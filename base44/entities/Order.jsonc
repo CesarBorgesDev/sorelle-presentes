@@ -1,0 +1,90 @@
+{
+  "name": "Order",
+  "type": "object",
+  "properties": {
+    "customer_name": {
+      "type": "string",
+      "description": "Nome do cliente"
+    },
+    "customer_email": {
+      "type": "string",
+      "description": "E-mail do cliente"
+    },
+    "customer_phone": {
+      "type": "string",
+      "description": "Telefone do cliente"
+    },
+    "customer_address": {
+      "type": "string",
+      "description": "Endere\u00e7o de entrega"
+    },
+    "items": {
+      "type": "array",
+      "description": "Itens do pedido",
+      "items": {
+        "type": "object",
+        "properties": {
+          "product_id": {
+            "type": "string"
+          },
+          "product_name": {
+            "type": "string"
+          },
+          "quantity": {
+            "type": "number"
+          },
+          "unit_price": {
+            "type": "number"
+          },
+          "total": {
+            "type": "number"
+          }
+        }
+      }
+    },
+    "subtotal": {
+      "type": "number",
+      "description": "Subtotal dos produtos"
+    },
+    "wrapping_cost": {
+      "type": "number",
+      "description": "Custo de embalagem"
+    },
+    "total": {
+      "type": "number",
+      "description": "Total do pedido"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pendente",
+        "confirmado",
+        "em_preparo",
+        "enviado",
+        "entregue",
+        "cancelado"
+      ],
+      "default": "pendente",
+      "description": "Status do pedido"
+    },
+    "payment_method": {
+      "type": "string",
+      "enum": [
+        "pix",
+        "cartao_credito",
+        "boleto"
+      ],
+      "description": "Forma de pagamento"
+    },
+    "notes": {
+      "type": "string",
+      "description": "Observa\u00e7\u00f5es do pedido"
+    }
+  },
+  "required": [
+    "customer_name",
+    "customer_email",
+    "total",
+    "status"
+  ]
+}

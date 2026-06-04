@@ -15,6 +15,10 @@ import Layout from '@/components/Layout';
 import Home from '@/pages/Home';
 import Category from '@/pages/Category';
 import ProductDetail from '@/pages/ProductDetail';
+import AdminLayout from '@/pages/admin/AdminLayout';
+import AdminDashboard from '@/pages/admin/AdminDashboard';
+import AdminProducts from '@/pages/admin/AdminProducts';
+import AdminOrders from '@/pages/admin/AdminOrders';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
@@ -51,6 +55,13 @@ const AuthenticatedApp = () => {
           <Route path="/" element={<Home />} />
           <Route path="/categoria/:slug" element={<Category />} />
           <Route path="/produto/:id" element={<ProductDetail />} />
+        </Route>
+      </Route>
+      <Route element={<ProtectedRoute unauthenticatedElement={<Navigate to="/login" replace />} />}>
+        <Route element={<AdminLayout />}>
+          <Route path="/admin" element={<AdminDashboard />} />
+          <Route path="/admin/produtos" element={<AdminProducts />} />
+          <Route path="/admin/pedidos" element={<AdminOrders />} />
         </Route>
       </Route>
       <Route path="*" element={<PageNotFound />} />
