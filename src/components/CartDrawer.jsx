@@ -1,0 +1,134 @@
+import React from 'react';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter } from '@/components/ui/sheet';
+import { Button } from '@/components/ui/button';
+import { Minus, Plus, X, Gift, Package } from 'lucide-react';
+import { base44 } from '@/api/base44Client';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+
+const wrappingOptions = [
+  { value: 'none', label: 'Sem embalagem', icon: Package, price: 0 },
+  { value: 'kraft', label: 'Kraft Minimalista', icon: Gift, price: 12.90 },
+  { value: 'signature', label: 'Sorelle Signature', icon: Gift, price: 29.90 },
+];
+
+export default function CartDrawer({ open, onClose }) {
+  const queryClient = useQueryClient();
+
+  const { data: items = [] } = useQuery({
+    queryKey: ['cart'],
+    queryFn: () => base44.entities.CartItem.list(),
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, data }) => base44.entities.CartItem.update(id, data),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['cart'] }),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id) => base44.entities.CartItem.delete(id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['cart'] }),
+  });
+
+  const subtotal = items.reduce((sum, item) => sum + item.price * (item.quantity || 1), 0);
+  const wrappingTotal = items.reduce((sum, item) => {
+    const wrap = wrappingOptions.find(w => w.value === item.wrapping);
+    return sum + (wrap?.price || 0);
+  }, 0);
+  const total = subtotal + wrappingTotal;
+
+  return (
+    <Sheet open={open} onOpenChange={onClose}>
+      <SheetContent className="w-full sm:max-w-lg bg-background flex flex-col">
+        <SheetHeader className="border-b border-border pb-4">
+          <SheetTitle className="font-display text-xl tracking-wider">Seu Carrinho</SheetTitle>
+        </SheetHeader>
+
+        {items.length === 0 ? (
+          <div className="flex-1 flex items-center justify-center">
+            <div className="text-center">
+              <Package className="w-12 h-12 text-muted-foreground/40 mx-auto mb-4" />
+              <p className="font-body text-muted-foreground">Seu carrinho está vazio</p>
+            </div>
+          </div>
+        ) : (
+          <>
+            <div className="flex-1 overflow-y-auto py-4 space-y-6">
+              {items.map((item) => (
+                <div key={item.id} className="flex gap-4">
+                  <div className="w-20 h-24 rounded-sm overflow-hidden bg-secondary flex-shrink-0">
+                    {item.product_image && (
+                      <img src={item.product_image} alt={item.product_name} className="w-full h-full object-cover" />
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex justify-between items-start">
+                      <h4 className="font-display text-sm tracking-wide text-foreground truncate pr-2">
+                        {item.product_name}
+                      </h4>
+                      <button onClick={() => deleteMutation.mutate(item.id)} className="text-muted-foreground hover:text-foreground">
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                    <p className="font-body text-sm text-foreground mt-1">
+                      R$ {item.price?.toFixed(2).replace('.', ',')}
+                    </p>
+                    {/* Quantity */}
+                    <div className="flex items-center gap-2 mt-2">
+                      <button
+                        onClick={() => updateMutation.mutate({ id: item.id, data: { quantity: Math.max(1, (item.quantity || 1) - 1) } })}
+                        className="w-7 h-7 border border-border rounded-sm flex items-center justify-center hover:bg-secondary"
+                      >
+                        <Minus className="w-3 h-3" />
+                      </button>
+                      <span className="font-body text-sm w-6 text-center">{item.quantity || 1}</span>
+                      <button
+                        onClick={() => updateMutation.mutate({ id: item.id, data: { quantity: (item.quantity || 1) + 1 } })}
+                        className="w-7 h-7 border border-border rounded-sm flex items-center justify-center hover:bg-secondary"
+                      >
+                        <Plus className="w-3 h-3" />
+                      </button>
+                    </div>
+                    {/* Wrapping */}
+                    <select
+                      value={item.wrapping || 'none'}
+                      onChange={(e) => updateMutation.mutate({ id: item.id, data: { wrapping: e.target.value } })}
+                      className="mt-2 text-xs font-body bg-secondary border-0 rounded-sm px-2 py-1 text-muted-foreground"
+                    >
+                      {wrappingOptions.map(w => (
+                        <option key={w.value} value={w.value}>
+                          {w.label} {w.price > 0 ? `(+R$ ${w.price.toFixed(2).replace('.', ',')})` : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <SheetFooter className="border-t border-border pt-4 flex-col gap-3">
+              <div className="w-full space-y-2">
+                <div className="flex justify-between font-body text-sm">
+                  <span className="text-muted-foreground">Subtotal</span>
+                  <span>R$ {subtotal.toFixed(2).replace('.', ',')}</span>
+                </div>
+                {wrappingTotal > 0 && (
+                  <div className="flex justify-between font-body text-sm">
+                    <span className="text-muted-foreground">Embalagem</span>
+                    <span>R$ {wrappingTotal.toFixed(2).replace('.', ',')}</span>
+                  </div>
+                )}
+                <div className="flex justify-between font-display text-base pt-2 border-t border-border">
+                  <span>Total</span>
+                  <span>R$ {total.toFixed(2).replace('.', ',')}</span>
+                </div>
+              </div>
+              <Button className="w-full bg-foreground text-background hover:bg-foreground/90 font-body tracking-wider uppercase text-sm py-6">
+                Finalizar Compra
+              </Button>
+            </SheetFooter>
+          </>
+        )}
+      </SheetContent>
+    </Sheet>
+  );
+}

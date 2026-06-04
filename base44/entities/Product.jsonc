@@ -1,0 +1,74 @@
+{
+  "name": "Product",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Nome do produto"
+    },
+    "description": {
+      "type": "string",
+      "description": "Descri\u00e7\u00e3o detalhada do produto"
+    },
+    "price": {
+      "type": "number",
+      "description": "Pre\u00e7o em reais"
+    },
+    "original_price": {
+      "type": "number",
+      "description": "Pre\u00e7o original antes do desconto"
+    },
+    "category": {
+      "type": "string",
+      "enum": [
+        "casa",
+        "decoracao",
+        "fragancias",
+        "cama_mesa_banho"
+      ],
+      "description": "Categoria do produto"
+    },
+    "subcategory": {
+      "type": "string",
+      "description": "Subcategoria do produto"
+    },
+    "image_url": {
+      "type": "string",
+      "description": "URL da imagem principal"
+    },
+    "images": {
+      "type": "array",
+      "description": "URLs das imagens adicionais",
+      "items": {
+        "type": "string"
+      }
+    },
+    "featured": {
+      "type": "boolean",
+      "default": false,
+      "description": "Produto em destaque"
+    },
+    "in_stock": {
+      "type": "boolean",
+      "default": true,
+      "description": "Em estoque"
+    },
+    "sku": {
+      "type": "string",
+      "description": "C\u00f3digo SKU do produto"
+    },
+    "materials": {
+      "type": "string",
+      "description": "Materiais do produto"
+    },
+    "dimensions": {
+      "type": "string",
+      "description": "Dimens\u00f5es do produto"
+    }
+  },
+  "required": [
+    "name",
+    "price",
+    "category"
+  ]
+}

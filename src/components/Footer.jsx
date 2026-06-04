@@ -1,0 +1,91 @@
+import React from 'react';
+import { Link } from 'react-router-dom';
+import { Instagram, Facebook, Mail, MapPin, Phone } from 'lucide-react';
+
+export default function Footer() {
+  return (
+    <footer className="bg-foreground text-background">
+      {/* Main Footer */}
+      <div className="max-w-7xl mx-auto px-6 lg:px-16 py-16 lg:py-24">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12 lg:gap-8">
+          {/* Brand */}
+          <div className="lg:col-span-1">
+            <h3 className="font-display text-2xl tracking-widest uppercase mb-4">
+              Sorelle
+            </h3>
+            <p className="font-body text-sm text-background/60 leading-relaxed mb-6">
+              Curadoria de presentes e decoração para quem valoriza a arte de viver bem. Cada peça é selecionada com cuidado para transformar momentos em memórias.
+            </p>
+            <div className="flex gap-4">
+              <a href="#" className="text-background/60 hover:text-background transition-colors">
+                <Instagram className="w-5 h-5" />
+              </a>
+              <a href="#" className="text-background/60 hover:text-background transition-colors">
+                <Facebook className="w-5 h-5" />
+              </a>
+            </div>
+          </div>
+
+          {/* Links */}
+          <div>
+            <h4 className="font-display text-sm tracking-widest uppercase mb-6">Navegação</h4>
+            <ul className="space-y-3">
+              {['Casa', 'Decoração', 'Fragrâncias', 'Cama, Mesa & Banho'].map((item) => (
+                <li key={item}>
+                  <Link to={`/categoria/${item.toLowerCase().replace(/[^a-z]/g, '_').replace(/__+/g, '_')}`} className="font-body text-sm text-background/60 hover:text-background transition-colors">
+                    {item}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {/* Institucional */}
+          <div>
+            <h4 className="font-display text-sm tracking-widest uppercase mb-6">Institucional</h4>
+            <ul className="space-y-3">
+              {['Sobre Nós', 'Política de Privacidade', 'Termos de Uso', 'Trocas e Devoluções'].map((item) => (
+                <li key={item}>
+                  <span className="font-body text-sm text-background/60 hover:text-background transition-colors cursor-pointer">
+                    {item}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {/* Contact */}
+          <div>
+            <h4 className="font-display text-sm tracking-widest uppercase mb-6">Contato</h4>
+            <ul className="space-y-4">
+              <li className="flex items-start gap-3">
+                <Mail className="w-4 h-4 mt-0.5 text-background/40" />
+                <span className="font-body text-sm text-background/60">contato@sorellepresentes.com.br</span>
+              </li>
+              <li className="flex items-start gap-3">
+                <Phone className="w-4 h-4 mt-0.5 text-background/40" />
+                <span className="font-body text-sm text-background/60">(11) 99999-9999</span>
+              </li>
+              <li className="flex items-start gap-3">
+                <MapPin className="w-4 h-4 mt-0.5 text-background/40" />
+                <span className="font-body text-sm text-background/60">São Paulo, SP</span>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      {/* Bottom */}
+      <div className="border-t border-background/10">
+        <div className="max-w-7xl mx-auto px-6 lg:px-16 py-6 flex flex-col md:flex-row items-center justify-between gap-4">
+          <p className="font-body text-xs text-background/40">
+            © 2024 Sorelle Presentes. Todos os direitos reservados.
+          </p>
+          <p className="font-body text-xs text-background/40">
+            Feito com amor para seu lar
+          </p>
+        </div>
+      </div>
+    </footer>
+  );
+}
