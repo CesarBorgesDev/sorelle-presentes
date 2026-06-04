@@ -38,18 +38,15 @@ export default function FeaturedProducts({ products, title, subtitle, link }) {
           )}
         </motion.div>
 
-        {/* Asymmetric Grid */}
-        <div className="grid grid-cols-2 lg:grid-cols-12 gap-4 lg:gap-6">
-          {products.slice(0, 4).map((product, index) => {
-            const spans = ['lg:col-span-4', 'lg:col-span-3', 'lg:col-span-3', 'lg:col-span-2'];
-            return (
-              <ProductCard
-                key={product.id}
-                product={product}
-                className={`col-span-1 ${spans[index] || 'lg:col-span-3'}`}
-              />
-            );
-          })}
+        {/* Uniform Grid */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6">
+          {products.slice(0, 4).map((product) => (
+            <ProductCard
+              key={product.id}
+              product={product}
+              className="col-span-1"
+            />
+          ))}
         </div>
       </div>
     </section>
