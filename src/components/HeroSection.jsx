@@ -52,7 +52,7 @@ export default function HeroSection() {
         </motion.div>
 
         {/* Category Navigation */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6 max-w-5xl">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6 max-w-5xl w-full">
           {categories.map((cat, index) => (
             <Link
               key={cat.key}
@@ -65,7 +65,7 @@ export default function HeroSection() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.5 + index * 0.1, duration: 0.6 }}
-                className={`border border-white/30 rounded-sm px-5 py-4 lg:px-6 lg:py-5 transition-all duration-500
+                className={`border border-white/30 rounded-sm px-5 py-4 lg:px-8 lg:py-5 transition-all duration-500 whitespace-nowrap
                   ${activeIndex === index ? 'bg-white/20 backdrop-blur-sm border-white/60' : 'hover:bg-white/10 hover:border-white/50'}`}
               >
                 <span className="font-display text-white text-sm lg:text-base tracking-widest uppercase block">
