@@ -1,0 +1,60 @@
+{
+  "name": "Affiliate",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Nome do afiliado"
+    },
+    "email": {
+      "type": "string",
+      "description": "E-mail do afiliado"
+    },
+    "phone": {
+      "type": "string",
+      "description": "Telefone do afiliado"
+    },
+    "code": {
+      "type": "string",
+      "description": "C\u00f3digo \u00fanico de afiliado"
+    },
+    "commission_rate": {
+      "type": "number",
+      "description": "Taxa de comiss\u00e3o em percentual (ex: 10 = 10%)"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "ativo",
+        "inativo",
+        "pendente"
+      ],
+      "default": "pendente",
+      "description": "Status do afiliado"
+    },
+    "payment_info": {
+      "type": "string",
+      "description": "Dados para pagamento (PIX, banco, etc)"
+    },
+    "notes": {
+      "type": "string",
+      "description": "Observa\u00e7\u00f5es internas"
+    },
+    "total_sales": {
+      "type": "number",
+      "default": 0,
+      "description": "Total de vendas geradas"
+    },
+    "total_commission": {
+      "type": "number",
+      "default": 0,
+      "description": "Total de comiss\u00f5es acumuladas"
+    }
+  },
+  "required": [
+    "name",
+    "email",
+    "code",
+    "commission_rate"
+  ]
+}

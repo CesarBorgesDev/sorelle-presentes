@@ -1,0 +1,56 @@
+{
+  "name": "AffiliateConversion",
+  "type": "object",
+  "properties": {
+    "affiliate_id": {
+      "type": "string",
+      "description": "ID do afiliado"
+    },
+    "affiliate_name": {
+      "type": "string",
+      "description": "Nome do afiliado"
+    },
+    "affiliate_code": {
+      "type": "string",
+      "description": "C\u00f3digo do afiliado"
+    },
+    "order_id": {
+      "type": "string",
+      "description": "ID do pedido relacionado"
+    },
+    "order_total": {
+      "type": "number",
+      "description": "Valor total do pedido"
+    },
+    "commission_rate": {
+      "type": "number",
+      "description": "Taxa de comiss\u00e3o aplicada"
+    },
+    "commission_value": {
+      "type": "number",
+      "description": "Valor da comiss\u00e3o gerada"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pendente",
+        "aprovado",
+        "pago",
+        "cancelado"
+      ],
+      "default": "pendente",
+      "description": "Status da convers\u00e3o/comiss\u00e3o"
+    },
+    "notes": {
+      "type": "string",
+      "description": "Observa\u00e7\u00f5es"
+    }
+  },
+  "required": [
+    "affiliate_id",
+    "affiliate_name",
+    "affiliate_code",
+    "order_total",
+    "commission_value"
+  ]
+}

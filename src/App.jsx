@@ -19,6 +19,7 @@ import AdminLayout from '@/pages/admin/AdminLayout';
 import AdminDashboard from '@/pages/admin/AdminDashboard';
 import AdminProducts from '@/pages/admin/AdminProducts';
 import AdminOrders from '@/pages/admin/AdminOrders';
+import AdminAffiliates from '@/pages/admin/AdminAffiliates';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
@@ -62,6 +63,7 @@ const AuthenticatedApp = () => {
           <Route path="/admin" element={<AdminDashboard />} />
           <Route path="/admin/produtos" element={<AdminProducts />} />
           <Route path="/admin/pedidos" element={<AdminOrders />} />
+          <Route path="/admin/afiliados" element={<AdminAffiliates />} />
         </Route>
       </Route>
       <Route path="*" element={<PageNotFound />} />
