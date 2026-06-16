@@ -43,7 +43,7 @@ export default function HeroSection() {
           transition={{ delay: 0.3, duration: 0.8 }}
           className="mb-12 lg:mb-16"
         >
-          <h1 className="font-display text-white text-4xl md:text-6xl lg:text-7xl tracking-wider leading-tight">
+          <h1 className="font-display text-white text-4xl md:text-6xl lg:text-7xl tracking-widest leading-tight">
             Sorelle
             <span className="block text-lg md:text-xl lg:text-2xl tracking-widest opacity-80 mt-2 font-body font-light">
               Presentes & Decoração
