@@ -2,15 +2,18 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-# Copy package files and install dependencies
-COPY package*.json ./
-RUN npm ci
+RUN apk add --no-cache curl
 
-# Copy server source code
+COPY package*.json ./
+RUN npm ci --omit=dev
+
 COPY . .
 
-# Expose API port
+RUN mkdir -p uploads/generated uploads/products uploads/temp
+
 EXPOSE 3001
 
-# Start the Node.js server
+HEALTHCHECK --interval=10s --timeout=5s --retries=5 --start-period=20s \
+  CMD curl -f http://localhost:3001/api/health || exit 1
+
 CMD ["npm", "start"]

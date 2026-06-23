@@ -2,6 +2,7 @@ services:
   db:
     image: postgres:15-alpine
     container_name: sorelle-db
+    restart: unless-stopped
     ports:
       - "5432:5432"
     environment:
@@ -21,16 +22,23 @@ services:
       context: ./server
       dockerfile: Dockerfile
     container_name: sorelle-backend
+    restart: unless-stopped
     ports:
       - "3001:3001"
     environment:
       DATABASE_URL: postgresql://postgres:postgres@db:5432/sorelle
-      JWT_SECRET: altere-esta-chave-secreta-em-producao
-      JWT_EXPIRES_IN: 7d
+      JWT_SECRET: ${JWT_SECRET:-altere-esta-chave-secreta-em-producao}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
       PORT: 3001
-      CORS_ORIGIN: http://localhost
-      ADMIN_EMAIL: admin@sorelle.com.br
-      ADMIN_PASSWORD: admin123
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost}
+      APP_PUBLIC_URL: ${APP_PUBLIC_URL:-http://localhost}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@sorelle.com.br}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin123}
+      CHECKOUT_PAYMENT_METHOD: ${CHECKOUT_PAYMENT_METHOD:-test}
+      CORREIOS_FALLBACK: ${CORREIOS_FALLBACK:-estimate}
+    volumes:
+      - backend_uploads:/app/uploads
     depends_on:
       db:
         condition: service_healthy
@@ -41,10 +49,13 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: sorelle-frontend
+    restart: unless-stopped
     ports:
       - "80:80"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
 
 volumes:
   postgres_data:
+  backend_uploads:
