@@ -12,7 +12,7 @@ const statusColors = {
 
 const STATUS_OPTIONS = ['pendente', 'confirmado', 'em_preparo', 'enviado', 'entregue', 'cancelado'];
 
-const paymentLabels = { pix: 'PIX', cartao_credito: 'Cartão de Crédito', boleto: 'Boleto', cielo: 'Cielo' };
+const paymentLabels = { pix: 'PIX', cartao_credito: 'Cartão de Crédito', boleto: 'Boleto', cielo: 'Cielo', test: 'Modo teste' };
 
 const paymentStatusLabels = {
   aguardando_pagamento: 'Aguardando pagamento',
@@ -89,6 +89,14 @@ export default function OrderDetailModal({ order, onClose, onStatusChange }) {
               <div className="flex justify-between">
                 <p className="font-body text-sm text-muted-foreground">Embalagem</p>
                 <p className="font-body text-sm text-muted-foreground">R$ {order.wrapping_cost?.toFixed(2).replace('.', ',')}</p>
+              </div>
+            )}
+            {order.shipping_cost > 0 && (
+              <div className="flex justify-between">
+                <p className="font-body text-sm text-muted-foreground">
+                  Frete{order.shipping_service_name ? ` (${order.shipping_service_name})` : ''}
+                </p>
+                <p className="font-body text-sm text-muted-foreground">R$ {Number(order.shipping_cost).toFixed(2).replace('.', ',')}</p>
               </div>
             )}
             <div className="flex justify-between">

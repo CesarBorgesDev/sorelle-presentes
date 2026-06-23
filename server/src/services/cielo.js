@@ -1,3 +1,5 @@
+import { toCieloAddress } from '../utils/address.js';
+
 const DEFAULT_CHECKOUT_URL = 'https://cieloecommerce.cielo.com.br/api/public/v1/orders/';
 
 const WRAPPING_LABELS = {  none: 'Sem embalagem',
@@ -23,32 +25,12 @@ function toCents(value) {
   return Math.round(Number(value) * 100);
 }
 
-function parseAddress(addressText) {
-  const text = String(addressText || '').trim();
-  if (!text) {
-    return {
-      Street: 'Endereco nao informado',
-      Number: 'S/N',
-      District: 'Centro',
-      City: 'Sao Paulo',
-      State: 'SP',
-    };
-  }
-
-  const parts = text.split(',').map((part) => part.trim()).filter(Boolean);
-  return {
-    Street: parts[0] || text,
-    Number: parts[1] || 'S/N',
-    Complement: parts[2] || undefined,
-    District: parts[3] || 'Centro',
-    City: parts[4] || 'Sao Paulo',
-    State: (parts[5] || 'SP').slice(0, 2).toUpperCase(),
-  };
-}
-
-export function buildCieloPayload({ order, customer, returnUrl, config = {} }) {
+export function buildCieloPayload({ order, customer, returnUrl, config = {}, shipping = {} }) {
   const softDescriptor = (config.softDescriptor || process.env.CIELO_SOFT_DESCRIPTOR || 'SORELLE').slice(0, 13);
   const maxInstallments = config.maxInstallments || 12;
+  const shippingCost = Number(shipping.cost || order.shipping_cost || 0);
+  const shippingDeadline = Number(shipping.deadlineDays || order.shipping_deadline_days || 7);
+  const shippingLabel = shipping.serviceName || order.shipping_service_name || 'Entrega Sorelle';
   const cartItems = (order.items || []).map((item) => ({
     Name: String(item.product_name || 'Produto').slice(0, 128),
     Description: String(item.product_name || 'Produto Sorelle').slice(0, 256),
@@ -71,7 +53,17 @@ export function buildCieloPayload({ order, customer, returnUrl, config = {} }) {
     }
   }
 
-  const address = parseAddress(customer.customer_address);
+  if (shippingCost > 0) {
+    cartItems.push({
+      Name: shippingLabel.slice(0, 128),
+      Description: 'Frete Correios',
+      UnitPrice: toCents(shippingCost),
+      Quantity: 1,
+      Type: 'Service',
+    });
+  }
+
+  const address = toCieloAddress(customer);
   const zipCode = onlyDigits(customer.customer_zip_code).slice(0, 8) || '01310100';
 
   return {
@@ -79,14 +71,14 @@ export function buildCieloPayload({ order, customer, returnUrl, config = {} }) {
     SoftDescriptor: softDescriptor,
     Cart: { Items: cartItems },
     Shipping: {
-      Type: 'FreeWithoutShipping',
+      Type: shippingCost > 0 ? 'Normal' : 'FreeWithoutShipping',
       TargetZipCode: zipCode,
       Address: address,
       Services: [
         {
-          Name: 'Entrega Sorelle',
-          Price: 0,
-          Deadline: 7,
+          Name: shippingLabel.slice(0, 128),
+          Price: toCents(shippingCost),
+          Deadline: shippingDeadline,
         },
       ],
     },

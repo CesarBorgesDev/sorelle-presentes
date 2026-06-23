@@ -8,6 +8,7 @@ const router = Router();
 const ALLOWED_FIELDS = [
   'name', 'description', 'price', 'original_price', 'category', 'subcategory',
   'image_url', 'images', 'featured', 'in_stock', 'sku', 'materials', 'dimensions',
+  'weight_kg', 'length_cm', 'width_cm', 'height_cm',
 ];
 
 router.get('/', optionalAuth, async (req, res) => {

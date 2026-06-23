@@ -1,7 +1,8 @@
 import React, { useState, useRef } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
-import { X, Upload, Sparkles, Loader2, ImageIcon } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { X, Upload, Sparkles, Loader2, ImageIcon, Link2 } from 'lucide-react';
 
 const CATEGORIES = [
   { value: 'casa', label: 'Casa' },
@@ -19,9 +20,21 @@ function readFileAsDataUrl(file) {
   });
 }
 
+function parseOptionalNumber(value) {
+  if (value === '' || value === null || value === undefined) return null;
+  const parsed = parseFloat(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function resolveImageSrc(url) {
+  if (!url) return '';
+  return url;
+}
+
 export default function ProductFormModal({ product, onClose }) {
   const queryClient = useQueryClient();
-  const fileInputRef = useRef(null);
+  const uploadFileRef = useRef(null);
+  const aiFileRef = useRef(null);
   const isEditing = !!product;
 
   const [form, setForm] = useState({
@@ -34,14 +47,23 @@ export default function ProductFormModal({ product, onClose }) {
     image_url: product?.image_url || '',
     materials: product?.materials || '',
     dimensions: product?.dimensions || '',
+    weight_kg: product?.weight_kg ?? '',
+    length_cm: product?.length_cm ?? '',
+    width_cm: product?.width_cm ?? '',
+    height_cm: product?.height_cm ?? '',
     in_stock: product?.in_stock ?? true,
     featured: product?.featured ?? false,
   });
 
-  const [sourcePreview, setSourcePreview] = useState(null);
-  const [sourceBase64, setSourceBase64] = useState(null);
-  const [sourceMimeType, setSourceMimeType] = useState('image/jpeg');
+  const [imageTab, setImageTab] = useState('url');
+  const [uploadPreview, setUploadPreview] = useState(null);
+  const [uploadBase64, setUploadBase64] = useState(null);
+  const [uploadMimeType, setUploadMimeType] = useState('image/jpeg');
+  const [aiPreview, setAiPreview] = useState(null);
+  const [aiBase64, setAiBase64] = useState(null);
+  const [aiMimeType, setAiMimeType] = useState('image/jpeg');
   const [imageError, setImageError] = useState('');
+  const [imageSuccess, setImageSuccess] = useState('');
 
   const set = (field, value) => setForm((f) => ({ ...f, [field]: value }));
 
@@ -55,10 +77,26 @@ export default function ProductFormModal({ product, onClose }) {
     },
   });
 
+  const uploadMutation = useMutation({
+    mutationFn: () => base44.images.uploadProduct({
+      image: uploadBase64,
+      mime_type: uploadMimeType,
+    }),
+    onSuccess: (result) => {
+      set('image_url', result.image_url);
+      setImageError('');
+      setImageSuccess(result.message || 'Imagem enviada e aplicada ao produto');
+    },
+    onError: (err) => {
+      setImageSuccess('');
+      setImageError(err.message || 'Erro ao enviar imagem');
+    },
+  });
+
   const generateMutation = useMutation({
     mutationFn: () => base44.images.generateScene({
-      image: sourceBase64,
-      mime_type: sourceMimeType,
+      image: aiBase64,
+      mime_type: aiMimeType,
       product_name: form.name,
       category: CATEGORIES.find((c) => c.value === form.category)?.label || form.category,
       materials: form.materials,
@@ -66,31 +104,58 @@ export default function ProductFormModal({ product, onClose }) {
     onSuccess: (result) => {
       set('image_url', result.image_url);
       setImageError('');
+      setImageSuccess(result.message || 'Imagem gerada com sucesso');
     },
     onError: (err) => {
+      setImageSuccess('');
       setImageError(err.message || 'Erro ao gerar imagem');
     },
   });
 
-  const handleFileSelect = async (e) => {
+  const validateImageFile = (file) => {
+    if (!file.type.startsWith('image/')) {
+      return 'Selecione um arquivo de imagem (JPG, PNG ou WebP)';
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      return 'A imagem deve ter no máximo 10 MB';
+    }
+    return null;
+  };
+
+  const handleUploadFileSelect = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (!file.type.startsWith('image/')) {
-      setImageError('Selecione um arquivo de imagem (JPG, PNG ou WebP)');
-      return;
-    }
-
-    if (file.size > 10 * 1024 * 1024) {
-      setImageError('A imagem deve ter no máximo 10 MB');
+    const validationError = validateImageFile(file);
+    if (validationError) {
+      setImageError(validationError);
       return;
     }
 
     setImageError('');
+    setImageSuccess('');
     const dataUrl = await readFileAsDataUrl(file);
-    setSourcePreview(dataUrl);
-    setSourceBase64(dataUrl);
-    setSourceMimeType(file.type);
+    setUploadPreview(dataUrl);
+    setUploadBase64(dataUrl);
+    setUploadMimeType(file.type);
+  };
+
+  const handleAiFileSelect = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const validationError = validateImageFile(file);
+    if (validationError) {
+      setImageError(validationError);
+      return;
+    }
+
+    setImageError('');
+    setImageSuccess('');
+    const dataUrl = await readFileAsDataUrl(file);
+    setAiPreview(dataUrl);
+    setAiBase64(dataUrl);
+    setAiMimeType(file.type);
   };
 
   const handleSubmit = (e) => {
@@ -98,7 +163,12 @@ export default function ProductFormModal({ product, onClose }) {
     mutation.mutate({
       ...form,
       price: parseFloat(form.price),
-      original_price: form.original_price ? parseFloat(form.original_price) : undefined,
+      original_price: form.original_price ? parseFloat(form.original_price) : null,
+      weight_kg: parseOptionalNumber(form.weight_kg),
+      length_cm: parseOptionalNumber(form.length_cm),
+      width_cm: parseOptionalNumber(form.width_cm),
+      height_cm: parseOptionalNumber(form.height_cm),
+      image_url: form.image_url?.trim() || null,
     });
   };
 
@@ -148,93 +218,173 @@ export default function ProductFormModal({ product, onClose }) {
             </div>
 
             <div className="md:col-span-2 space-y-4 p-4 border border-border rounded-sm bg-secondary/30">
-              <div className="flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-primary" />
-                <p className="font-body text-sm font-medium text-foreground">Imagem do Produto — Pollinations (grátis)</p>
-              </div>
-              <p className="font-body text-xs text-muted-foreground">
-                Envie uma foto do produto — a geração usará essa imagem como base (Stable Horde gratuito).
-                Opcional: token Hugging Face em Configurações para melhor qualidade.
-              </p>
+              <p className="font-body text-sm font-medium text-foreground">Imagem do produto</p>
 
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/jpeg,image/png,image/webp"
-                className="hidden"
-                onChange={handleFileSelect}
-              />
-
-              <div className="flex flex-wrap gap-3">
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="inline-flex items-center gap-2 px-4 py-2.5 border border-border rounded-sm font-body text-sm hover:bg-secondary transition-colors"
-                >
-                  <Upload className="w-4 h-4" />
-                  Enviar foto
-                </button>
-
-                <button
-                  type="button"
-                  disabled={!sourceBase64 || generateMutation.isPending}
-                  onClick={() => generateMutation.mutate()}
-                  className="inline-flex items-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground rounded-sm font-body text-sm hover:opacity-80 transition-opacity disabled:opacity-50"
-                >
-                  {generateMutation.isPending ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Gerando a partir da foto...
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles className="w-4 h-4" />
-                      Gerar cenário sofisticado
-                    </>
-                  )}
-                </button>
+              <div className="aspect-[4/5] max-w-xs rounded-sm border border-border bg-background overflow-hidden flex items-center justify-center">
+                {form.image_url ? (
+                  <img
+                    src={resolveImageSrc(form.image_url)}
+                    alt="Preview do produto"
+                    className="w-full h-full object-cover"
+                    onError={() => setImageError('Não foi possível carregar a imagem. Verifique a URL ou envie novamente.')}
+                  />
+                ) : (
+                  <div className="text-center text-muted-foreground p-4">
+                    <ImageIcon className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                    <p className="font-body text-xs">Nenhuma imagem selecionada</p>
+                  </div>
+                )}
               </div>
 
               {imageError && (
-                <div className="p-3 rounded-sm bg-destructive/10 text-destructive text-sm font-body">
-                  {imageError}
-                </div>
+                <div className="p-3 rounded-sm bg-destructive/10 text-destructive text-sm font-body">{imageError}</div>
+              )}
+              {imageSuccess && (
+                <div className="p-3 rounded-sm bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 text-sm font-body">{imageSuccess}</div>
               )}
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <p className={labelClass}>Foto original</p>
-                  <div className="aspect-[4/5] rounded-sm border border-border bg-background overflow-hidden flex items-center justify-center">
-                    {sourcePreview ? (
-                      <img src={sourcePreview} alt="Foto original" className="w-full h-full object-cover" />
-                    ) : (
-                      <div className="text-center text-muted-foreground p-4">
-                        <ImageIcon className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                        <p className="font-body text-xs">Nenhuma foto enviada</p>
-                      </div>
-                    )}
-                  </div>
-                </div>
+              <Tabs value={imageTab} onValueChange={setImageTab}>
+                <TabsList className="w-full grid grid-cols-3 h-auto">
+                  <TabsTrigger value="url" className="gap-1.5 text-xs sm:text-sm">
+                    <Link2 className="w-3.5 h-3.5" />
+                    URL
+                  </TabsTrigger>
+                  <TabsTrigger value="upload" className="gap-1.5 text-xs sm:text-sm">
+                    <Upload className="w-3.5 h-3.5" />
+                    Upload
+                  </TabsTrigger>
+                  <TabsTrigger value="ai" className="gap-1.5 text-xs sm:text-sm">
+                    <Sparkles className="w-3.5 h-3.5" />
+                    Gerar IA
+                  </TabsTrigger>
+                </TabsList>
 
-                <div>
-                  <p className={labelClass}>Imagem gerada / final</p>
-                  <div className="aspect-[4/5] rounded-sm border border-border bg-background overflow-hidden flex items-center justify-center">
-                    {form.image_url ? (
-                      <img src={form.image_url} alt="Imagem do produto" className="w-full h-full object-cover" />
-                    ) : (
-                      <div className="text-center text-muted-foreground p-4">
-                        <Sparkles className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                        <p className="font-body text-xs">Gere ou cole uma URL</p>
-                      </div>
-                    )}
+                <TabsContent value="url" className="mt-4 space-y-3">
+                  <p className="font-body text-xs text-muted-foreground">
+                    Cole o link direto de uma imagem (Unsplash, CDN ou `/api/uploads/...`).
+                  </p>
+                  <div>
+                    <label className={labelClass}>URL da imagem</label>
+                    <input
+                      className={inputClass}
+                      value={form.image_url}
+                      onChange={(e) => {
+                        set('image_url', e.target.value);
+                        setImageError('');
+                        setImageSuccess('');
+                      }}
+                      placeholder="https://images.unsplash.com/..."
+                    />
                   </div>
-                </div>
-              </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!form.image_url?.trim()) {
+                        setImageError('Informe uma URL de imagem');
+                        return;
+                      }
+                      setImageError('');
+                      setImageSuccess('URL aplicada. Salve o produto para confirmar.');
+                    }}
+                    className="inline-flex items-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground rounded-sm font-body text-sm hover:opacity-80"
+                  >
+                    <Link2 className="w-4 h-4" />
+                    Usar esta URL
+                  </button>
+                </TabsContent>
 
-              <div>
-                <label className={labelClass}>URL da Imagem (alternativa)</label>
-                <input className={inputClass} value={form.image_url} onChange={(e) => set('image_url', e.target.value)} placeholder="https://... ou /api/uploads/generated/..." />
-              </div>
+                <TabsContent value="upload" className="mt-4 space-y-3">
+                  <p className="font-body text-xs text-muted-foreground">
+                    Envie JPG, PNG ou WebP (até 10 MB). A imagem fica salva no servidor.
+                  </p>
+                  <input
+                    ref={uploadFileRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    className="hidden"
+                    onChange={handleUploadFileSelect}
+                  />
+                  <div className="flex flex-wrap gap-3">
+                    <button
+                      type="button"
+                      onClick={() => uploadFileRef.current?.click()}
+                      className="inline-flex items-center gap-2 px-4 py-2.5 border border-border rounded-sm font-body text-sm hover:bg-secondary transition-colors"
+                    >
+                      <Upload className="w-4 h-4" />
+                      Escolher arquivo
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!uploadBase64 || uploadMutation.isPending}
+                      onClick={() => uploadMutation.mutate()}
+                      className="inline-flex items-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground rounded-sm font-body text-sm hover:opacity-80 disabled:opacity-50"
+                    >
+                      {uploadMutation.isPending ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Enviando...
+                        </>
+                      ) : (
+                        <>
+                          <Upload className="w-4 h-4" />
+                          Enviar e usar imagem
+                        </>
+                      )}
+                    </button>
+                  </div>
+                  {uploadPreview && (
+                    <div className="max-w-[140px] aspect-[4/5] rounded-sm border border-border overflow-hidden">
+                      <img src={uploadPreview} alt="Arquivo selecionado" className="w-full h-full object-cover" />
+                    </div>
+                  )}
+                </TabsContent>
+
+                <TabsContent value="ai" className="mt-4 space-y-3">
+                  <p className="font-body text-xs text-muted-foreground">
+                    Envie uma foto do produto e gere um cenário sofisticado com IA (Stable Horde / Pollinations).
+                  </p>
+                  <input
+                    ref={aiFileRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    className="hidden"
+                    onChange={handleAiFileSelect}
+                  />
+                  <div className="flex flex-wrap gap-3">
+                    <button
+                      type="button"
+                      onClick={() => aiFileRef.current?.click()}
+                      className="inline-flex items-center gap-2 px-4 py-2.5 border border-border rounded-sm font-body text-sm hover:bg-secondary transition-colors"
+                    >
+                      <Upload className="w-4 h-4" />
+                      Foto de referência
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!aiBase64 || generateMutation.isPending}
+                      onClick={() => generateMutation.mutate()}
+                      className="inline-flex items-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground rounded-sm font-body text-sm hover:opacity-80 disabled:opacity-50"
+                    >
+                      {generateMutation.isPending ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Gerando...
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="w-4 h-4" />
+                          Gerar cenário
+                        </>
+                      )}
+                    </button>
+                  </div>
+                  {aiPreview && (
+                    <div className="max-w-[140px] aspect-[4/5] rounded-sm border border-border overflow-hidden">
+                      <img src={aiPreview} alt="Referência IA" className="w-full h-full object-cover" />
+                    </div>
+                  )}
+                </TabsContent>
+              </Tabs>
             </div>
 
             <div className="md:col-span-2">
@@ -248,9 +398,31 @@ export default function ProductFormModal({ product, onClose }) {
             </div>
 
             <div>
-              <label className={labelClass}>Dimensões</label>
+              <label className={labelClass}>Dimensões (texto)</label>
               <input className={inputClass} value={form.dimensions} onChange={(e) => set('dimensions', e.target.value)} placeholder="Ex: 22cm x 15cm" />
             </div>
+
+            <div className="md:col-span-2 grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <div>
+                <label className={labelClass}>Peso (kg)</label>
+                <input type="number" step="0.01" min="0" className={inputClass} value={form.weight_kg} onChange={(e) => set('weight_kg', e.target.value)} placeholder="0.3" />
+              </div>
+              <div>
+                <label className={labelClass}>Comp. (cm)</label>
+                <input type="number" step="0.1" min="0" className={inputClass} value={form.length_cm} onChange={(e) => set('length_cm', e.target.value)} placeholder="20" />
+              </div>
+              <div>
+                <label className={labelClass}>Larg. (cm)</label>
+                <input type="number" step="0.1" min="0" className={inputClass} value={form.width_cm} onChange={(e) => set('width_cm', e.target.value)} placeholder="15" />
+              </div>
+              <div>
+                <label className={labelClass}>Alt. (cm)</label>
+                <input type="number" step="0.1" min="0" className={inputClass} value={form.height_cm} onChange={(e) => set('height_cm', e.target.value)} placeholder="10" />
+              </div>
+            </div>
+            <p className="md:col-span-2 font-body text-xs text-muted-foreground -mt-2">
+              Usados no cálculo de frete Correios. Padrão: 0,3 kg e 20×15×10 cm se não informado.
+            </p>
 
             <div className="flex items-center gap-3">
               <input type="checkbox" id="in_stock" checked={form.in_stock} onChange={(e) => set('in_stock', e.target.checked)} className="w-4 h-4 rounded" />

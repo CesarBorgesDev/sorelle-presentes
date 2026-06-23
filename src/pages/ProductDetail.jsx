@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { useAuth } from '@/lib/AuthContext';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Minus, Plus, ShoppingBag, Check } from 'lucide-react';
+import { ArrowLeft, Minus, Plus, ShoppingBag, Check, Heart } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 const categoryLabels = {
@@ -20,6 +20,7 @@ export default function ProductDetail() {
   const { isAuthenticated } = useAuth();
   const [quantity, setQuantity] = useState(1);
   const [added, setAdded] = useState(false);
+  const [wishlisted, setWishlisted] = useState(false);
   const [activeImage, setActiveImage] = useState(0);
   const queryClient = useQueryClient();
 
@@ -39,6 +40,24 @@ export default function ProductDetail() {
       setTimeout(() => setAdded(false), 2000);
     },
   });
+
+  const wishlistMutation = useMutation({
+    mutationFn: (productId) => base44.account.addToWishlist(productId),
+    onSuccess: () => {
+      setWishlisted(true);
+      queryClient.invalidateQueries({ queryKey: ['wishlist'] });
+      setTimeout(() => setWishlisted(false), 2000);
+    },
+  });
+
+  const handleAddToWishlist = () => {
+    if (!product) return;
+    if (!isAuthenticated) {
+      navigate('/login');
+      return;
+    }
+    wishlistMutation.mutate(product.id);
+  };
 
   const handleAddToCart = () => {
     if (!product) return;
@@ -208,6 +227,20 @@ export default function ProductDetail() {
                 <span className="flex items-center gap-2"><Check className="w-4 h-4" /> Adicionado</span>
               ) : (
                 <span className="flex items-center gap-2"><ShoppingBag className="w-4 h-4" /> Adicionar ao Carrinho</span>
+              )}
+            </Button>
+
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleAddToWishlist}
+              disabled={wishlistMutation.isPending}
+              className="w-full mt-3 font-body tracking-wider text-sm py-6 rounded-sm gap-2"
+            >
+              {wishlisted ? (
+                <><Check className="w-4 h-4" /> Na lista de desejos</>
+              ) : (
+                <><Heart className="w-4 h-4" /> Adicionar à lista de desejos</>
               )}
             </Button>
 

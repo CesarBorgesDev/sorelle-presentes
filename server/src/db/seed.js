@@ -1,60 +1,9 @@
 import bcrypt from 'bcryptjs';
 import dotenv from 'dotenv';
 import pool from '../config/db.js';
+import { sampleProducts, syncProductImages } from './productImages.js';
 
 dotenv.config();
-
-const sampleProducts = [
-  {
-    name: 'Vaso Orgânico em Cerâmica',
-    description: 'Vaso artesanal com formas orgânicas, perfeito para flores secas ou arranjos minimalistas.',
-    price: 189.90,
-    original_price: 229.90,
-    category: 'decoracao',
-    subcategory: 'Vasos',
-    image_url: 'https://images.unsplash.com/photo-1578749556568-bc2c40e68b24?w=600',
-    featured: true,
-    in_stock: true,
-    materials: 'Cerâmica artesanal',
-    dimensions: '22cm x 15cm',
-  },
-  {
-    name: 'Vela Aromática Lavanda',
-    description: 'Vela de cera de soja com essência de lavanda, queima limpa de até 40 horas.',
-    price: 79.90,
-    category: 'fragancias',
-    subcategory: 'Velas',
-    image_url: 'https://images.unsplash.com/photo-1602607890780-8e7d8a8b8e8e?w=600',
-    featured: true,
-    in_stock: true,
-    materials: 'Cera de soja, óleo essencial',
-    dimensions: '9cm x 8cm',
-  },
-  {
-    name: 'Jogo de Toalhas Premium',
-    description: 'Conjunto de toalhas de banho e rosto em algodão egípcio 600 fios.',
-    price: 349.90,
-    category: 'cama_mesa_banho',
-    subcategory: 'Toalhas',
-    image_url: 'https://images.unsplash.com/photo-1631049307264-da0ec9d70304?w=600',
-    featured: false,
-    in_stock: true,
-    materials: 'Algodão egípcio',
-    dimensions: 'Banho 70x140cm, Rosto 50x90cm',
-  },
-  {
-    name: 'Bandeja Decorativa em Madeira',
-    description: 'Bandeja em madeira maciça com acabamento natural, ideal para servir ou decorar.',
-    price: 159.90,
-    category: 'casa',
-    subcategory: 'Bandejas',
-    image_url: 'https://images.unsplash.com/photo-1615876234686-a8828094e910?w=600',
-    featured: true,
-    in_stock: true,
-    materials: 'Madeira maciça',
-    dimensions: '35cm x 25cm',
-  },
-];
 
 async function seed() {
   console.log('Iniciando seed do banco de dados...');
@@ -90,7 +39,8 @@ async function seed() {
     }
     console.log(`${sampleProducts.length} produtos de exemplo criados.`);
   } else {
-    console.log('Produtos já existem, pulando seed.');
+    console.log('Produtos já existem, sincronizando imagens...');
+    await syncProductImages(pool);
   }
 
   console.log('Seed concluído!');

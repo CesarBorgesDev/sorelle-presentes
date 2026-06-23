@@ -7,7 +7,8 @@ const router = Router();
 
 const ALLOWED_FIELDS = [
   'customer_name', 'customer_email', 'customer_phone', 'customer_address',
-  'items', 'subtotal', 'wrapping_cost', 'total', 'status', 'payment_method',
+  'items', 'subtotal', 'wrapping_cost', 'shipping_cost', 'shipping_service_code',
+  'shipping_service_name', 'shipping_deadline_days', 'total', 'status', 'payment_method',
   'payment_status', 'gateway_order_number', 'notes',
 ];
 

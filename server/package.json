@@ -8,7 +8,8 @@
     "start": "node src/index.js",
     "db:setup": "node src/db/ensureDb.js && node src/db/migrate.js && node src/db/seed.js",
     "db:migrate": "node src/db/migrate.js",
-    "db:seed": "node src/db/seed.js"
+    "db:seed": "node src/db/seed.js",
+    "db:update-images": "node src/db/updateProductImages.js"
   },
   "dependencies": {
     "bcryptjs": "^3.0.2",

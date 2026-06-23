@@ -48,6 +48,10 @@ import Checkout from '@/pages/Checkout';
 
 import PaymentReturn from '@/pages/PaymentReturn';
 
+import PixPayment from '@/pages/PixPayment';
+
+import Account from '@/pages/Account';
+
 
 
 function AppRoutes() {
@@ -76,7 +80,9 @@ function AppRoutes() {
 
         <Route element={<ProtectedRoute unauthenticatedElement={<Navigate to="/login" replace />} />}>
           <Route path="/checkout" element={<Checkout />} />
+          <Route path="/conta" element={<Account />} />
           <Route path="/pagamento/retorno" element={<PaymentReturn />} />
+          <Route path="/pagamento/pix" element={<PixPayment />} />
         </Route>
 
       </Route>

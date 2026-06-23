@@ -167,6 +167,13 @@ const settings = {
 };
 
 const images = {
+  async uploadProduct({ image, mime_type }) {
+    return apiFetch('/images/upload-product', {
+      method: 'POST',
+      body: JSON.stringify({ image, mime_type }),
+    });
+  },
+
   async generateScene({ image, mime_type, product_name, category, materials }) {
     return apiFetch('/images/generate-scene', {
       method: 'POST',
@@ -176,6 +183,17 @@ const images = {
 };
 
 const checkout = {
+  async getMethods() {
+    return apiFetch('/checkout/metodos');
+  },
+
+  async start(data) {
+    return apiFetch('/checkout', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
   async startCielo(data) {
     return apiFetch('/checkout/cielo', {
       method: 'POST',
@@ -186,6 +204,66 @@ const checkout = {
   async getOrder(orderId) {
     return apiFetch(`/checkout/pedido/${orderId}`);
   },
+
+  async listMyOrders() {
+    return apiFetch('/checkout/meus-pedidos');
+  },
+
+  async getPixDetails(orderId) {
+    return apiFetch(`/checkout/pedido/${orderId}/pix`);
+  },
+};
+
+const shipping = {
+  async quote(destination_zip) {
+    return apiFetch('/shipping/cotacao', {
+      method: 'POST',
+      body: JSON.stringify({ destination_zip }),
+    });
+  },
+
+  async lookupCep(cep) {
+    return apiFetch(`/shipping/cep/${cep.replace(/\D/g, '')}`);
+  },
+};
+
+const account = {
+  getProfile() {
+    return apiFetch('/account/profile');
+  },
+
+  updateProfile(data) {
+    return apiFetch('/account/profile', {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  },
+
+  getWishlist() {
+    return apiFetch('/account/wishlist');
+  },
+
+  addToWishlist(productId) {
+    return apiFetch('/account/wishlist', {
+      method: 'POST',
+      body: JSON.stringify({ product_id: productId }),
+    });
+  },
+
+  removeFromWishlist(productId) {
+    return apiFetch(`/account/wishlist/${productId}`, { method: 'DELETE' });
+  },
+
+  getRmaRequests() {
+    return apiFetch('/account/rma');
+  },
+
+  createRmaRequest(data) {
+    return apiFetch('/account/rma', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
 };
 
 export const api = {
@@ -193,6 +271,8 @@ export const api = {
   settings,
   images,
   checkout,
+  shipping,
+  account,
   entities: {
     Product: createEntityClient('products'),
     Order: createEntityClient('orders'),

@@ -79,6 +79,9 @@ export default function PaymentReturn() {
         </div>
       )}
 
+      <Link to="/conta" className="inline-block px-6 py-3 border border-border rounded-sm font-body text-sm tracking-wider hover:bg-secondary/50 mr-3">
+        Meus pedidos
+      </Link>
       <Link to="/" className="inline-block px-6 py-3 bg-primary text-primary-foreground rounded-sm font-body text-sm tracking-wider hover:opacity-80">
         Voltar à loja
       </Link>

@@ -6,6 +6,10 @@ CREATE TABLE IF NOT EXISTS users (
   email VARCHAR(255) UNIQUE NOT NULL,
   password_hash VARCHAR(255) NOT NULL,
   role VARCHAR(20) NOT NULL DEFAULT 'user' CHECK (role IN ('admin', 'user')),
+  full_name VARCHAR(255),
+  phone VARCHAR(50),
+  document VARCHAR(20),
+  address TEXT,
   created_date TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_date TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -25,6 +29,10 @@ CREATE TABLE IF NOT EXISTS products (
   sku VARCHAR(100),
   materials TEXT,
   dimensions TEXT,
+  weight_kg NUMERIC(8, 3),
+  length_cm NUMERIC(8, 2),
+  width_cm NUMERIC(8, 2),
+  height_cm NUMERIC(8, 2),
   created_date TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_date TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -38,10 +46,14 @@ CREATE TABLE IF NOT EXISTS orders (
   items JSONB NOT NULL DEFAULT '[]',
   subtotal NUMERIC(10, 2) DEFAULT 0,
   wrapping_cost NUMERIC(10, 2) DEFAULT 0,
+  shipping_cost NUMERIC(10, 2) DEFAULT 0,
+  shipping_service_code VARCHAR(20),
+  shipping_service_name VARCHAR(50),
+  shipping_deadline_days INTEGER,
   total NUMERIC(10, 2) NOT NULL,
   status VARCHAR(30) NOT NULL DEFAULT 'pendente'
     CHECK (status IN ('pendente', 'confirmado', 'em_preparo', 'enviado', 'entregue', 'cancelado')),
-  payment_method VARCHAR(30) CHECK (payment_method IN ('pix', 'cartao_credito', 'boleto', 'cielo')),
+  payment_method VARCHAR(30) CHECK (payment_method IN ('pix', 'cartao_credito', 'boleto', 'cielo', 'test')),
   payment_status VARCHAR(30) NOT NULL DEFAULT 'aguardando_pagamento'
     CHECK (payment_status IN ('aguardando_pagamento', 'pago', 'recusado', 'cancelado')),
   gateway_order_number VARCHAR(64),
@@ -114,8 +126,46 @@ ALTER TABLE orders ADD COLUMN IF NOT EXISTS gateway_order_number VARCHAR(64);
 
 ALTER TABLE orders DROP CONSTRAINT IF EXISTS orders_payment_method_check;
 ALTER TABLE orders ADD CONSTRAINT orders_payment_method_check
-  CHECK (payment_method IS NULL OR payment_method IN ('pix', 'cartao_credito', 'boleto', 'cielo'));
+  CHECK (payment_method IS NULL OR payment_method IN ('pix', 'cartao_credito', 'boleto', 'cielo', 'test'));
 
 ALTER TABLE orders DROP CONSTRAINT IF EXISTS orders_payment_status_check;
 ALTER TABLE orders ADD CONSTRAINT orders_payment_status_check
   CHECK (payment_status IN ('aguardando_pagamento', 'pago', 'recusado', 'cancelado'));
+
+ALTER TABLE products ADD COLUMN IF NOT EXISTS weight_kg NUMERIC(8, 3);
+ALTER TABLE products ADD COLUMN IF NOT EXISTS length_cm NUMERIC(8, 2);
+ALTER TABLE products ADD COLUMN IF NOT EXISTS width_cm NUMERIC(8, 2);
+ALTER TABLE products ADD COLUMN IF NOT EXISTS height_cm NUMERIC(8, 2);
+
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS shipping_cost NUMERIC(10, 2) DEFAULT 0;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS shipping_service_code VARCHAR(20);
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS shipping_service_name VARCHAR(50);
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS shipping_deadline_days INTEGER;
+
+ALTER TABLE users ADD COLUMN IF NOT EXISTS full_name VARCHAR(255);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS phone VARCHAR(50);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS document VARCHAR(20);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS address TEXT;
+
+CREATE TABLE IF NOT EXISTS wishlist_items (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  product_id UUID NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  created_date TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(user_id, product_id)
+);
+
+CREATE TABLE IF NOT EXISTS rma_requests (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  order_id UUID REFERENCES orders(id) ON DELETE SET NULL,
+  reason VARCHAR(50) NOT NULL,
+  description TEXT,
+  status VARCHAR(30) NOT NULL DEFAULT 'aberta'
+    CHECK (status IN ('aberta', 'em_analise', 'aprovada', 'recusada', 'concluida')),
+  created_date TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_date TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_wishlist_user_id ON wishlist_items(user_id);
+CREATE INDEX IF NOT EXISTS idx_rma_user_id ON rma_requests(user_id);

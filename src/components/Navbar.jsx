@@ -62,7 +62,12 @@ export default function Navbar({ cartCount = 0, onCartClick }) {
               <button className={`hidden lg:block transition-colors ${textColor} hover:opacity-60`}>
                 <Search className="w-5 h-5" />
               </button>
-              <Link to="/login" className={`hidden lg:block transition-colors ${textColor} hover:opacity-60`}>
+              <Link
+                to="/conta"
+                className={`transition-colors ${textColor} hover:opacity-60`}
+                title="Minha conta"
+                aria-label="Minha conta"
+              >
                 <User className="w-5 h-5" />
               </Link>
               <button
@@ -106,6 +111,12 @@ export default function Navbar({ cartCount = 0, onCartClick }) {
                   {link.label}
                 </Link>
               ))}
+              <Link
+                to="/conta"
+                className="font-display text-2xl tracking-widest uppercase text-foreground hover:text-primary transition-colors"
+              >
+                Minha conta
+              </Link>
             </div>
           </motion.div>
         )}

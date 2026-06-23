@@ -3,8 +3,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import {
   Settings, Key, Sparkles, Loader2, CheckCircle2,
-  CreditCard, Circle, ExternalLink, AlertCircle,
+  CreditCard, Circle, ExternalLink, AlertCircle, Truck, ShoppingBag,
 } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 const MODELS = [
   { value: 'flux', label: 'Flux (fallback texto — gratuito)' },
@@ -49,6 +50,16 @@ export default function AdminSettings() {
   const [cieloBackendUrl, setCieloBackendUrl] = useState('');
   const [cieloCheckoutApiUrl, setCieloCheckoutApiUrl] = useState('');
   const [cieloMaxInstallments, setCieloMaxInstallments] = useState('12');
+  const [checkoutMethod, setCheckoutMethod] = useState('pix');
+  const [pixKey, setPixKey] = useState('');
+  const [pixHolderName, setPixHolderName] = useState('');
+  const [correiosOriginZip, setCorreiosOriginZip] = useState('');
+  const [correiosCompanyCode, setCorreiosCompanyCode] = useState('');
+  const [correiosPassword, setCorreiosPassword] = useState('');
+  const [carrierEnabled, setCarrierEnabled] = useState(false);
+  const [carrierName, setCarrierName] = useState('Transportadora');
+  const [carrierPrice, setCarrierPrice] = useState('');
+  const [carrierDeadlineDays, setCarrierDeadlineDays] = useState('10');
   const [model, setModel] = useState('flux');
   const [saved, setSaved] = useState(false);
 
@@ -66,7 +77,20 @@ export default function AdminSettings() {
       setCieloCheckoutApiUrl(data.cielo.checkoutApiUrl || '');
       setCieloMaxInstallments(String(data.cielo.maxInstallments || 12));
     }
-  }, [data?.image_model, data?.cielo]);
+    if (data?.payment) {
+      setCheckoutMethod(data.payment.checkout_method || 'pix');
+      setPixHolderName(data.payment.pix_holder_name || '');
+    }
+    if (data?.correios) {
+      setCorreiosOriginZip(data.correios.origin_zip || '');
+      if (data.correios.carrier) {
+        setCarrierEnabled(Boolean(data.correios.carrier.enabled));
+        setCarrierName(data.correios.carrier.label || 'Transportadora');
+        setCarrierPrice(data.correios.carrier.price > 0 ? String(data.correios.carrier.price) : '');
+        setCarrierDeadlineDays(String(data.correios.carrier.deadlineDays || 10));
+      }
+    }
+  }, [data?.image_model, data?.cielo, data?.payment, data?.correios]);
 
   const mutation = useMutation({
     mutationFn: (payload) => base44.settings.update(payload),
@@ -76,6 +100,8 @@ export default function AdminSettings() {
       setHfToken('');
       setStableHordeKey('');
       setCieloMerchantId('');
+      setPixKey('');
+      setCorreiosPassword('');
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     },
@@ -90,13 +116,32 @@ export default function AdminSettings() {
       cielo_backend_public_url: cieloBackendUrl.trim(),
       cielo_checkout_api_url: cieloCheckoutApiUrl.trim(),
       cielo_max_installments: cieloMaxInstallments,
+      checkout_payment_method: checkoutMethod,
+      pix_holder_name: pixHolderName.trim(),
+      correios_origin_zip: correiosOriginZip.replace(/\D/g, ''),
+      shipping_carrier_enabled: carrierEnabled,
+      shipping_carrier_name: carrierName.trim(),
+      shipping_carrier_deadline_days: carrierDeadlineDays,
     };
     if (pollinationsKey.trim()) payload.pollinations_api_key = pollinationsKey.trim();
     if (hfToken.trim()) payload.huggingface_api_token = hfToken.trim();
     if (stableHordeKey.trim()) payload.stable_horde_api_key = stableHordeKey.trim();
     if (cieloMerchantId.trim()) payload.cielo_merchant_id = cieloMerchantId.trim();
+    if (pixKey.trim()) payload.pix_key = pixKey.trim();
+    if (correiosCompanyCode.trim()) payload.correios_company_code = correiosCompanyCode.trim();
+    if (correiosPassword.trim()) payload.correios_password = correiosPassword.trim();
+    if (carrierPrice.trim()) payload.shipping_carrier_price = carrierPrice.trim().replace(',', '.');
     mutation.mutate(payload);
   };
+
+  const payment = data?.payment;
+  const correios = data?.correios;
+  const checkoutOptions = payment?.checkout_options || [
+    { id: 'pix', label: 'PIX', hint: 'Cielo ou chave manual' },
+    { id: 'cartao_credito', label: 'Cartão de crédito', hint: 'Checkout Cielo' },
+    { id: 'boleto', label: 'Boleto bancário', hint: 'Checkout Cielo' },
+    { id: 'test', label: 'Modo teste', hint: 'Aprova automaticamente' },
+  ];
 
   const inputClass = 'w-full px-3 py-2.5 bg-background border border-border rounded-sm font-body text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring';
   const labelClass = 'block font-body text-xs text-muted-foreground tracking-wider uppercase mb-1.5';
@@ -113,7 +158,7 @@ export default function AdminSettings() {
           <h1 className="font-display text-2xl tracking-wide text-foreground">Configurações</h1>
         </div>
         <p className="font-body text-sm text-muted-foreground">
-          Pagamentos Cielo e geração de imagens. Configure credenciais abaixo.
+          Pagamentos, frete, Cielo e geração de imagens.
         </p>
       </div>
 
@@ -123,27 +168,251 @@ export default function AdminSettings() {
           Carregando...
         </div>
       ) : (
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {/* ── Cielo ── */}
-          <section className="bg-card border border-border rounded-sm p-6 space-y-6">
-            <div className="flex items-start gap-3">
-              <CreditCard className="w-5 h-5 text-primary mt-0.5 shrink-0" />
+        <form onSubmit={handleSubmit}>
+          <Tabs defaultValue="checkout" className="w-full">
+            <TabsList className="w-full h-auto flex flex-wrap justify-start gap-1 p-1 mb-6 bg-secondary/60">
+              <TabsTrigger value="checkout" className="gap-1.5 font-body text-xs sm:text-sm px-3 py-2">
+                <ShoppingBag className="w-3.5 h-3.5" />
+                Checkout
+              </TabsTrigger>
+              <TabsTrigger value="frete" className="gap-1.5 font-body text-xs sm:text-sm px-3 py-2">
+                <Truck className="w-3.5 h-3.5" />
+                Frete
+              </TabsTrigger>
+              <TabsTrigger value="cielo" className="gap-1.5 font-body text-xs sm:text-sm px-3 py-2">
+                <CreditCard className="w-3.5 h-3.5" />
+                Cielo
+              </TabsTrigger>
+              <TabsTrigger value="imagens" className="gap-1.5 font-body text-xs sm:text-sm px-3 py-2">
+                <Sparkles className="w-3.5 h-3.5" />
+                Imagens
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="checkout" className="space-y-6 mt-0 focus-visible:outline-none">
               <div>
-                <h2 className="font-display text-lg tracking-wide text-foreground">Pagamento Cielo</h2>
+                <h2 className="font-display text-lg tracking-wide text-foreground">Finalizar compra</h2>
                 <p className="font-body text-sm text-muted-foreground mt-1">
-                  Checkout Cielo — o cliente é redirecionado ao gateway seguro da Cielo para pagar com cartão.
+                  Define como todos os clientes concluem o pedido. O checkout da loja usa apenas esta opção.
                 </p>
-                <a
-                  href={CIELO_DOCS_URL}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 font-body text-xs text-primary hover:underline mt-2"
+              </div>
+
+            {payment?.checkout_config && (
+              <div className={`px-3 py-2 rounded-sm text-sm font-body ${
+                payment.checkout_config.available
+                  ? 'bg-green-500/10 text-green-700 dark:text-green-400'
+                  : 'bg-amber-500/10 text-amber-700 dark:text-amber-400'
+              }`}>
+                {payment.checkout_config.available
+                  ? `Ativo: ${payment.checkout_config.label}${payment.checkout_config.isTestMode ? ' (sem cobrança real)' : ''}`
+                  : 'Checkout indisponível — configure Cielo ou chave PIX abaixo'}
+              </div>
+            )}
+
+            <div className="space-y-2">
+              {checkoutOptions.map((option) => (
+                <label
+                  key={option.id}
+                  className={`flex items-start gap-3 p-4 border rounded-sm cursor-pointer transition-colors ${
+                    checkoutMethod === option.id
+                      ? 'border-primary bg-primary/5 ring-1 ring-primary'
+                      : 'border-border hover:bg-secondary/30'
+                  }`}
                 >
-                  Documentação oficial
-                  <ExternalLink className="w-3 h-3" />
-                </a>
+                  <input
+                    type="radio"
+                    name="checkout_method"
+                    checked={checkoutMethod === option.id}
+                    onChange={() => setCheckoutMethod(option.id)}
+                    className="mt-1"
+                  />
+                  <div>
+                    <span className="font-body text-sm font-medium text-foreground">{option.label}</span>
+                    {option.hint && (
+                      <p className="font-body text-xs text-muted-foreground mt-0.5">{option.hint}</p>
+                    )}
+                  </div>
+                </label>
+              ))}
+            </div>
+
+            {checkoutMethod === 'test' && (
+              <div className="p-3 rounded-sm bg-amber-500/10 border border-amber-500/30 font-body text-xs text-amber-800 dark:text-amber-300">
+                Modo teste aprova pedidos automaticamente, esvazia o carrinho e não cobra nada.
+                Use apenas em desenvolvimento ou homologação.
+              </div>
+            )}
+
+            {checkoutMethod === 'pix' && (
+              <>
+                <div>
+                  <label className={labelClass}>Chave PIX (pagamento manual)</label>
+                  {payment?.has_pix_key && (
+                    <p className="font-body text-xs text-muted-foreground mb-2">
+                      Chave atual: <span className="font-mono text-foreground">{payment.pix_key_masked}</span>
+                    </p>
+                  )}
+                  <input
+                    type="text"
+                    className={inputClass}
+                    value={pixKey}
+                    onChange={(e) => setPixKey(e.target.value)}
+                    placeholder="Obrigatória se Cielo não estiver configurada"
+                    autoComplete="off"
+                  />
+                </div>
+
+                <div>
+                  <label className={labelClass}>Titular da chave PIX</label>
+                  <input
+                    type="text"
+                    className={inputClass}
+                    value={pixHolderName}
+                    onChange={(e) => setPixHolderName(e.target.value)}
+                    placeholder="Sorelle Presentes"
+                  />
+                </div>
+              </>
+            )}
+            </TabsContent>
+
+            <TabsContent value="frete" className="space-y-6 mt-0 focus-visible:outline-none">
+              <div>
+                <h2 className="font-display text-lg tracking-wide text-foreground">Frete</h2>
+                <p className="font-body text-sm text-muted-foreground mt-1">
+                  Correios (PAC/SEDEX) e transportadora própria. Informe o CEP de origem da loja.
+                </p>
+              </div>
+
+            <div>
+              <label className={labelClass}>CEP de origem *</label>
+              <input
+                type="text"
+                className={inputClass}
+                value={correiosOriginZip}
+                onChange={(e) => setCorreiosOriginZip(e.target.value.replace(/\D/g, '').slice(0, 8))}
+                placeholder="01310100"
+              />
+              <p className="font-body text-xs text-muted-foreground mt-1">
+                CEP de onde os produtos são despachados.
+              </p>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label className={labelClass}>Código da empresa (opcional)</label>
+                <input
+                  type="text"
+                  className={inputClass}
+                  value={correiosCompanyCode}
+                  onChange={(e) => setCorreiosCompanyCode(e.target.value)}
+                  placeholder="Contrato Correios"
+                  autoComplete="off"
+                />
+              </div>
+              <div>
+                <label className={labelClass}>Senha do contrato (opcional)</label>
+                <input
+                  type="password"
+                  className={inputClass}
+                  value={correiosPassword}
+                  onChange={(e) => setCorreiosPassword(e.target.value)}
+                  placeholder="Senha API Correios"
+                  autoComplete="new-password"
+                />
               </div>
             </div>
+
+            <div className="pt-4 border-t border-border space-y-4">
+              <div>
+                <h3 className="font-display text-base tracking-wide text-foreground">Transportadora</h3>
+                <p className="font-body text-sm text-muted-foreground mt-1">
+                  Frete fixo ou calculado por peso, sem integração com API. Aparece no checkout junto com PAC/SEDEX.
+                </p>
+              </div>
+
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={carrierEnabled}
+                  onChange={(e) => setCarrierEnabled(e.target.checked)}
+                  className="rounded border-border"
+                />
+                <span className="font-body text-sm text-foreground">Oferecer transportadora no checkout</span>
+              </label>
+
+              {carrierEnabled && (
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="sm:col-span-2">
+                    <label className={labelClass}>Nome exibido ao cliente</label>
+                    <input
+                      type="text"
+                      className={inputClass}
+                      value={carrierName}
+                      onChange={(e) => setCarrierName(e.target.value)}
+                      placeholder="Transportadora"
+                    />
+                  </div>
+                  <div>
+                    <label className={labelClass}>Valor do frete (R$)</label>
+                    <input
+                      type="text"
+                      className={inputClass}
+                      value={carrierPrice}
+                      onChange={(e) => setCarrierPrice(e.target.value.replace(/[^\d,.]/g, ''))}
+                      placeholder="Ex.: 35,00 (vazio = por peso)"
+                    />
+                  </div>
+                  <div>
+                    <label className={labelClass}>Prazo (dias úteis)</label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={60}
+                      className={inputClass}
+                      value={carrierDeadlineDays}
+                      onChange={(e) => setCarrierDeadlineDays(e.target.value)}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {correios && (
+              <p className="font-body text-xs text-muted-foreground">
+                Serviços: {correios.services?.map((s) => s.label).join(', ') || 'PAC, SEDEX'}
+                {correios.has_contract ? ' (com contrato)' : ' (varejo)'}
+                {correios.fallback_mode && correios.fallback_mode !== 'off' && (
+                  <> · Fallback: <span className="font-mono">{correios.fallback_mode}</span> (env CORREIOS_FALLBACK)</>
+                )}
+              </p>
+            )}
+
+            <div className="p-3 rounded-sm bg-secondary/50 border border-border font-body text-xs text-muted-foreground">
+              Se a API legada dos Correios não responder, o sistema usa frete estimado em desenvolvimento
+              (<span className="font-mono">CORREIOS_FALLBACK=auto</span>). Em produção, use <span className="font-mono">off</span> ou migre para a API REST com contrato.
+            </div>
+            </TabsContent>
+
+            <TabsContent value="cielo" className="space-y-6 mt-0 focus-visible:outline-none">
+              <div className="flex items-start gap-3">
+                <CreditCard className="w-5 h-5 text-primary mt-0.5 shrink-0" />
+                <div>
+                  <h2 className="font-display text-lg tracking-wide text-foreground">Pagamento Cielo</h2>
+                  <p className="font-body text-sm text-muted-foreground mt-1">
+                    Checkout Cielo — o cliente é redirecionado ao gateway seguro da Cielo para pagar com cartão.
+                  </p>
+                  <a
+                    href={CIELO_DOCS_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 font-body text-xs text-primary hover:underline mt-2"
+                  >
+                    Documentação oficial
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                </div>
+              </div>
 
             {cielo && (
               <div className={`flex items-center gap-2 px-3 py-2 rounded-sm text-sm font-body ${
@@ -280,20 +549,19 @@ export default function AdminSettings() {
               <p>• <strong>Options.ReturnUrl</strong> — redirecionamento após pagamento</p>
               <p>• <strong>Payment.MaxNumberOfInstallments</strong> — parcelas configuradas acima</p>
             </div>
-          </section>
+            </TabsContent>
 
-          {/* ── Imagens ── */}
-          <section className="bg-card border border-border rounded-sm p-6 space-y-6">
-            <div className="flex items-start gap-3 p-4 bg-secondary/50 rounded-sm border border-border">
-              <Sparkles className="w-5 h-5 text-primary mt-0.5 shrink-0" />
-              <div className="font-body text-sm text-muted-foreground">
-                <p className="text-foreground font-medium mb-1">Geração a partir da foto</p>
-                <p>
-                  Ao enviar uma foto no cadastro de produto, o sistema usa img2img gratuito (Stable Horde).
-                  Nenhum token é obrigatório, mas a fila anônima pode demorar alguns minutos.
-                </p>
+            <TabsContent value="imagens" className="space-y-6 mt-0 focus-visible:outline-none">
+              <div className="flex items-start gap-3 p-4 bg-secondary/50 rounded-sm border border-border">
+                <Sparkles className="w-5 h-5 text-primary mt-0.5 shrink-0" />
+                <div className="font-body text-sm text-muted-foreground">
+                  <p className="text-foreground font-medium mb-1">Geração a partir da foto</p>
+                  <p>
+                    Ao enviar uma foto no cadastro de produto, o sistema usa img2img gratuito (Stable Horde).
+                    Nenhum token é obrigatório, mas a fila anônima pode demorar alguns minutos.
+                  </p>
+                </div>
               </div>
-            </div>
 
             <div>
               <label className={labelClass}>
@@ -369,8 +637,10 @@ export default function AdminSettings() {
                 ))}
               </select>
             </div>
-          </section>
+            </TabsContent>
+          </Tabs>
 
+          <div className="mt-8 space-y-4 pt-6 border-t border-border">
           {mutation.isError && (
             <div className="p-3 rounded-sm bg-destructive/10 text-destructive text-sm font-body">
               {mutation.error.message}
@@ -391,6 +661,7 @@ export default function AdminSettings() {
           >
             {mutation.isPending ? 'Salvando...' : 'Salvar Configurações'}
           </button>
+          </div>
         </form>
       )}
     </div>

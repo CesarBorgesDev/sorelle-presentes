@@ -72,7 +72,7 @@ router.post('/login', async (req, res) => {
 router.get('/me', requireAuth, async (req, res) => {
   try {
     const result = await pool.query(
-      'SELECT id, email, role, created_date FROM users WHERE id = $1',
+      'SELECT id, email, role, full_name, phone, document, address, created_date FROM users WHERE id = $1',
       [req.user.id]
     );
     if (result.rows.length === 0) {

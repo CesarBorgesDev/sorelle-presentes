@@ -12,6 +12,8 @@ import cartItemRoutes from './routes/cartItems.js';
 import settingsRoutes from './routes/settings.js';
 import imageRoutes from './routes/images.js';
 import checkoutRoutes from './routes/checkout.js';
+import shippingRoutes from './routes/shipping.js';
+import accountRoutes from './routes/account.js';
 
 dotenv.config();
 
@@ -40,6 +42,8 @@ app.use('/api/cart-items', cartItemRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/images', imageRoutes);
 app.use('/api/checkout', checkoutRoutes);
+app.use('/api/shipping', shippingRoutes);
+app.use('/api/account', accountRoutes);
 
 app.use((_req, res) => {
   res.status(404).json({ message: 'Rota não encontrada' });

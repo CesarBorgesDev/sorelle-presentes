@@ -10,6 +10,7 @@
     "db:migrate": "npm run db:migrate --prefix server",
     "db:seed": "npm run db:seed --prefix server",
     "db:setup": "npm run db:setup --prefix server",
+    "db:update-images": "npm run db:update-images --prefix server",
     "build": "vite build",
     "lint": "eslint . --quiet",
     "lint:fix": "eslint . --fix",
