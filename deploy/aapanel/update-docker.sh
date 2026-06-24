@@ -20,11 +20,14 @@ SITE_ROOT="${SITE_ROOT:-/www/wwwroot/${DOMAIN}}"
 
 cd "$APP_DIR"
 
+# shellcheck source=npm-install.sh
+source "${SCRIPT_DIR}/npm-install.sh"
+
 echo "==> Atualizando código..."
 git pull
 
 echo "==> Build frontend..."
-npm ci
+npm_ci_safe .
 npm run build
 
 echo "==> Publicando frontend..."

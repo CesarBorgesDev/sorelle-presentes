@@ -131,6 +131,9 @@ wait_for_api() {
   fail "API não respondeu a tempo. Verifique: docker logs sorelle-backend"
 }
 
+# shellcheck source=npm-install.sh
+source "${SCRIPT_DIR}/npm-install.sh"
+
 # --- main ---
 
 load_deploy_env
@@ -191,7 +194,7 @@ wait_for_api
 
 # Frontend
 log "Instalando dependências e build do frontend..."
-npm ci
+npm_ci_safe .
 npm run build
 
 log "Publicando frontend em $SITE_ROOT ..."

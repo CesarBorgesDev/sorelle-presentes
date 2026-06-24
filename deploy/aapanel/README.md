@@ -187,6 +187,15 @@ Atualizações: `bash deploy/aapanel/update.sh`
 
 **502 em /api** — API parada. Verifique `docker logs sorelle-backend`.
 
+**npm ERR_SOCKET_TIMEOUT / npmmirror** — O aaPanel pode usar mirror chinês lento. O projeto inclui `.npmrc` com `registry.npmjs.org`. No servidor:
+
+```bash
+cd /www/server/sorelle-presentes
+npm config set registry https://registry.npmjs.org/ --global
+rm -rf node_modules
+npm ci --registry=https://registry.npmjs.org/
+```
+
 **CORS** — `CORS_ORIGIN` deve ser exatamente a URL HTTPS do site.
 
 **Banco recusado** — Senha com `@` exige URL-encoding na `DATABASE_URL`. Use `install-docker.sh` para gerar.
