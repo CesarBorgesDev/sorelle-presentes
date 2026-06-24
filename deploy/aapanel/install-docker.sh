@@ -141,6 +141,7 @@ require_cmd node
 require_cmd npm
 require_cmd curl
 require_cmd python3
+require_cmd rsync
 
 if ! docker compose version >/dev/null 2>&1; then
   fail "docker compose não disponível. Instale Docker pelo aaPanel."

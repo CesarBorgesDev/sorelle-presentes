@@ -24,11 +24,11 @@ Libere portas **80** e **443** em Security.
 
 ### Servidor novo (sem repositório clonado)
 
-Instalação completa em um comando — clona o repo e roda o deploy:
+Um único comando — clona o repo, sobe Docker (API + banco) e publica o frontend no aaPanel:
 
 ```bash
 export POSTGRES_PASSWORD='Sorelle@1975'
-curl -fsSL https://raw.githubusercontent.com/CesarBorgesDev/sorelle-presentes/main/deploy/aapanel/bootstrap-docker.sh | bash
+curl -fsSL https://raw.githubusercontent.com/CesarBorgesDev/sorelle-presentes/main/deploy/aapanel/install-aapanel-ubuntu.sh | bash
 ```
 
 Repositório: [github.com/CesarBorgesDev/sorelle-presentes](https://github.com/CesarBorgesDev/sorelle-presentes.git)
@@ -37,20 +37,17 @@ Repositório: [github.com/CesarBorgesDev/sorelle-presentes](https://github.com/C
 
 ```bash
 cd /www/server/sorelle-presentes
-
-sed -i 's/\r$//' deploy/aapanel/*.sh
-
-cp deploy/aapanel/.env.deploy.example deploy/aapanel/.env.deploy
-nano deploy/aapanel/.env.deploy   # POSTGRES_PASSWORD, etc.
-
-bash deploy/aapanel/install-docker.sh
+export POSTGRES_PASSWORD='Sorelle@1975'
+bash deploy/aapanel/install-aapanel-ubuntu.sh
 ```
 
-Ou use o bootstrap local:
+Ou configure manualmente:
 
 ```bash
-export POSTGRES_PASSWORD='Sorelle@1975'
-bash deploy/aapanel/bootstrap-docker.sh
+sed -i 's/\r$//' deploy/aapanel/*.sh
+cp deploy/aapanel/.env.deploy.example deploy/aapanel/.env.deploy
+nano deploy/aapanel/.env.deploy
+bash deploy/aapanel/install-docker.sh
 ```
 
 Exemplo de `deploy/aapanel/.env.deploy`:
@@ -132,8 +129,9 @@ Atualizações: `bash deploy/aapanel/update.sh`
 
 | Arquivo | Função |
 |---------|--------|
-| `install-docker.sh` | Instalação completa Docker + frontend |
-| `bootstrap-docker.sh` | Clone do GitHub + install (servidor vazio) |
+| **`install-aapanel-ubuntu.sh`** | **Instalador principal** (clone + Docker + frontend) |
+| `install-docker.sh` | Etapas internas (Docker, build, Nginx) |
+| `bootstrap-docker.sh` | Atalho para `install-aapanel-ubuntu.sh` |
 | `update-docker.sh` | Atualização pós-`git pull` |
 | `.env.deploy.example` | Variáveis de deploy (copiar para `.env.deploy`) |
 | `docker-compose.backend.yml` | PostgreSQL + API |
