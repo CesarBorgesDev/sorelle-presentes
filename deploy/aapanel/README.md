@@ -2,168 +2,140 @@
 
 Guia para publicar a loja **Sorelle Presentes** em um VPS com [aaPanel](https://www.aapanel.com/).
 
-## Arquitetura recomendada
+## Instalação Docker (recomendada)
+
+API + PostgreSQL em **Docker**; frontend estático servido pelo **Nginx do aaPanel**.
 
 ```
 Internet → Nginx (aaPanel, :443)
-              ├── /        → dist/ (React build)
-              └── /api     → Node.js API (:3001, PM2)
-                              └── PostgreSQL (:5432)
+              ├── /        → /www/wwwroot/sorellepresentes.com.br
+              └── /api     → Docker sorelle-backend (:3001)
+                              └── Docker sorelle-db (PostgreSQL)
 ```
 
-O aaPanel já usa a porta **80/443**. Por isso **não** suba o container `frontend` do Docker na mesma máquina — use o Nginx do painel.
+### Pré-requisitos (aaPanel → App Store)
 
----
+- Nginx
+- Node.js 20
+- Docker + Docker Compose
+- Git
 
-## 1. Preparar o aaPanel
+Libere portas **80** e **443** em Security.
 
-1. Instale o aaPanel no Ubuntu (script oficial do site).
-2. Em **App Store**, instale:
-   - **Nginx**
-   - **Node.js 20** (ou superior)
-   - **PM2 Manager**
-   - **PostgreSQL 15**
-   - **Git** (opcional)
-
-3. Em **Security**, libere portas **80** e **443**.
-
----
-
-## 2. Criar o site
-
-1. **Website → Add site**
-2. Domínio: `loja.seudominio.com.br`
-3. Root: `/www/wwwroot/loja.seudominio.com.br` (padrão)
-4. PHP: desabilitado (site estático + proxy)
-
-Aponte o DNS do domínio para o IP do VPS.
-
----
-
-## 3. PostgreSQL
-
-### Opção A — pelo script (recomendado)
-
-O `install.sh` cria usuário e banco automaticamente.
-
-### Opção B — pelo aaPanel
-
-1. **Databases → PostgreSQL → Add database**
-2. Nome: `sorelle`, usuário: `sorelle`, senha forte
-3. Anote a connection string para `server/.env`
-
----
-
-## 4. Instalar a aplicação
-
-Conecte via SSH ao servidor:
+### Comando único no servidor
 
 ```bash
 cd /www/server
 git clone https://github.com/SEU_USUARIO/sorelle-presentes.git
 cd sorelle-presentes
 
-export DOMAIN="loja.seudominio.com.br"
-export REPO_URL=""   # já clonou, pode deixar vazio
-export APP_DIR="/www/server/sorelle-presentes"
-export DB_USER="sorelle"
-export DB_PASS="SUA_SENHA_FORTE"
-
-chmod +x deploy/aapanel/install.sh
-
-# Se veio do Windows e der erro "$'\r': command not found":
 sed -i 's/\r$//' deploy/aapanel/*.sh
 
+cp deploy/aapanel/.env.deploy.example deploy/aapanel/.env.deploy
+nano deploy/aapanel/.env.deploy   # DOMAIN, POSTGRES_PASSWORD, etc.
+
+bash deploy/aapanel/install-docker.sh
+```
+
+Exemplo de `deploy/aapanel/.env.deploy`:
+
+```bash
+DOMAIN=sorellepresentes.com.br
+POSTGRES_PASSWORD='Sorelle@1975'
+APP_DIR=/www/server/sorelle-presentes
+SITE_ROOT=/www/wwwroot/sorellepresentes.com.br
+```
+
+> **Senha com `@`:** o script codifica automaticamente na `DATABASE_URL` (`%40`). Não monte a URL manualmente.
+
+O script `install-docker.sh`:
+
+1. Gera `server/.env` (se não existir)
+2. Sobe `sorelle-db` + `sorelle-backend` via Docker
+3. Faz build do frontend (`npm run build`)
+4. Publica `dist/` em `/www/wwwroot/SEU_DOMINIO/`
+5. Cria vhost Nginx em `/www/server/panel/vhost/nginx/SEU_DOMINIO.conf`
+6. Recarrega Nginx
+
+### SSL (manual — 1 passo no painel)
+
+Após o DNS apontar para o VPS:
+
+1. **Website → sorellepresentes.com.br → SSL**
+2. **Let's Encrypt** → Apply → Force HTTPS
+
+Confirme em `server/.env`:
+
+```
+CORS_ORIGIN=https://sorellepresentes.com.br
+FRONTEND_URL=https://sorellepresentes.com.br
+APP_PUBLIC_URL=https://sorellepresentes.com.br
+```
+
+Reinicie a API:
+
+```bash
+docker compose -f deploy/aapanel/docker-compose.backend.yml restart backend
+```
+
+### Atualizações
+
+```bash
+bash deploy/aapanel/update-docker.sh
+```
+
+### Testes
+
+```bash
+curl -s http://127.0.0.1:3001/api/health
+curl -I http://sorellepresentes.com.br/
+curl -s http://sorellepresentes.com.br/api/health
+docker ps
+```
+
+---
+
+## Instalação alternativa (PM2 + PostgreSQL nativo)
+
+Use [`install.sh`](install.sh) se preferir API com PM2 e PostgreSQL instalado pelo aaPanel (sem Docker).
+
+```bash
+export DOMAIN="loja.seudominio.com.br"
+export DB_PASS="SUA_SENHA_FORTE"
 bash deploy/aapanel/install.sh
 ```
 
-O script:
+Requer: Nginx, Node.js 20, PM2 Manager, PostgreSQL 15.
 
-- instala dependências e faz build do frontend;
-- configura `server/.env` (se não existir);
-- roda migrate + seed;
-- inicia a API com PM2;
-- copia `dist/` para `/www/wwwroot/SEU_DOMINIO/`.
+Atualizações: `bash deploy/aapanel/update.sh`
 
 ---
 
-## 5. Configurar Nginx no aaPanel
+## Arquivos de deploy
 
-1. **Website → seu domínio → Config**
-2. Dentro do bloco `server { ... }`, use o modelo em `nginx-site.conf.example`
-3. Ajuste o `root` se o projeto estiver em outro caminho
-4. Salve e recarregue o Nginx
-
-Teste localmente no servidor:
-
-```bash
-curl http://127.0.0.1:3001/api/health
-# {"status":"ok","message":"Sorelle API funcionando"}
-```
+| Arquivo | Função |
+|---------|--------|
+| `install-docker.sh` | Instalação completa Docker + frontend |
+| `update-docker.sh` | Atualização pós-`git pull` |
+| `.env.deploy.example` | Variáveis de deploy (copiar para `.env.deploy`) |
+| `docker-compose.backend.yml` | PostgreSQL + API |
+| `nginx-vhost.conf.template` | Vhost Nginx gerado automaticamente |
+| `env.production.example` | Modelo do `server/.env` |
+| `install.sh` | Instalação PM2 (alternativa) |
 
 ---
 
-## 6. HTTPS (SSL)
-
-1. **Website → seu domínio → SSL**
-2. **Let's Encrypt** → Apply
-3. Ative **Force HTTPS**
-
-Atualize em `server/.env`:
-
-```
-CORS_ORIGIN=https://loja.seudominio.com.br
-FRONTEND_URL=https://loja.seudominio.com.br
-APP_PUBLIC_URL=https://loja.seudominio.com.br
-```
-
-Reinicie a API: `pm2 restart sorelle-api`
-
----
-
-## 7. Variáveis importantes
-
-Edite `server/.env` (modelo: `env.production.example`):
+## Variáveis importantes (`server/.env`)
 
 | Variável | Uso |
 |----------|-----|
+| `DATABASE_URL` | Conexão PostgreSQL (host `db` no Docker) |
 | `JWT_SECRET` | Chave longa e aleatória |
 | `ADMIN_PASSWORD` | Senha do admin inicial |
 | `CHECKOUT_PAYMENT_METHOD` | `pix`, `cartao_credito`, `test` |
 | `CIELO_*` | Pagamentos Cielo |
 | `CORREIOS_*` | Cálculo de frete |
 | `PIX_KEY` | PIX manual |
-
-Reinicie após alterar: `pm2 restart sorelle-api`
-
----
-
-## 8. Atualizações
-
-```bash
-export DOMAIN="loja.seudominio.com.br"
-bash deploy/aapanel/update.sh
-```
-
----
-
-## Alternativa: Docker só para API + banco
-
-Se preferir PostgreSQL e API em containers:
-
-```bash
-# Build do frontend no host (aaPanel Nginx serve dist/)
-npm ci && npm run build
-rsync -a dist/ /www/wwwroot/loja.seudominio.com.br/
-
-cp deploy/aapanel/env.production.example server/.env
-# edite server/.env
-
-export POSTGRES_PASSWORD=senha_forte
-docker compose -f deploy/aapanel/docker-compose.backend.yml up -d --build
-```
-
-Configure o Nginx igual ao passo 5 (`proxy_pass` → `127.0.0.1:3001`).
 
 ---
 
@@ -172,18 +144,19 @@ Configure o Nginx igual ao passo 5 (`proxy_pass` → `127.0.0.1:3001`).
 - [ ] `https://seudominio/` abre a loja
 - [ ] `https://seudominio/api/health` retorna OK
 - [ ] Login admin funciona
-- [ ] Upload de imagem de produto funciona (limite 15 MB no Nginx)
-- [ ] PM2: `pm2 status` mostra `sorelle-api` online
-- [ ] `pm2 startup` configurado para reiniciar após reboot
+- [ ] Upload de imagem funciona (limite 15 MB no Nginx)
+- [ ] `docker ps` mostra `sorelle-db` e `sorelle-backend` online
 
 ---
 
 ## Problemas comuns
 
-**502 em /api** — API parada ou porta errada. Verifique `pm2 logs sorelle-api`.
+**502 em /api** — API parada. Verifique `docker logs sorelle-backend`.
 
 **CORS** — `CORS_ORIGIN` deve ser exatamente a URL HTTPS do site.
 
-**Banco recusado** — Confira `DATABASE_URL` e se o PostgreSQL está rodando.
+**Banco recusado** — Senha com `@` exige URL-encoding na `DATABASE_URL`. Use `install-docker.sh` para gerar.
 
-**Página em branco** — Confira `root` do Nginx apontando para `dist/` e `try_files` com fallback para `index.html`.
+**Página em branco** — Confira `SITE_ROOT` e vhost Nginx (`nginx-vhost.conf.template`).
+
+**`$'\r': command not found`** — Rode `sed -i 's/\r$//' deploy/aapanel/*.sh`

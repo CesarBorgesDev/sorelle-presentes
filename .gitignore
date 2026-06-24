@@ -1,6 +1,7 @@
 #env
 .env
 .env.*
+!deploy/aapanel/.env.deploy.example
 *.ini
 
 # Logs

@@ -1,8 +1,7 @@
-# Alternativa: só banco + API em Docker (Nginx do aaPanel serve o frontend estático)
-# Uso: docker compose -f deploy/aapanel/docker-compose.backend.yml up -d --build
+# Backend + PostgreSQL em Docker (frontend servido pelo Nginx do aaPanel)
+# Uso: bash deploy/aapanel/install-docker.sh
 #
-# Depois configure server/.env com:
-#   DATABASE_URL=postgresql://postgres:SENHA@127.0.0.1:5432/sorelle
+# DATABASE_URL completa fica em server/.env (senha com @ deve estar URL-encoded).
 
 services:
   db:
@@ -33,8 +32,6 @@ services:
       - "127.0.0.1:3001:3001"
     env_file:
       - ../../server/.env
-    environment:
-      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@db:5432/sorelle
     volumes:
       - sorelle_uploads:/app/uploads
     depends_on:
