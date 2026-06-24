@@ -1,4 +1,7 @@
 #!/bin/bash
+# Corrige finais de linha Windows (CRLF) antes de executar no Linux
+grep -q $'\r' "$0" 2>/dev/null && sed -i 's/\r$//' "$0" && exec bash "$0" "$@"
+
 # =============================================================================
 # Instalação Sorelle Presentes — Ubuntu + aaPanel
 # =============================================================================

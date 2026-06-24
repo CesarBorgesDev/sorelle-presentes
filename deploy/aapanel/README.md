@@ -70,6 +70,10 @@ export DB_USER="sorelle"
 export DB_PASS="SUA_SENHA_FORTE"
 
 chmod +x deploy/aapanel/install.sh
+
+# Se veio do Windows e der erro "$'\r': command not found":
+sed -i 's/\r$//' deploy/aapanel/*.sh
+
 bash deploy/aapanel/install.sh
 ```
 

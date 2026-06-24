@@ -1,4 +1,6 @@
 #!/bin/bash
+grep -q $'\r' "$0" 2>/dev/null && sed -i 's/\r$//' "$0" && exec bash "$0" "$@"
+
 # Atualização rápida após git pull (rodar no servidor dentro do projeto)
 set -euo pipefail
 
