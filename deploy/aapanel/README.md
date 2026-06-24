@@ -7,11 +7,13 @@ Guia para publicar a loja **Sorelle Presentes** em um VPS com [aaPanel](https://
 API + PostgreSQL em **Docker**; frontend estático servido pelo **Nginx do aaPanel**.
 
 ```
-Internet → Nginx (aaPanel, :443)
-              ├── /        → /www/wwwroot/sorellepresentes.com.br
+Internet → Nginx (aaPanel, :80)
+              ├── /        → /www/wwwroot/191.252.205.7
               └── /api     → Docker sorelle-backend (:3001)
                               └── Docker sorelle-db (PostgreSQL)
 ```
+
+**URL padrão:** [http://191.252.205.7/](http://191.252.205.7/) (HTTP — IP não usa SSL Let's Encrypt)
 
 ### Pré-requisitos (aaPanel → App Store)
 
@@ -71,11 +73,32 @@ bash deploy/aapanel/install-docker.sh
 Exemplo de `deploy/aapanel/.env.deploy`:
 
 ```bash
-DOMAIN=sorellepresentes.com.br
+DOMAIN=191.252.205.7
 POSTGRES_PASSWORD='Sorelle@1975'
 APP_DIR=/www/server/sorelle-presentes
-SITE_ROOT=/www/wwwroot/sorellepresentes.com.br
+SITE_ROOT=/www/wwwroot/191.252.205.7
 REPO_URL=https://github.com/CesarBorgesDev/sorelle-presentes.git
+```
+
+### Firewall e acesso externo
+
+O instalador libera portas **80** e **443** automaticamente. Para forçar manualmente:
+
+```bash
+bash deploy/aapanel/open-firewall.sh
+```
+
+No **aaPanel**:
+1. **Security → Firewall** → libere **80** e **443** (Status: Release)
+2. **Website → Add site** → digite `191.252.205.7` como domínio (se ainda não existir)
+3. No provedor VPS (Locaweb/etc.), libere 80/443 no firewall externo
+
+Se aparecer *"Website not found"* ou *"website has been stopped"*, rode novamente:
+
+```bash
+cd /www/server/sorelle-presentes
+git pull
+bash deploy/aapanel/install-docker.sh
 ```
 
 > **Senha com `@`:** o script codifica automaticamente na `DATABASE_URL` (`%40`). Não monte a URL manualmente.

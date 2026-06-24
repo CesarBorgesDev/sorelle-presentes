@@ -15,7 +15,7 @@ if [ -f "$DEPLOY_ENV" ]; then
 fi
 
 APP_DIR="${APP_DIR:-/www/server/sorelle-presentes}"
-DOMAIN="${DOMAIN:-sorellepresentes.com.br}"
+DOMAIN="${DOMAIN:-191.252.205.7}"
 SITE_ROOT="${SITE_ROOT:-/www/wwwroot/${DOMAIN}}"
 
 cd "$APP_DIR"

@@ -1,7 +1,7 @@
 server {
-    listen 80;
-    listen [::]:80;
-    server_name {{DOMAIN}};
+    listen 80 {{NGINX_DEFAULT_SERVER}};
+    listen [::]:80 {{NGINX_DEFAULT_SERVER}};
+    server_name {{DOMAIN}} _;
     index index.html index.htm;
     root {{SITE_ROOT}};
 

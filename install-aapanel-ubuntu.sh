@@ -28,7 +28,7 @@ if [ -f "${SELF_DIR}/deploy/aapanel/install-docker.sh" ]; then
 else
   APP_DIR="${APP_DIR:-/www/server/sorelle-presentes}"
 fi
-DOMAIN="${DOMAIN:-sorellepresentes.com.br}"
+DOMAIN="${DOMAIN:-191.252.205.7}"
 SITE_ROOT="${SITE_ROOT:-/www/wwwroot/${DOMAIN}}"
 
 RED='\033[0;31m'
