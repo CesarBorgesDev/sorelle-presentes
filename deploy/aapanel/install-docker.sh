@@ -71,7 +71,7 @@ generate_server_env() {
   fi
 
   encoded_pass="$(urlencode "$POSTGRES_PASSWORD")"
-  db_url="postgresql://postgres:${encoded_pass}@db:5432/sorelle"
+  db_url="postgresql://postgres:${encoded_pass}@127.0.0.1:5432/sorelle"
   jwt_secret="$(openssl rand -base64 48 | tr -d '/+=' | head -c 64)"
   env_file="${APP_DIR}/server/.env"
   template="${SCRIPT_DIR}/env.production.example"
@@ -184,10 +184,9 @@ if [ ! -f server/.env ]; then
   generate_server_env
 else
   log "server/.env já existe — atualizando URLs e DATABASE_URL se necessário."
-  if grep -q '@127.0.0.1:5432' server/.env 2>/dev/null; then
-    warn "server/.env usa 127.0.0.1 — atualizando DATABASE_URL para rede Docker (db)..."
-    encoded_pass="$(urlencode "$POSTGRES_PASSWORD")"
-    sed -i "s|DATABASE_URL=.*|DATABASE_URL=postgresql://postgres:${encoded_pass}@db:5432/sorelle|" server/.env
+  if grep -q '@db:5432' server/.env 2>/dev/null; then
+    warn "server/.env usa host 'db' — ajustando para 127.0.0.1 (acesso pelo host VPS)..."
+    sed -i 's|@db:5432|@127.0.0.1:5432|' server/.env
   fi
   update_server_env_urls
 fi

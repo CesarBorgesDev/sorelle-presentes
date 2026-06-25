@@ -17,6 +17,13 @@ npm ci
 npm ci --prefix server
 npm run build
 
+if docker ps --format '{{.Names}}' 2>/dev/null | grep -q '^sorelle-backend$'; then
+  echo "ERRO: Este servidor usa Docker. Use:"
+  echo "  bash deploy/aapanel/update-frontend.sh   # só frontend"
+  echo "  bash deploy/aapanel/update-docker.sh     # frontend + API"
+  exit 1
+fi
+
 echo "==> Migrando banco..."
 npm run db:migrate --prefix server
 

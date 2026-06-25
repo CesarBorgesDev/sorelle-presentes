@@ -7,6 +7,14 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 DEPLOY_ENV="${SCRIPT_DIR}/.env.deploy"
 
+# shellcheck source=common.sh
+source "${SCRIPT_DIR}/common.sh"
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+NC='\033[0m'
+log() { echo -e "${GREEN}==>${NC} $*"; }
+
 if [ -f "$DEPLOY_ENV" ]; then
   set -a
   # shellcheck disable=SC1090
@@ -23,24 +31,24 @@ cd "$APP_DIR"
 # shellcheck source=npm-install.sh
 source "${SCRIPT_DIR}/npm-install.sh"
 
-echo "==> Atualizando código..."
+log "Atualizando código..."
 git pull
 
-echo "==> Build frontend..."
+log "Build frontend..."
 npm_ci_safe .
 npm run build
 
-echo "==> Publicando frontend..."
+log "Publicando frontend..."
 mkdir -p "$SITE_ROOT"
 rsync -a --delete dist/ "$SITE_ROOT/"
 chown -R www:www "$SITE_ROOT" 2>/dev/null || true
 
-echo "==> Rebuild containers..."
+log "Rebuild containers..."
 export POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-}"
 docker compose -f deploy/aapanel/docker-compose.backend.yml up -d --build
 
-echo "==> Migrando banco..."
-docker exec sorelle-backend npm run db:migrate
+run_db_migrate "$APP_DIR"
 
+echo ""
 echo "==> Deploy concluído."
 echo "    curl -s http://127.0.0.1:3001/api/health"

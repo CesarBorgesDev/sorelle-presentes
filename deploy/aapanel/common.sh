@@ -133,3 +133,37 @@ update_server_env_urls() {
   sed -i "s|FRONTEND_URL=.*|FRONTEND_URL=${base_url}|" "$env_file"
   sed -i "s|APP_PUBLIC_URL=.*|APP_PUBLIC_URL=${base_url}|" "$env_file"
 }
+
+wait_for_db() {
+  local i
+  log "Aguardando PostgreSQL..."
+  for i in $(seq 1 30); do
+    if docker exec sorelle-db pg_isready -U postgres -d sorelle >/dev/null 2>&1; then
+      log "PostgreSQL respondendo."
+      return 0
+    fi
+    sleep 2
+  done
+  warn "PostgreSQL não respondeu a tempo. Verifique: docker ps"
+  return 1
+}
+
+# Migração pelo host VPS — DATABASE_URL deve usar 127.0.0.1 (não "db")
+run_db_migrate() {
+  local app_dir="${1:-${APP_DIR:-.}}"
+
+  if ! docker ps --format '{{.Names}}' 2>/dev/null | grep -q '^sorelle-db$'; then
+    warn "Container sorelle-db não está rodando — suba o Docker antes de migrar."
+    return 1
+  fi
+
+  wait_for_db || return 1
+
+  if [ -f "${app_dir}/server/.env" ] && grep -q '@db:5432' "${app_dir}/server/.env" 2>/dev/null; then
+    warn "Corrigindo DATABASE_URL: db → 127.0.0.1 em server/.env"
+    sed -i 's|@db:5432|@127.0.0.1:5432|' "${app_dir}/server/.env"
+  fi
+
+  log "Executando migrações (host → 127.0.0.1:5432)..."
+  npm run db:migrate --prefix "${app_dir}/server"
+}

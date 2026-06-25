@@ -227,7 +227,7 @@ Atualizações: `bash deploy/aapanel/update.sh`
 
 | Variável | Uso |
 |----------|-----|
-| `DATABASE_URL` | Conexão PostgreSQL (host `db` no Docker) |
+| `DATABASE_URL` | Conexão PostgreSQL — use `127.0.0.1` no `server/.env`; no Docker vira `db` automaticamente |
 | `JWT_SECRET` | Chave longa e aleatória |
 | `ADMIN_PASSWORD` | Senha do admin inicial |
 | `CHECKOUT_PAYMENT_METHOD` | `pix`, `cartao_credito`, `test` |
@@ -263,6 +263,13 @@ npm ci --registry=https://registry.npmjs.org/
 **CORS** — `CORS_ORIGIN` deve ser exatamente a URL HTTPS do site.
 
 **Banco recusado** — Senha com `@` exige URL-encoding na `DATABASE_URL`. Use `install-docker.sh` para gerar.
+
+**`ENOTFOUND db` na migração** — O host `db` só existe dentro do Docker. No `server/.env` use `127.0.0.1:5432`. Corrija e rode:
+
+```bash
+sed -i 's|@db:5432|@127.0.0.1:5432|' server/.env
+bash deploy/aapanel/update-docker.sh
+```
 
 **Página em branco** — Confira `SITE_ROOT` e vhost Nginx (`nginx-vhost.conf.template`).
 
