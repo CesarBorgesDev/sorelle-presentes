@@ -64,11 +64,11 @@ export default function Footer() {
               </li>
               <li className="flex items-start gap-3">
                 <Phone className="w-4 h-4 mt-0.5 text-background/40" />
-                <span className="font-body text-sm text-background/60">(11) 99999-9999</span>
+                <span className="font-body text-sm text-background/60">(34) 3351-1975</span>
               </li>
               <li className="flex items-start gap-3">
                 <MapPin className="w-4 h-4 mt-0.5 text-background/40" />
-                <span className="font-body text-sm text-background/60">São Paulo, SP</span>
+                <span className="font-body text-sm text-background/60">Sacramento - MG</span>
               </li>
             </ul>
           </div>
