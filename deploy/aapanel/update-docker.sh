@@ -9,6 +9,7 @@ DEPLOY_ENV="${SCRIPT_DIR}/.env.deploy"
 
 # shellcheck source=common.sh
 source "${SCRIPT_DIR}/common.sh"
+DEPLOY_AAPANEL_DIR="$SCRIPT_DIR"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -39,9 +40,9 @@ npm_ci_safe .
 npm run build
 
 log "Publicando frontend..."
-mkdir -p "$SITE_ROOT"
-rsync -a --delete dist/ "$SITE_ROOT/"
-chown -R www:www "$SITE_ROOT" 2>/dev/null || true
+publish_frontend "${APP_DIR}/dist" "$SITE_ROOT"
+write_nginx_vhost || true
+reload_nginx || true
 
 log "Rebuild containers..."
 export POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-}"

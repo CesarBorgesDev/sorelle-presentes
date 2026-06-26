@@ -215,6 +215,17 @@ Atualizações: `bash deploy/aapanel/update.sh`
 | `bootstrap-docker.sh` | Atalho para `install-aapanel-ubuntu.sh` |
 | `update-docker.sh` | Atualização completa (frontend + Docker + migrações) |
 | `update-frontend.sh` | Atualização rápida só do frontend |
+| `fix-homepage.sh` | Remove index padrão do aaPanel e publica a loja React |
+
+### Página padrão do aaPanel ("Congratulations, the site is created successfully")
+
+O aaPanel cria um `index.html` genérico ao adicionar o site. Para substituir pela loja:
+
+```bash
+bash deploy/aapanel/fix-homepage.sh
+```
+
+Confira no aaPanel: **Website → 191.252.205.7 →** raiz do site = `/www/wwwroot/191.252.205.7`
 | `.env.deploy.example` | Variáveis de deploy (copiar para `.env.deploy`) |
 | `docker-compose.backend.yml` | PostgreSQL + API |
 | `nginx-vhost.conf.template` | Vhost Nginx gerado automaticamente |

@@ -8,6 +8,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 # shellcheck source=common.sh
 source "${SCRIPT_DIR}/common.sh"
+DEPLOY_AAPANEL_DIR="$SCRIPT_DIR"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -36,20 +37,22 @@ log "2/4 Iniciando Nginx..."
 ensure_nginx_running || true
 
 if [ -d "$APP_DIR" ] && [ -f "${APP_DIR}/deploy/aapanel/nginx-vhost.conf.template" ]; then
-  log "3/4 Reaplicando vhost Nginx para ${DOMAIN}..."
-  AAPANEL_VHOST="/www/server/panel/vhost/nginx/${DOMAIN}.conf"
-  default_flag="$(nginx_default_server_flag)"
-  sed -e "s|{{DOMAIN}}|${DOMAIN}|g" \
-      -e "s|{{SITE_ROOT}}|${SITE_ROOT}|g" \
-      -e "s|{{APP_DIR}}|${APP_DIR}|g" \
-      -e "s|{{NGINX_DEFAULT_SERVER}}|${default_flag}|g" \
-      "${APP_DIR}/deploy/aapanel/nginx-vhost.conf.template" > "$AAPANEL_VHOST"
+  log "3/5 Reaplicando vhost Nginx para ${DOMAIN}..."
+  DEPLOY_AAPANEL_DIR="${APP_DIR}/deploy/aapanel"
+  write_nginx_vhost || true
   ensure_nginx_running || true
 else
   warn "Repositório não encontrado em ${APP_DIR} — pule vhost ou rode git clone + install-docker.sh"
 fi
 
-log "4/4 Subindo Docker (se existir)..."
+log "4/5 Publicando loja React (substitui index padrão do aaPanel)..."
+if [ -d "${APP_DIR}/dist" ]; then
+  publish_frontend "${APP_DIR}/dist" "$SITE_ROOT" || warn "Build dist/ ausente — rode: bash deploy/aapanel/fix-homepage.sh"
+elif [ -f "${APP_DIR}/package.json" ]; then
+  warn "dist/ não encontrado — execute: bash ${APP_DIR}/deploy/aapanel/fix-homepage.sh"
+fi
+
+log "5/5 Subindo Docker (se existir)..."
 if [ -f "${APP_DIR}/deploy/aapanel/docker-compose.backend.yml" ]; then
   docker compose -f "${APP_DIR}/deploy/aapanel/docker-compose.backend.yml" up -d 2>/dev/null || true
 fi

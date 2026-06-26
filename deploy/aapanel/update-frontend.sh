@@ -10,6 +10,7 @@ DEPLOY_ENV="${SCRIPT_DIR}/.env.deploy"
 
 # shellcheck source=common.sh
 source "${SCRIPT_DIR}/common.sh"
+DEPLOY_AAPANEL_DIR="$SCRIPT_DIR"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -51,10 +52,10 @@ npm run build
 
 [ -d dist ] || fail "Build falhou — pasta dist/ não encontrada"
 
-log "Publicando em ${SITE_ROOT}..."
-ensure_site_root
-rsync -a --delete dist/ "$SITE_ROOT/"
-chown -R www:www "$SITE_ROOT" 2>/dev/null || true
+publish_frontend "${APP_DIR}/dist" "$SITE_ROOT" || fail "Falha ao publicar frontend"
+
+write_nginx_vhost || warn "Não foi possível atualizar vhost Nginx"
+reload_nginx || true
 
 PUBLIC_URL="$(site_public_url)"
 

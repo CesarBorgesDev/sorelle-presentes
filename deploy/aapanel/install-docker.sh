@@ -19,6 +19,7 @@ DEPLOY_ENV="${SCRIPT_DIR}/.env.deploy"
 
 # shellcheck source=common.sh
 source "${SCRIPT_DIR}/common.sh"
+DEPLOY_AAPANEL_DIR="$SCRIPT_DIR"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -88,41 +89,6 @@ generate_server_env() {
   sed -i "s|CORS_ORIGIN=.*|CORS_ORIGIN=${base_url}|" "$env_file"
   sed -i "s|FRONTEND_URL=.*|FRONTEND_URL=${base_url}|" "$env_file"
   sed -i "s|APP_PUBLIC_URL=.*|APP_PUBLIC_URL=${base_url}|" "$env_file"
-}
-
-write_nginx_vhost() {
-  local template out_dir default_flag
-
-  template="${SCRIPT_DIR}/nginx-vhost.conf.template"
-  [ -f "$template" ] || fail "Template Nginx não encontrado: $template"
-
-  default_flag="$(nginx_default_server_flag)"
-  out_dir="$(dirname "$AAPANEL_VHOST")"
-  mkdir -p "$out_dir" /www/wwwlogs 2>/dev/null || true
-
-  log "Escrevendo vhost Nginx → $AAPANEL_VHOST"
-  sed -e "s|{{DOMAIN}}|${DOMAIN}|g" \
-      -e "s|{{SITE_ROOT}}|${SITE_ROOT}|g" \
-      -e "s|{{APP_DIR}}|${APP_DIR}|g" \
-      -e "s|{{NGINX_DEFAULT_SERVER}}|${default_flag}|g" \
-      "$template" > "$AAPANEL_VHOST"
-}
-
-reload_nginx() {
-  log "Recarregando Nginx..."
-  ensure_nginx_running || true
-  if command -v bt >/dev/null 2>&1; then
-    bt reload 2>/dev/null || true
-  fi
-  if [ -x /etc/init.d/nginx ]; then
-    /etc/init.d/nginx reload 2>/dev/null || /etc/init.d/nginx restart 2>/dev/null || true
-  elif command -v nginx >/dev/null 2>&1; then
-    nginx -t && nginx -s reload 2>/dev/null || true
-  elif [ -x /www/server/nginx/sbin/nginx ]; then
-    /www/server/nginx/sbin/nginx -t && /www/server/nginx/sbin/nginx -s reload 2>/dev/null || true
-  else
-    warn "Não foi possível recarregar Nginx automaticamente. Recarregue pelo aaPanel."
-  fi
 }
 
 wait_for_api() {
@@ -204,9 +170,7 @@ npm_ci_safe .
 npm run build
 
 log "Publicando frontend em $SITE_ROOT ..."
-ensure_site_root
-rsync -a --delete dist/ "$SITE_ROOT/"
-chown -R www:www "$SITE_ROOT" 2>/dev/null || true
+publish_frontend "${APP_DIR}/dist" "$SITE_ROOT" || fail "Falha ao publicar frontend"
 
 # Firewall
 open_firewall_ports
