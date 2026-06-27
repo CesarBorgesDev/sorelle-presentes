@@ -1,11 +1,16 @@
 #!/bin/bash
 grep -q $'\r' "$0" 2>/dev/null && sed -i 's/\r$//' "$0" && exec bash "$0" "$@"
 
-# Atualização rápida após git pull (rodar no servidor dentro do projeto)
+# Atualização PM2 (alternativa sem Docker)
 set -euo pipefail
 
-APP_DIR="${APP_DIR:-/www/server/sorelle-presentes}"
-DOMAIN="${DOMAIN:-}"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+DEPLOY_ENV="${SCRIPT_DIR}/.env.deploy"
+
+# shellcheck source=common.sh
+source "${SCRIPT_DIR}/common.sh"
+
+load_deploy_env "$DEPLOY_ENV"
 
 cd "$APP_DIR"
 
@@ -19,8 +24,8 @@ npm run build
 
 if docker ps --format '{{.Names}}' 2>/dev/null | grep -q '^sorelle-backend$'; then
   echo "ERRO: Este servidor usa Docker. Use:"
-  echo "  bash deploy/aapanel/update-frontend.sh   # só frontend"
-  echo "  bash deploy/aapanel/update-docker.sh     # frontend + API"
+  echo "  bash deploy/aapanel/update-frontend.sh"
+  echo "  bash deploy/aapanel/update-docker.sh"
   exit 1
 fi
 
@@ -30,10 +35,10 @@ npm run db:migrate --prefix server
 echo "==> Reiniciando API..."
 pm2 restart sorelle-api
 
-if [ -n "$DOMAIN" ] && [ -d "/www/wwwroot/${DOMAIN}" ]; then
-  echo "==> Publicando frontend..."
-  rsync -a --delete dist/ "/www/wwwroot/${DOMAIN}/"
-  chown -R www:www "/www/wwwroot/${DOMAIN}"
+if [ -d "$SITE_ROOT" ]; then
+  echo "==> Publicando frontend em ${SITE_ROOT}..."
+  rsync -a --delete dist/ "$SITE_ROOT/"
+  chown -R www:www "$SITE_ROOT"
 fi
 
 echo "==> Deploy concluído."

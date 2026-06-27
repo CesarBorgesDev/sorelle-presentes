@@ -132,15 +132,14 @@ pm2 start deploy/aapanel/ecosystem.config.cjs --cwd "$APP_DIR"
 pm2 save
 
 # --- Permissões do site aaPanel ---
-SITE_ROOT="/www/wwwroot/${DOMAIN}"
+SITE_ROOT="${SITE_ROOT:-/www/wwwroot/sorelle-presentes}"
 if [ -d "$SITE_ROOT" ]; then
   log "Sincronizando dist → $SITE_ROOT"
   rsync -a --delete dist/ "$SITE_ROOT/"
   chown -R www:www "$SITE_ROOT"
 else
   warn "Pasta do site não existe: $SITE_ROOT"
-  warn "Crie o site no aaPanel (Website → Add site) com domínio $DOMAIN e aponte o root para:"
-  warn "  $APP_DIR/dist"
+  warn "Crie o site no aaPanel: Website → sorelle-presentes → root ${SITE_ROOT}"
 fi
 
 echo ""

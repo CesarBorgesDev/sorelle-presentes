@@ -74,6 +74,7 @@ Exemplo de `deploy/aapanel/.env.deploy`:
 
 ```bash
 DOMAIN=191.252.205.7
+SITE_NAME=sorelle-presentes
 POSTGRES_PASSWORD='Sorelle@1975'
 APP_DIR=/www/server/sorelle-presentes
 SITE_ROOT=/www/wwwroot/sorelle-presentes
@@ -90,7 +91,7 @@ bash deploy/aapanel/open-firewall.sh
 
 No **aaPanel**:
 1. **Security → Firewall** → libere **80** e **443** (Status: Release)
-2. **Website → Add site** → digite `191.252.205.7` como domínio (se ainda não existir)
+2. **Website → Add site** → nome: `sorelle-presentes` → raiz: `/www/wwwroot/sorelle-presentes`
 3. No provedor VPS (Locaweb/etc.), libere 80/443 no firewall externo
 
 Se aparecer *"Website not found"* ou *"website has been stopped"*, rode novamente:
@@ -140,7 +141,7 @@ O script `install-docker.sh`:
 1. Gera `server/.env` (se não existir)
 2. Sobe `sorelle-db` + `sorelle-backend` via Docker
 3. Faz build do frontend (`npm run build`)
-4. Publica `dist/` em `/www/wwwroot/SEU_DOMINIO/`
+4. Publica `dist/` em `/www/wwwroot/sorelle-presentes`
 5. Cria vhost Nginx em `/www/server/panel/vhost/nginx/SEU_DOMINIO.conf`
 6. Recarrega Nginx
 
