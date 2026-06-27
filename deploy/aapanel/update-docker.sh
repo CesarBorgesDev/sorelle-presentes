@@ -16,16 +16,7 @@ GREEN='\033[0;32m'
 NC='\033[0m'
 log() { echo -e "${GREEN}==>${NC} $*"; }
 
-if [ -f "$DEPLOY_ENV" ]; then
-  set -a
-  # shellcheck disable=SC1090
-  source "$DEPLOY_ENV"
-  set +a
-fi
-
-APP_DIR="${APP_DIR:-/www/server/sorelle-presentes}"
-DOMAIN="${DOMAIN:-191.252.205.7}"
-SITE_ROOT="${SITE_ROOT:-/www/wwwroot/sorelle-presentes}"
+load_deploy_env "$DEPLOY_ENV"
 
 cd "$APP_DIR"
 
@@ -39,7 +30,6 @@ log "Build frontend..."
 npm_ci_safe .
 npm run build
 
-log "Publicando frontend..."
 publish_frontend "${APP_DIR}/dist" "$SITE_ROOT"
 write_nginx_vhost || true
 reload_nginx || true
@@ -52,4 +42,5 @@ run_db_migrate "$APP_DIR"
 
 echo ""
 echo "==> Deploy concluído."
-echo "    curl -s http://127.0.0.1:3001/api/health"
+echo "    Site: $(site_public_url)/"
+echo "    API:  curl -s http://127.0.0.1:3001/api/health"

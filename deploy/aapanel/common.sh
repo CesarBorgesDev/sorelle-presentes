@@ -1,4 +1,43 @@
 # Helpers compartilhados — deploy aaPanel
+#
+# Diretórios padrão (VPS Sorelle + aaPanel):
+#   APP_DIR    /www/server/sorelle-presentes   — código-fonte
+#   SITE_ROOT  /www/wwwroot/sorelle-presentes   — frontend publicado (site aaPanel)
+#   DOMAIN     191.252.205.7                    — IP público (Nginx server_name)
+#   SITE_NAME  sorelle-presentes                — nome do site no aaPanel (vhost .conf)
+
+DEFAULT_DOMAIN="191.252.205.7"
+DEFAULT_APP_DIR="/www/server/sorelle-presentes"
+DEFAULT_SITE_ROOT="/www/wwwroot/sorelle-presentes"
+DEFAULT_SITE_NAME="sorelle-presentes"
+DEFAULT_REPO_URL="https://github.com/CesarBorgesDev/sorelle-presentes.git"
+
+load_deploy_env() {
+  local deploy_env_file="${1:-}"
+
+  if [ -n "$deploy_env_file" ] && [ -f "$deploy_env_file" ]; then
+    set -a
+    # shellcheck disable=SC1090
+    source "$deploy_env_file"
+    set +a
+  fi
+
+  DOMAIN="${DOMAIN:-$DEFAULT_DOMAIN}"
+  APP_DIR="${APP_DIR:-$DEFAULT_APP_DIR}"
+  SITE_ROOT="${SITE_ROOT:-$DEFAULT_SITE_ROOT}"
+  SITE_NAME="${SITE_NAME:-$DEFAULT_SITE_NAME}"
+  REPO_URL="${REPO_URL:-$DEFAULT_REPO_URL}"
+  GIT_BRANCH="${GIT_BRANCH:-main}"
+  AAPANEL_VHOST="${AAPANEL_VHOST:-/www/server/panel/vhost/nginx/${SITE_NAME}.conf}"
+}
+
+print_deploy_paths() {
+  echo "  APP_DIR:    ${APP_DIR}"
+  echo "  SITE_ROOT:  ${SITE_ROOT}"
+  echo "  DOMAIN:     ${DOMAIN}"
+  echo "  SITE_NAME:  ${SITE_NAME}"
+  echo "  NGINX:      ${AAPANEL_VHOST}"
+}
 
 log()  { echo -e "${GREEN:-}==>${NC:-} $*"; }
 warn() { echo -e "${YELLOW:-}AVISO:${NC:-} $*"; }
@@ -117,8 +156,6 @@ diagnose_access() {
 
 ensure_site_root() {
   mkdir -p "$SITE_ROOT"
-  mkdir -p "/www/wwwroot/sorelle-presentes" 2>/dev/null || true
-  mkdir -p "/www/wwwroot/${DOMAIN}" 2>/dev/null || true
   chown -R www:www "$SITE_ROOT" 2>/dev/null || true
 }
 
@@ -188,8 +225,10 @@ write_nginx_vhost() {
   out_dir="$(dirname "$AAPANEL_VHOST")"
   mkdir -p "$out_dir" /www/wwwlogs 2>/dev/null || true
 
-  log "Configurando Nginx → ${AAPANEL_VHOST} (root: ${SITE_ROOT})"
+  log "Configurando Nginx → ${AAPANEL_VHOST}"
+  log "  root: ${SITE_ROOT} | server_name: ${DOMAIN} ${SITE_NAME}"
   sed -e "s|{{DOMAIN}}|${DOMAIN}|g" \
+      -e "s|{{SITE_NAME}}|${SITE_NAME}|g" \
       -e "s|{{SITE_ROOT}}|${SITE_ROOT}|g" \
       -e "s|{{APP_DIR}}|${APP_DIR}|g" \
       -e "s|{{NGINX_DEFAULT_SERVER}}|${default_flag}|g" \

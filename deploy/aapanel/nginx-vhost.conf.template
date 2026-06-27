@@ -1,7 +1,7 @@
 server {
     listen 80 {{NGINX_DEFAULT_SERVER}};
     listen [::]:80 {{NGINX_DEFAULT_SERVER}};
-    server_name {{DOMAIN}} _;
+    server_name {{DOMAIN}} {{SITE_NAME}} _;
     index index.html index.htm;
     root {{SITE_ROOT}};
 
@@ -24,6 +24,6 @@ server {
         try_files $uri $uri/ /index.html;
     }
 
-    access_log /www/wwwlogs/{{DOMAIN}}.log;
-    error_log /www/wwwlogs/{{DOMAIN}}.error.log;
+    access_log /www/wwwlogs/{{SITE_NAME}}.log;
+    error_log /www/wwwlogs/{{SITE_NAME}}.error.log;
 }

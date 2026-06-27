@@ -29,6 +29,7 @@ else
   APP_DIR="${APP_DIR:-/www/server/sorelle-presentes}"
 fi
 DOMAIN="${DOMAIN:-191.252.205.7}"
+SITE_NAME="${SITE_NAME:-sorelle-presentes}"
 SITE_ROOT="${SITE_ROOT:-/www/wwwroot/sorelle-presentes}"
 
 RED='\033[0;31m'
@@ -83,6 +84,7 @@ if [ ! -f "${DEPLOY_DIR}/.env.deploy" ]; then
   log "[2/2] Criando ${DEPLOY_DIR}/.env.deploy ..."
   cat > "${DEPLOY_DIR}/.env.deploy" << EOF
 DOMAIN=${DOMAIN}
+SITE_NAME=${SITE_NAME}
 POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
 APP_DIR=${APP_DIR}
 SITE_ROOT=${SITE_ROOT}

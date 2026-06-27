@@ -38,30 +38,18 @@ urlencode() {
   VAL="$1" python3 -c "import os, urllib.parse; print(urllib.parse.quote(os.environ['VAL'], safe=''))"
 }
 
-load_deploy_env() {
+bootstrap_deploy_env() {
   if [ -f "$DEPLOY_ENV" ]; then
-    set -a
-    # shellcheck disable=SC1090
-    source "$DEPLOY_ENV"
-    set +a
+    load_deploy_env "$DEPLOY_ENV"
   elif [ -f "${SCRIPT_DIR}/.env.deploy.example" ]; then
     warn ".env.deploy não encontrado — criando a partir do exemplo..."
     cp "${SCRIPT_DIR}/.env.deploy.example" "$DEPLOY_ENV"
-    set -a
-    # shellcheck disable=SC1090
-    source "$DEPLOY_ENV"
-    set +a
+    load_deploy_env "$DEPLOY_ENV"
     warn "Edite $DEPLOY_ENV (POSTGRES_PASSWORD) se ainda estiver com valor padrão."
   else
+    load_deploy_env ""
     fail "Crie deploy/aapanel/.env.deploy com DOMAIN e POSTGRES_PASSWORD."
   fi
-
-  DOMAIN="${DOMAIN:-191.252.205.7}"
-  APP_DIR="${APP_DIR:-/www/server/sorelle-presentes}"
-  SITE_ROOT="${SITE_ROOT:-/www/wwwroot/sorelle-presentes}"
-  POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-}"
-  REPO_URL="${REPO_URL:-https://github.com/CesarBorgesDev/sorelle-presentes.git}"
-  AAPANEL_VHOST="${AAPANEL_VHOST:-/www/server/panel/vhost/nginx/${DOMAIN}.conf}"
 }
 
 generate_server_env() {
@@ -109,9 +97,10 @@ source "${SCRIPT_DIR}/npm-install.sh"
 
 # --- main ---
 
-load_deploy_env
+bootstrap_deploy_env
 
-require_cmd docker
+log "Caminhos:"
+print_deploy_paths
 require_cmd git
 require_cmd node
 require_cmd npm

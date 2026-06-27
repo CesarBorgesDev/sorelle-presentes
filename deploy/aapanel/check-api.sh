@@ -1,33 +1,17 @@
 #!/bin/bash
 grep -q $'\r' "$0" 2>/dev/null && sed -i 's/\r$//' "$0" && exec bash "$0" "$@"
 
-# Diagnóstico rápido da API e frontend no aaPanel
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 DEPLOY_ENV="${SCRIPT_DIR}/.env.deploy"
 
-if [ -f "$DEPLOY_ENV" ]; then
-  set -a
-  # shellcheck disable=SC1090
-  source "$DEPLOY_ENV"
-  set +a
-fi
+# shellcheck source=common.sh
+source "${SCRIPT_DIR}/common.sh"
 
-DOMAIN="${DOMAIN:-191.252.205.7}"
-BASE_URL="${SITE_SCHEME:-http}://${DOMAIN}"
-[ "$DOMAIN" = "191.252.205.7" ] && BASE_URL="http://${DOMAIN}"
+load_deploy_env "$DEPLOY_ENV"
 
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-NC='\033[0m'
-ok()   { echo -e "${GREEN}OK${NC}  $*"; }
-fail() { echo -e "${RED}FALHA${NC} $*"; }
-warn() { echo -e "${YELLOW}AVISO${NC} $*"; }
-
-echo "=== Diagnóstico Sorelle — ${DOMAIN} ==="
-echo ""
+BASE_URL="$(site_public_url)"
 
 echo "Docker:"
 if docker ps --format '  {{.Names}}: {{.Status}}' 2>/dev/null | grep -E 'sorelle-(db|backend)'; then
