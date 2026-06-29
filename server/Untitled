@@ -1,0 +1,8 @@
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/sorelle
+JWT_SECRET=sua-chave-secreta-aqui
+JWT_EXPIRES_IN=7d
+PORT=3001
+CORS_ORIGIN=http://localhost:5173
+ADMIN_EMAIL=admin@sorelle.com.br
+ADMIN_PASSWORD=admin123
+```

@@ -24,9 +24,13 @@ const PORT = process.env.PORT || 3001;
 
 function buildAllowedOrigins() {
   const origins = new Set([
+    'http://localhost:3000',
+    'http://127.0.0.1:3000',
     'http://localhost:5173',
     'http://127.0.0.1:5173',
     'http://191.252.205.7',
+    'https://sorelle-presentes.com.br',
+    ''
   ]);
   for (const key of ['CORS_ORIGIN', 'FRONTEND_URL', 'APP_PUBLIC_URL']) {
     const value = process.env[key];

@@ -30,9 +30,9 @@ services:
       JWT_SECRET: ${JWT_SECRET:-altere-esta-chave-secreta-em-producao}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
       PORT: 3001
-      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost}
-      FRONTEND_URL: ${FRONTEND_URL:-http://localhost}
-      APP_PUBLIC_URL: ${APP_PUBLIC_URL:-http://localhost}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+      APP_PUBLIC_URL: ${APP_PUBLIC_URL:-http://localhost:3000}
       ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@sorelle.com.br}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin123}
       CHECKOUT_PAYMENT_METHOD: ${CHECKOUT_PAYMENT_METHOD:-test}
@@ -51,7 +51,7 @@ services:
     container_name: sorelle-frontend
     restart: unless-stopped
     ports:
-      - "80:80"
+      - "3000:80"
     depends_on:
       backend:
         condition: service_healthy

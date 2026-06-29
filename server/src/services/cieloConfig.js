@@ -5,7 +5,7 @@ const DEFAULT_CHECKOUT_URL = 'https://cieloecommerce.cielo.com.br/api/public/v1/
 export async function getCieloConfig() {
   const merchantId = ((await getSetting('cielo_merchant_id')) || process.env.CIELO_MERCHANT_ID || '').trim();
   const softDescriptor = ((await getSetting('cielo_soft_descriptor')) || process.env.CIELO_SOFT_DESCRIPTOR || 'SORELLE').trim();
-  const frontendUrl = ((await getSetting('cielo_frontend_url')) || process.env.FRONTEND_URL || process.env.CORS_ORIGIN || 'http://localhost:5173').replace(/\/$/, '');
+  const frontendUrl = ((await getSetting('cielo_frontend_url')) || process.env.FRONTEND_URL || process.env.CORS_ORIGIN || 'http://localhost:3000').replace(/\/$/, '');
   const backendPublicUrl = ((await getSetting('cielo_backend_public_url')) || process.env.APP_PUBLIC_URL || 'http://localhost:3001').replace(/\/$/, '');
   const checkoutApiUrl = ((await getSetting('cielo_checkout_api_url')) || process.env.CIELO_CHECKOUT_URL || DEFAULT_CHECKOUT_URL).trim();
   const maxInstallments = Number((await getSetting('cielo_max_installments')) || process.env.CIELO_MAX_INSTALLMENTS || 12);
@@ -37,7 +37,7 @@ export function getCieloRequirements(config) {
       label: 'URL do site (retorno após pagamento)',
       required: true,
       done: Boolean(config.frontendUrl),
-      hint: 'Ex.: https://loja.sorelle.com.br ou http://localhost:5173',
+      hint: 'Ex.: https://loja.sorelle.com.br ou http://localhost:3000',
     },
     {
       id: 'backend_url',

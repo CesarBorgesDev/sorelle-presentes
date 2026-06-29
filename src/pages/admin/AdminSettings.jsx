@@ -503,7 +503,7 @@ export default function AdminSettings() {
                   className={inputClass}
                   value={cieloFrontendUrl}
                   onChange={(e) => setCieloFrontendUrl(e.target.value)}
-                  placeholder="http://localhost:5173"
+                  placeholder="http://localhost:3000"
                 />
                 <p className="font-body text-xs text-muted-foreground mt-1">
                   Retorno após pagamento:{' '}
