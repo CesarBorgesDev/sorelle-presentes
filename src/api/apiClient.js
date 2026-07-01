@@ -2,10 +2,14 @@ const TOKEN_KEY = 'sorelle_access_token';
 const API_BASE = import.meta.env.VITE_API_URL || '/api';
 
 class ApiError extends Error {
-  constructor(message, status) {
+  constructor(message, status, details = {}) {
     super(message);
     this.status = status;
     this.name = 'ApiError';
+    this.path = details.path ?? null;
+    this.url = details.url ?? null;
+    this.body = details.body ?? null;
+    this.rawBody = details.rawBody ?? null;
   }
 }
 
@@ -37,24 +41,32 @@ async function apiFetch(path, options = {}) {
       ...options,
       headers,
     });
-  } catch {
-    throw new ApiError(
+  } catch (networkErr) {
+    const err = new ApiError(
       'Não foi possível conectar ao servidor. Verifique se a API está online.',
-      0
+      0,
+      { path, url: `${API_BASE}${path}` }
     );
+    err.cause = networkErr;
+    throw err;
   }
 
   if (!response.ok) {
     const contentType = response.headers.get('content-type') || '';
     let body = {};
+    let rawBody = null;
+
     if (contentType.includes('application/json')) {
       body = await response.json().catch(() => ({}));
+    } else {
+      rawBody = await response.text().catch(() => null);
     }
 
     const fallbackByStatus = {
       401: 'Não autorizado',
       403: 'Acesso negado',
       404: 'Recurso não encontrado',
+      409: 'Este e-mail já está cadastrado',
       500: 'Erro interno no servidor',
       502: 'API indisponível — reinicie o container sorelle-backend',
       503: 'Servidor temporariamente indisponível',
@@ -62,7 +74,13 @@ async function apiFetch(path, options = {}) {
 
     throw new ApiError(
       body.message || fallbackByStatus[response.status] || `Erro na requisição (${response.status})`,
-      response.status
+      response.status,
+      {
+        path,
+        url: `${API_BASE}${path}`,
+        body: Object.keys(body).length ? body : null,
+        rawBody,
+      }
     );
   }
 
@@ -307,6 +325,26 @@ const account = {
     });
   },
 };
+
+export function logApiError(context, err, extra = {}) {
+  const details = {
+    context,
+    message: err?.message ?? String(err),
+    name: err?.name ?? null,
+    status: err?.status ?? null,
+    url: err?.url ?? null,
+    path: err?.path ?? null,
+    body: err?.body ?? null,
+    rawBody: err?.rawBody ?? null,
+    cause: err?.cause ?? null,
+    ...extra,
+  };
+
+  console.error(`[Sorelle] ${context}`, details);
+  if (err instanceof Error && err.stack) {
+    console.error(err.stack);
+  }
+}
 
 export const api = {
   auth,

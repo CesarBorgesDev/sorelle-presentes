@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
+import { logApiError } from "@/api/apiClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -27,6 +28,7 @@ export default function Register() {
       await base44.auth.register({ email, password });
       window.location.href = "/";
     } catch (err) {
+      logApiError("Falha ao criar conta", err, { email });
       setError(err.message || "Falha ao criar conta");
     } finally {
       setLoading(false);
