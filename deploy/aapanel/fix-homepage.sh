@@ -1,15 +1,15 @@
 #!/bin/bash
 grep -q $'\r' "$0" 2>/dev/null && sed -i 's/\r$//' "$0" && exec bash "$0" "$@"
 
-# Publica a loja React em /www/wwwroot/sorelle-presentes (substitui index padrão aaPanel)
+# Publica a loja React em /home/deploy/sorelle-presentes/dist
 #
 # Caminhos padrão:
-#   APP_DIR   = /www/server/sorelle-presentes
-#   SITE_ROOT = /www/wwwroot/sorelle-presentes
-#   DOMAIN    = 191.252.205.7
+#   APP_DIR   = /home/deploy/sorelle-presentes
+#   SITE_ROOT = /home/deploy/sorelle-presentes/dist
+#   DOMAIN    = sorellepresentes.com.br
 #
 # Uso (na VPS, como root):
-#   cd /www/server/sorelle-presentes
+#   cd /home/deploy/sorelle-presentes
 #   bash deploy/aapanel/fix-homepage.sh
 set -euo pipefail
 

@@ -1,4 +1,4 @@
-/** PM2 — rode na pasta deploy/aapanel ou passe --cwd /www/server/sorelle-presentes */
+/** PM2 — rode na pasta deploy/aapanel ou passe --cwd /home/deploy/sorelle-presentes */
 module.exports = {
   apps: [
     {

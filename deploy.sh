@@ -9,7 +9,7 @@ set -e
 # Configurações de Acesso
 VPS_IP="191.252.205.7"
 VPS_USER="root"               # Altere para o usuário correto (ex: ubuntu, root) se necessário
-TARGET_DIR="/var/www/sorelle"  # Diretório de destino na VPS
+TARGET_DIR="/home/deploy/sorelle-presentes"  # Diretório de destino na VPS
 SSH_KEY=""                    # Caminho para sua chave SSH se não for o padrão (ex: -i ~/.ssh/minha_chave)
 
 # Configuração da linha de comando SSH

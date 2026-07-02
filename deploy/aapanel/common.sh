@@ -1,14 +1,12 @@
 # Helpers compartilhados — deploy aaPanel
 #
-# Diretórios padrão (VPS Sorelle + aaPanel):
-#   APP_DIR    /www/server/sorelle-presentes   — código-fonte
-#   SITE_ROOT  /www/wwwroot/sorelle-presentes   — frontend publicado (site aaPanel)
-#   DOMAIN     191.252.205.7                    — IP público (Nginx server_name)
-#   SITE_NAME  sorelle-presentes                — nome do site no aaPanel (vhost .conf)
+# Diretórios padrão (VPS Sorelle):
+#   APP_DIR    /home/deploy/sorelle-presentes        — código-fonte
+#   SITE_ROOT  /home/deploy/sorelle-presentes/dist   — frontend publicado (raiz Nginx)
 
 DEFAULT_DOMAIN="191.252.205.7"
-DEFAULT_APP_DIR="/www/server/sorelle-presentes"
-DEFAULT_SITE_ROOT="/www/wwwroot/sorelle-presentes"
+DEFAULT_APP_DIR="/home/deploy/sorelle-presentes"
+DEFAULT_SITE_ROOT="/home/deploy/sorelle-presentes/dist"
 DEFAULT_SITE_NAME="sorelle-presentes"
 DEFAULT_REPO_URL="https://github.com/CesarBorgesDev/sorelle-presentes.git"
 

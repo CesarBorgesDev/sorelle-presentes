@@ -13,8 +13,8 @@ grep -q $'\r' "$0" 2>/dev/null && sed -i 's/\r$//' "$0" && exec bash "$0" "$@"
 #
 # Opção B — git clone (recomendado):
 #   export POSTGRES_PASSWORD='Sorelle@1975'
-#   git clone https://github.com/CesarBorgesDev/sorelle-presentes.git /www/server/sorelle-presentes
-#   bash /www/server/sorelle-presentes/install-aapanel-ubuntu.sh
+#   git clone https://github.com/CesarBorgesDev/sorelle-presentes.git /home/deploy/sorelle-presentes
+#   bash /home/deploy/sorelle-presentes/install-aapanel-ubuntu.sh
 # =============================================================================
 
 set -euo pipefail
@@ -26,11 +26,11 @@ GIT_BRANCH="${GIT_BRANCH:-main}"
 if [ -f "${SELF_DIR}/deploy/aapanel/install-docker.sh" ]; then
   APP_DIR="${APP_DIR:-$SELF_DIR}"
 else
-  APP_DIR="${APP_DIR:-/www/server/sorelle-presentes}"
+  APP_DIR="${APP_DIR:-/home/deploy/sorelle-presentes}"
 fi
 DOMAIN="${DOMAIN:-191.252.205.7}"
 SITE_NAME="${SITE_NAME:-sorelle-presentes}"
-SITE_ROOT="${SITE_ROOT:-/www/wwwroot/sorelle-presentes}"
+SITE_ROOT="${SITE_ROOT:-/home/deploy/sorelle-presentes/dist}"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'

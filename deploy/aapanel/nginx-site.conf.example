@@ -17,7 +17,7 @@ location /api {
 }
 
 location / {
-    root /www/server/sorelle-presentes/dist;
+    root /home/deploy/sorelle-presentes/dist;
     index index.html;
     try_files $uri $uri/ /index.html;
 }
