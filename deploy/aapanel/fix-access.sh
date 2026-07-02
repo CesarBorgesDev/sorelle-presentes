@@ -28,18 +28,20 @@ open_firewall_ports
 log "2/5 Iniciando Nginx..."
 ensure_nginx_running || true
 
-log "3/5 Configurando vhost (${SITE_NAME})..."
+log "3/6 Configurando vhost (${SITE_NAME})..."
 write_nginx_vhost || warn "Falha ao escrever vhost"
+write_nginx_api_vhost || warn "Falha ao escrever vhost da API"
+update_server_env_urls || true
 reload_nginx || true
 
-log "4/5 Publicando frontend em ${SITE_ROOT}..."
+log "4/6 Publicando frontend em ${SITE_ROOT}..."
 if [ -d "${APP_DIR}/dist" ]; then
   publish_frontend "${APP_DIR}/dist" "$SITE_ROOT" || warn "dist/ inválido — rode: bash deploy/aapanel/fix-homepage.sh"
 else
   warn "dist/ não encontrado — rode: bash ${APP_DIR}/deploy/aapanel/fix-homepage.sh"
 fi
 
-log "5/5 Subindo Docker..."
+log "5/6 Subindo Docker..."
 if [ -f "${APP_DIR}/deploy/aapanel/docker-compose.backend.yml" ]; then
   docker compose -f "${APP_DIR}/deploy/aapanel/docker-compose.backend.yml" up -d 2>/dev/null || true
 fi
@@ -47,5 +49,6 @@ fi
 diagnose_access
 
 echo ""
-echo "Teste: curl -I $(site_public_url)/"
+echo "Teste loja: curl -I $(site_public_url)/"
+echo "Teste API:  curl -s $(api_public_url)/api/health"
 echo "Site root: ${SITE_ROOT} | Nginx: ${AAPANEL_VHOST}"

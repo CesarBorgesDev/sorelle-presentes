@@ -29,14 +29,58 @@ load_deploy_env() {
   REPO_URL="${REPO_URL:-$DEFAULT_REPO_URL}"
   GIT_BRANCH="${GIT_BRANCH:-main}"
   AAPANEL_VHOST="${AAPANEL_VHOST:-/www/server/panel/vhost/nginx/${SITE_NAME}.conf}"
+
+  if [ -z "${API_DOMAIN:-}" ] && ! is_ipv4 "${DOMAIN:-}"; then
+    API_DOMAIN="api.${DOMAIN}"
+  fi
+  AAPANEL_API_VHOST="${AAPANEL_API_VHOST:-/www/server/panel/vhost/nginx/${API_DOMAIN}.conf}"
 }
 
 print_deploy_paths() {
-  echo "  APP_DIR:    ${APP_DIR}"
-  echo "  SITE_ROOT:  ${SITE_ROOT}"
-  echo "  DOMAIN:     ${DOMAIN}"
-  echo "  SITE_NAME:  ${SITE_NAME}"
-  echo "  NGINX:      ${AAPANEL_VHOST}"
+  echo "  APP_DIR:     ${APP_DIR}"
+  echo "  SITE_ROOT:   ${SITE_ROOT}"
+  echo "  DOMAIN:      ${DOMAIN}"
+  echo "  API_DOMAIN:  ${API_DOMAIN:-(proxy /api no site principal)}"
+  echo "  SITE_NAME:   ${SITE_NAME}"
+  echo "  NGINX:       ${AAPANEL_VHOST}"
+  if [ -n "${API_DOMAIN:-}" ]; then
+    echo "  NGINX API:   ${AAPANEL_API_VHOST}"
+    echo "  VITE_API:    $(vite_api_url)"
+  fi
+}
+
+api_public_url() {
+  if [ -n "${API_DOMAIN:-}" ]; then
+    site_public_url "$API_DOMAIN"
+  else
+    site_public_url
+  fi
+}
+
+vite_api_url() {
+  echo "$(api_public_url)/api"
+}
+
+nginx_api_location_block() {
+  if [ -n "${API_DOMAIN:-}" ] && ! is_ipv4 "${DOMAIN:-}"; then
+    echo ""
+    return
+  fi
+
+  cat <<'EOF'
+    location /api {
+        proxy_pass http://127.0.0.1:3001;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
+        proxy_read_timeout 120s;
+    }
+EOF
 }
 
 log()  { echo -e "${GREEN:-}==>${NC:-} $*"; }
@@ -227,12 +271,50 @@ write_nginx_vhost() {
 
   log "Configurando Nginx → ${AAPANEL_VHOST}"
   log "  root: ${SITE_ROOT} | server_name: ${DOMAIN} ${SITE_NAME}"
-  sed -e "s|{{DOMAIN}}|${DOMAIN}|g" \
-      -e "s|{{SITE_NAME}}|${SITE_NAME}|g" \
-      -e "s|{{SITE_ROOT}}|${SITE_ROOT}|g" \
-      -e "s|{{APP_DIR}}|${APP_DIR}|g" \
+  DOMAIN="$DOMAIN" SITE_NAME="$SITE_NAME" SITE_ROOT="$SITE_ROOT" APP_DIR="$APP_DIR" \
+  NGINX_DEFAULT_SERVER="$default_flag" \
+  awk '
+    BEGIN {
+      api = ENVIRON["API_BLOCK"]
+      gsub(/\r/, "", api)
+    }
+    /\{\{API_LOCATION_BLOCK\}\}/ {
+      if (length(api) > 0) printf "%s\n", api
+      next
+    }
+    {
+      line = $0
+      gsub(/\{\{DOMAIN\}\}/, ENVIRON["DOMAIN"], line)
+      gsub(/\{\{SITE_NAME\}\}/, ENVIRON["SITE_NAME"], line)
+      gsub(/\{\{SITE_ROOT\}\}/, ENVIRON["SITE_ROOT"], line)
+      gsub(/\{\{APP_DIR\}\}/, ENVIRON["APP_DIR"], line)
+      gsub(/\{\{NGINX_DEFAULT_SERVER\}\}/, ENVIRON["NGINX_DEFAULT_SERVER"], line)
+      print line
+    }
+  ' API_BLOCK="$(nginx_api_location_block)" "$template" > "$AAPANEL_VHOST"
+}
+
+write_nginx_api_vhost() {
+  local script_dir="${DEPLOY_AAPANEL_DIR:-}"
+  local template out_dir default_flag
+
+  [ -n "${API_DOMAIN:-}" ] || return 0
+  is_ipv4 "${DOMAIN:-}" && return 0
+
+  [ -n "$script_dir" ] || { warn "DEPLOY_AAPANEL_DIR não definido"; return 1; }
+
+  template="${script_dir}/nginx-api-vhost.conf.template"
+  [ -f "$template" ] || { warn "Template API Nginx não encontrado: $template"; return 1; }
+
+  default_flag=""
+  out_dir="$(dirname "$AAPANEL_API_VHOST")"
+  mkdir -p "$out_dir" /www/wwwlogs 2>/dev/null || true
+
+  log "Configurando Nginx API → ${AAPANEL_API_VHOST}"
+  log "  server_name: ${API_DOMAIN} → 127.0.0.1:3001"
+  sed -e "s|{{API_DOMAIN}}|${API_DOMAIN}|g" \
       -e "s|{{NGINX_DEFAULT_SERVER}}|${default_flag}|g" \
-      "$template" > "$AAPANEL_VHOST"
+      "$template" > "$AAPANEL_API_VHOST"
 }
 
 reload_nginx() {
@@ -254,15 +336,17 @@ reload_nginx() {
 
 update_server_env_urls() {
   local env_file="${APP_DIR}/server/.env"
-  local base_url
-  base_url="$(site_public_url)"
+  local frontend_url api_url
+  frontend_url="$(site_public_url)"
+  api_url="$(api_public_url)"
 
   [ -f "$env_file" ] || return 0
 
-  log "Atualizando URLs em server/.env → ${base_url}"
-  sed -i "s|CORS_ORIGIN=.*|CORS_ORIGIN=${base_url}|" "$env_file"
-  sed -i "s|FRONTEND_URL=.*|FRONTEND_URL=${base_url}|" "$env_file"
-  sed -i "s|APP_PUBLIC_URL=.*|APP_PUBLIC_URL=${base_url}|" "$env_file"
+  log "Atualizando URLs em server/.env"
+  log "  FRONTEND → ${frontend_url} | API → ${api_url}"
+  sed -i "s|CORS_ORIGIN=.*|CORS_ORIGIN=${frontend_url}|" "$env_file"
+  sed -i "s|FRONTEND_URL=.*|FRONTEND_URL=${frontend_url}|" "$env_file"
+  sed -i "s|APP_PUBLIC_URL=.*|APP_PUBLIC_URL=${api_url}|" "$env_file"
 }
 
 wait_for_db() {

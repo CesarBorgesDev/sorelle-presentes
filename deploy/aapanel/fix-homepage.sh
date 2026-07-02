@@ -51,6 +51,8 @@ fi
 
 log "Build do frontend..."
 npm_ci_safe .
+export VITE_API_URL="$(vite_api_url)"
+log "VITE_API_URL=${VITE_API_URL}"
 npm run build
 
 [ -d dist ] || fail "Build falhou — pasta dist/ não encontrada"
@@ -58,6 +60,8 @@ npm run build
 publish_frontend "${APP_DIR}/dist" "$SITE_ROOT" || fail "Falha ao publicar em ${SITE_ROOT}"
 
 write_nginx_vhost || fail "Falha ao escrever ${AAPANEL_VHOST}"
+write_nginx_api_vhost || warn "Falha ao escrever vhost da API"
+update_server_env_urls || true
 reload_nginx || true
 
 PUBLIC_URL="$(site_public_url)"

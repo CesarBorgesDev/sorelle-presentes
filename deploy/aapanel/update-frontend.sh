@@ -36,12 +36,15 @@ git pull origin "$GIT_BRANCH"
 
 log "Instalando dependências e build do frontend..."
 npm_ci_safe .
+export VITE_API_URL="$(vite_api_url)"
+log "VITE_API_URL=${VITE_API_URL}"
 npm run build
 
 [ -d dist ] || fail "Build falhou — pasta dist/ não encontrada"
 
 publish_frontend "${APP_DIR}/dist" "$SITE_ROOT" || fail "Falha ao publicar frontend"
 write_nginx_vhost || warn "Não foi possível atualizar vhost Nginx"
+write_nginx_api_vhost || warn "Não foi possível atualizar vhost da API"
 reload_nginx || true
 
 PUBLIC_URL="$(site_public_url)"
