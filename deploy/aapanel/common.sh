@@ -56,15 +56,10 @@ api_public_url() {
 }
 
 vite_api_url() {
-  echo "$(api_public_url)/api"
+  echo "/api"
 }
 
 nginx_api_location_block() {
-  if [ -n "${API_DOMAIN:-}" ] && ! is_ipv4 "${DOMAIN:-}"; then
-    echo ""
-    return
-  fi
-
   cat <<'EOF'
     location /api {
         proxy_pass http://127.0.0.1:3001;
@@ -79,6 +74,23 @@ nginx_api_location_block() {
         proxy_read_timeout 120s;
     }
 EOF
+}
+
+write_sorelle_api_config() {
+  local target="${1:-${SITE_ROOT}}"
+  local config_file="${target}/sorelle-config.js"
+  local api_url
+
+  api_url="$(vite_api_url)"
+  mkdir -p "$target"
+
+  cat > "$config_file" <<EOF
+window.__SORELLE_API_URL__ = '${api_url}';
+EOF
+
+  if [ -f "${target}/index.html" ] && ! grep -q 'sorelle-config.js' "${target}/index.html"; then
+    sed -i 's|<head>|<head>\n    <script src="/sorelle-config.js"></script>|' "${target}/index.html"
+  fi
 }
 
 log()  { echo -e "${GREEN:-}==>${NC:-} $*"; }
@@ -244,6 +256,7 @@ publish_frontend() {
   chown -R www:www "$target" 2>/dev/null || true
 
   if is_react_index "${target}/index.html"; then
+    write_sorelle_api_config "$target"
     log "Página inicial React publicada."
   elif is_aapanel_placeholder_page "${target}/index.html"; then
     warn "index.html ainda é o padrão do aaPanel — rode npm run build antes de publicar."

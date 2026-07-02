@@ -43,35 +43,24 @@ else
 fi
 echo ""
 
-echo "API via Nginx:"
-if [ -n "${API_DOMAIN:-}" ] && ! is_ipv4 "${DOMAIN:-}"; then
-  API_URL="$(api_public_url)/api/health"
-else
-  API_URL="${BASE_URL}/api/health"
-fi
+echo "API via Nginx (${BASE_URL}/api):"
+API_URL="${BASE_URL}/api/health"
 HTTP_CODE=$(curl -s -o /tmp/sorelle-health.json -w "%{http_code}" "${API_URL}" || echo "000")
 if [ "$HTTP_CODE" = "200" ]; then
-  ok "HTTP ${HTTP_CODE} — $(cat /tmp/sorelle-health.json) (${API_URL})"
+  ok "HTTP ${HTTP_CODE} — $(cat /tmp/sorelle-health.json)"
 else
   fail "HTTP ${HTTP_CODE} em ${API_URL}"
-  if [ -n "${API_DOMAIN:-}" ]; then
-    echo "  → Crie o site api no aaPanel: ${API_DOMAIN}"
-    echo "  → bash deploy/aapanel/fix-access.sh"
-  else
-    echo "  → bash deploy/aapanel/fix-access.sh"
-  fi
+  echo "  → bash deploy/aapanel/fix-access.sh"
 fi
 echo ""
 
 if [ -n "${API_DOMAIN:-}" ] && ! is_ipv4 "${DOMAIN:-}"; then
-  echo "API subdomínio (${API_DOMAIN}):"
-  SUB_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$(api_public_url)/api/health" || echo "000")
+  echo "API subdomínio (${API_DOMAIN}) — opcional:"
+  SUB_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$(site_public_url "$API_DOMAIN")/api/health" || echo "000")
   if [ "$SUB_CODE" = "200" ]; then
-    ok "HTTP ${SUB_CODE} — $(api_public_url)/api/health"
+    ok "HTTP ${SUB_CODE} — $(site_public_url "$API_DOMAIN")/api/health"
   else
-    fail "HTTP ${SUB_CODE} — DNS ou vhost de ${API_DOMAIN} incorreto"
-    echo "  → DNS: ${API_DOMAIN} → A → IP do servidor"
-    echo "  → aaPanel: Website → Add site → ${API_DOMAIN}"
+    warn "HTTP ${SUB_CODE} — subdomínio não responde (use ${BASE_URL}/api)"
   fi
   echo ""
 fi
@@ -93,7 +82,7 @@ fi
 echo ""
 
 echo "Login admin (teste):"
-LOGIN_URL="$(api_public_url)/api/auth/login"
+LOGIN_URL="${BASE_URL}/api/auth/login"
 LOGIN_CODE=$(curl -s -o /tmp/sorelle-login.json -w "%{http_code}" \
   -X POST "${LOGIN_URL}" \
   -H "Content-Type: application/json" \

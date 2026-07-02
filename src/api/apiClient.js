@@ -1,29 +1,19 @@
 const TOKEN_KEY = 'sorelle_access_token';
 
 function resolveApiBase() {
-  const fromEnv = import.meta.env.VITE_API_URL?.trim();
-  if (fromEnv) {
-    return fromEnv.replace(/\/$/, '');
-  }
-
   if (typeof window !== 'undefined') {
     const runtimeApi = window.__SORELLE_API_URL__?.trim();
     if (runtimeApi) {
       return runtimeApi.replace(/\/$/, '');
     }
-
-    const { protocol, hostname } = window.location;
-
-    // IP ou localhost: Nginx do mesmo host faz proxy em /api
-    if (/^\d+\.\d+\.\d+\.\d+$/.test(hostname) || hostname === 'localhost' || hostname === '127.0.0.1') {
-      return '/api';
-    }
-
-    // Domínio de produção: API no subdomínio api.*
-    const apex = hostname.replace(/^www\./, '');
-    return `${protocol}//api.${apex}/api`;
   }
 
+  const fromEnv = import.meta.env.VITE_API_URL?.trim();
+  if (fromEnv) {
+    return fromEnv.replace(/\/$/, '');
+  }
+
+  // Mesmo domínio — Nginx faz proxy /api → backend (sem CORS)
   return '/api';
 }
 
@@ -115,6 +105,21 @@ async function apiFetch(path, options = {}) {
   }
 
   if (response.status === 204) return null;
+
+  const contentType = response.headers.get('content-type') || '';
+  if (!contentType.includes('application/json')) {
+    const rawBody = await response.text().catch(() => null);
+    throw new ApiError(
+      'Resposta inválida da API — confira se o Nginx faz proxy de /api para o backend',
+      response.status,
+      {
+        path,
+        url: `${API_BASE}${path}`,
+        rawBody: rawBody?.slice(0, 200) ?? null,
+      }
+    );
+  }
+
   return response.json();
 }
 
