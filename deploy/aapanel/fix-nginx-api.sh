@@ -37,8 +37,8 @@ fi
 
 echo ""
 log "Site: ${DOMAIN} | root: ${SITE_ROOT}"
-log "Include: $(nginx_api_include_path)"
-patch_nginx_api_proxy || fail "Falha ao aplicar proxy /api"
+log "Removendo includes inválidos de tentativas anteriores..."
+patch_nginx_api_proxy || fail "Falha ao aplicar proxy /api — veja nginx -t acima"
 reload_nginx || true
 
 BASE_URL="$(site_public_url)"

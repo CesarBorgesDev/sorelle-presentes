@@ -64,7 +64,7 @@ nginx_api_include_path() {
 }
 
 nginx_api_template_block() {
-  echo "    include $(nginx_api_include_path);"
+  nginx_api_location_block
 }
 
 nginx_api_location_block() {
@@ -85,143 +85,19 @@ nginx_api_location_block() {
 EOF
 }
 
-write_nginx_api_include_file() {
-  local include_dest include_src
-
-  include_dest="$(nginx_api_include_path)"
-  include_src="${DEPLOY_AAPANEL_DIR}/nginx-api-proxy.include"
-  [ -f "$include_src" ] || include_src="${DEPLOY_AAPANEL_DIR:-}/nginx-api-proxy.include"
-
-  if [ -f "$include_src" ]; then
-    cp "$include_src" "$include_dest"
-  else
-    nginx_api_location_block | sed 's/^    //' > "$include_dest"
-  fi
-
-  log "Include API → ${include_dest}"
-}
-
-# Insere proxy /api nos vhosts aaPanel (HTTP e HTTPS/SSL) sem apagar certificados
+# Insere location ^~ /api dentro de cada bloco server {} (HTTP + HTTPS)
 patch_nginx_api_proxy() {
   local vhost_dir="/www/server/panel/vhost/nginx"
-  local include_line include_dest patched_count
+  local tmp_block patched_count nginx_test_out
 
   [ -d "$vhost_dir" ] || { warn "Pasta Nginx não encontrada: $vhost_dir"; return 1; }
-
-  write_nginx_api_include_file
-  include_dest="$(nginx_api_include_path)"
-  include_line="    include ${include_dest};"
-
-  log "Injetando include nos vhosts (SSL :443, apex e www)..."
-  patched_count="$(
-    python3 - "$vhost_dir" "$SITE_ROOT" "$DOMAIN" "$SITE_NAME" "$include_line" "$include_dest" << 'PY'
-import re
-import sys
-from pathlib import Path
-
-vhost_dir, site_root, domain, site_name, include_line, include_dest = sys.argv[1:7]
-markers = [m for m in (
-    site_root,
-    domain,
-    f"www.{domain}",
-    site_name,
-    "sorellepresentes.com.br",
-    "sorelle-presentes",
-) if m]
-include_name = Path(include_dest).name
-patched = []
-
-def should_patch(text: str) -> bool:
-    if include_name in text:
-        return False
-    if "location ^~ /api" in text or "location /api" in text:
-        return False
-    return any(m and m in text for m in markers)
-
-def inject_include(text: str) -> tuple[str, bool]:
-    if include_name in text:
-        return text, False
-
-    if "location ^~ /api" in text or "location /api" in text:
-        return text, False
-
-    # aaPanel: após cada bloco SSL (HTTP + HTTPS no mesmo arquivo)
-    if "#SSL-END" in text:
-        new = text.replace("#SSL-END", f"#SSL-END\n{include_line}")
-        if new != text:
-            return new, True
-
-    # após root do site
-    if site_root:
-        pattern = rf"(^[ \t]*root[ \t]+{re.escape(site_root)}[ \t]*;\s*\n)"
-        new, n = re.subn(pattern, r"\1" + include_line + "\n", text, count=1, flags=re.MULTILINE)
-        if n:
-            return new, True
-
-    # qualquer root no arquivo do site
-    new, n = re.subn(
-        r"(^[ \t]*root[ \t]+[^;]+;\s*\n)",
-        r"\1" + include_line + "\n",
-        text,
-        count=1,
-        flags=re.MULTILINE,
-    )
-    if n:
-        return new, True
-
-    # antes do primeiro location
-    new, n = re.subn(
-        r"(\n)([ \t]*location[ \t])",
-        r"\1" + include_line + "\n\n\2",
-        text,
-        count=1,
-    )
-    if n:
-        return new, True
-
-    return text, False
-
-for conf in sorted(Path(vhost_dir).rglob("*.conf")):
-    try:
-        text = conf.read_text(encoding="utf-8", errors="ignore")
-    except OSError:
-        continue
-    if not should_patch(text):
-        continue
-    new_text, changed = inject_include(text)
-    if changed:
-        conf.write_text(new_text, encoding="utf-8")
-        patched.append(str(conf))
-
-for path in patched:
-    print(f"  + {path}", file=sys.stderr)
-print(len(patched))
-PY
-  )"
-
-  if [ "${patched_count:-0}" -gt 0 ] 2>/dev/null; then
-    log "Include aplicado em ${patched_count} vhost(s)."
-  else
-    warn "Nenhum vhost patchado — tentando bloco location inline..."
-    _patch_nginx_api_inline
-  fi
-
-  if [ -x /www/server/nginx/sbin/nginx ]; then
-    if ! /www/server/nginx/sbin/nginx -t 2>/dev/null; then
-      warn "Config Nginx inválida após patch — reverta ou corrija manualmente."
-      return 1
-    fi
-  fi
-}
-
-_patch_nginx_api_inline() {
-  local vhost_dir="/www/server/panel/vhost/nginx"
-  local tmp_block
 
   tmp_block="$(mktemp)"
   nginx_api_location_block > "$tmp_block"
 
-  python3 - "$vhost_dir" "$SITE_ROOT" "$DOMAIN" "$SITE_NAME" "$tmp_block" << 'PY'
+  log "Aplicando location ^~ /api dentro dos blocos server (apex + www)..."
+  patched_count="$(
+    python3 - "$vhost_dir" "$SITE_ROOT" "$DOMAIN" "$SITE_NAME" "$tmp_block" << 'PY'
 import re
 import sys
 from pathlib import Path
@@ -231,30 +107,142 @@ api_block = Path(block_file).read_text()
 if not api_block.endswith("\n"):
     api_block += "\n"
 
-markers = [m for m in (site_root, domain, f"www.{domain}", site_name, "sorellepresentes.com.br") if m]
+markers = [m for m in (
+    site_root,
+    domain,
+    f"www.{domain}",
+    site_name,
+    "sorellepresentes.com.br",
+    "sorelle-presentes",
+) if m]
+include_re = re.compile(
+    r"^[ \t]*include[ \t]+/www/server/panel/vhost/nginx/sorelle-presentes-api-proxy\.conf;\s*\n",
+    re.MULTILINE,
+)
+patched = []
 
-for conf in sorted(Path(vhost_dir).rglob("*.conf")):
-    try:
-        text = conf.read_text(encoding="utf-8", errors="ignore")
-    except OSError:
-        continue
-    if "location ^~ /api" in text or "location /api" in text:
-        continue
-    if not any(m and m in text for m in markers):
-        continue
-    for pattern in (
+def block_matches(block: str) -> bool:
+    return any(m and m in block for m in markers)
+
+def has_api_location(block: str) -> bool:
+    return bool(re.search(r"location\s+\^~\s+/api\b", block) or re.search(r"location\s+/api\b", block))
+
+def iter_server_blocks(text: str):
+    pos = 0
+    while pos < len(text):
+        match = re.search(r"\bserver\s*\{", text[pos:])
+        if not match:
+            break
+        start = pos + match.start()
+        brace = pos + match.end() - 1
+        depth = 0
+        end = None
+        for idx in range(brace, len(text)):
+            ch = text[idx]
+            if ch == "{":
+                depth += 1
+            elif ch == "}":
+                depth -= 1
+                if depth == 0:
+                    end = idx + 1
+                    break
+        if end is None:
+            break
+        yield start, end, text[start:end]
+        pos = end
+
+def patch_server_block(block: str) -> tuple[str, bool]:
+    cleaned = include_re.sub("", block)
+    if has_api_location(cleaned):
+        return cleaned, cleaned != block
+
+    patterns = (
         r"(\n)([ \t]*location[ \t]+\^[ \t]*~[ \t]+/[ \t]*\{)",
         r"(\n)([ \t]*location[ \t]+/[ \t]*\{)",
         r"(\n)([ \t]*location[ \t]+~\s)",
-    ):
-        new, n = re.subn(pattern, r"\1" + api_block + r"\2", text, count=1)
+        r"(\n)([ \t]*error_page[ \t])",
+        r"(\n)([ \t]*access_log[ \t])",
+    )
+    for pattern in patterns:
+        new, n = re.subn(pattern, r"\1" + api_block + r"\2", cleaned, count=1)
         if n:
-            conf.write_text(new, encoding="utf-8")
-            print(f"  + inline {conf}", file=sys.stderr)
-            break
+            return new, True
+
+    new, n = re.subn(r"\n\}\s*$", "\n" + api_block + "\n}\n", cleaned, count=1)
+    if n:
+        return new, True
+    return cleaned, cleaned != block
+
+def patch_file(text: str) -> tuple[str, bool]:
+    text = include_re.sub("", text)
+    spans = list(iter_server_blocks(text))
+    if not spans:
+        return text, False
+
+    changed = False
+    parts = []
+    cursor = 0
+    for start, end, block in spans:
+        parts.append(text[cursor:start])
+        new_block = block
+        if block_matches(block):
+            new_block, block_changed = patch_server_block(block)
+            if block_changed:
+                changed = True
+        parts.append(new_block)
+        cursor = end
+    parts.append(text[cursor:])
+    return "".join(parts), changed
+
+for conf in sorted(Path(vhost_dir).rglob("*.conf")):
+    try:
+        original = conf.read_text(encoding="utf-8", errors="ignore")
+    except OSError:
+        continue
+    if not any(m and m in original for m in markers):
+        continue
+    updated, _ = patch_file(original)
+    if updated == original:
+        continue
+    backup = conf.with_suffix(conf.suffix + ".bak")
+    if not backup.exists():
+        backup.write_text(original, encoding="utf-8")
+    conf.write_text(updated, encoding="utf-8")
+    patched.append(str(conf))
+
+for path in patched:
+    print(f"  + {path}", file=sys.stderr)
+print(len(patched))
 PY
+  )"
 
   rm -f "$tmp_block"
+
+  if [ "${patched_count:-0}" -gt 0 ] 2>/dev/null; then
+    log "Proxy /api aplicado em ${patched_count} arquivo(s)."
+  else
+    warn "Nenhum vhost alterado (location /api já existe?)."
+  fi
+
+  if [ -x /www/server/nginx/sbin/nginx ]; then
+    nginx_test_out="$(/www/server/nginx/sbin/nginx -t 2>&1)" || {
+      warn "Config Nginx inválida após patch:"
+      echo "$nginx_test_out" | sed 's/^/  /'
+      warn "Restaurando backups (*.conf.bak)..."
+      find /www/server/panel/vhost/nginx -name '*.conf.bak' 2>/dev/null | while read -r bak; do
+        orig="${bak%.bak}"
+        [ -f "$bak" ] && cp "$bak" "$orig"
+      done
+      return 1
+    }
+    log "nginx -t OK"
+  fi
+
+  return 0
+}
+
+_patch_nginx_api_inline() {
+  patch_nginx_api_proxy
 }
 
 write_sorelle_api_config() {
@@ -497,7 +485,6 @@ write_nginx_vhost() {
 
   log "Configurando Nginx → ${AAPANEL_VHOST}"
   log "  root: ${SITE_ROOT} | server_name: ${DOMAIN} www.${DOMAIN} ${SITE_NAME}"
-  write_nginx_api_include_file
   _render_nginx_vhost_file "$AAPANEL_VHOST" || return 1
 
   if ! is_ipv4 "${DOMAIN:-}"; then
