@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation } from '@tanstack/react-query';
-import { base44 } from '@/api/base44Client';
+import { api } from '@/api/apiClient';
 import { useAuth } from '@/lib/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Loader2, ArrowLeft, Truck, FlaskConical } from 'lucide-react';
@@ -48,19 +48,19 @@ export default function Checkout() {
 
   const { data: items = [], isLoading: cartLoading } = useQuery({
     queryKey: ['cart'],
-    queryFn: () => base44.entities.CartItem.list(),
+    queryFn: () => api.entities.CartItem.list(),
     enabled: isAuthenticated,
   });
 
   const { data: methodsData, isLoading: methodsLoading } = useQuery({
     queryKey: ['checkout-methods'],
-    queryFn: () => base44.checkout.getMethods(),
+    queryFn: () => api.checkout.getMethods(),
     enabled: isAuthenticated,
   });
 
   const { data: profile } = useQuery({
     queryKey: ['account-profile'],
-    queryFn: () => base44.account.getProfile(),
+    queryFn: () => api.account.getProfile(),
     enabled: isAuthenticated,
   });
 
@@ -100,8 +100,8 @@ export default function Checkout() {
     setShippingServiceId('');
 
     const [quoteResult, addressResult] = await Promise.allSettled([
-      base44.shipping.quote(digits),
-      base44.shipping.lookupCep(digits),
+      api.shipping.quote(digits),
+      api.shipping.lookupCep(digits),
     ]);
 
     setCepLoading(false);
@@ -131,7 +131,7 @@ export default function Checkout() {
   const total = subtotal + wrappingTotal + shippingCost;
 
   const checkoutMutation = useMutation({
-    mutationFn: (data) => base44.checkout.start(data),
+    mutationFn: (data) => api.checkout.start(data),
     onSuccess: (result) => {
       if (result.type === 'manual_pix') {
         navigate(result.redirect_url || `/pagamento/pix?pedido=${result.order_id}`);

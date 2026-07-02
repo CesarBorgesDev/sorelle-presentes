@@ -1,5 +1,5 @@
 import React, { createContext, useState, useContext, useEffect, useCallback } from 'react';
-import { base44 } from '@/api/base44Client';
+import { api } from '@/api/apiClient';
 
 const AuthContext = createContext();
 
@@ -13,7 +13,7 @@ export const AuthProvider = ({ children }) => {
   const [appPublicSettings] = useState({ id: 'sorelle-local' });
 
   const checkUserAuth = useCallback(async () => {
-    const token = base44.auth.getToken();
+    const token = api.auth.getToken();
     if (!token) {
       setIsLoadingAuth(false);
       setIsAuthenticated(false);
@@ -24,11 +24,11 @@ export const AuthProvider = ({ children }) => {
     try {
       setIsLoadingAuth(true);
       setAuthError(null);
-      const currentUser = await base44.auth.me();
+      const currentUser = await api.auth.me();
       setUser(currentUser);
       setIsAuthenticated(true);
     } catch (error) {
-      base44.auth.setToken(null);
+      api.auth.setToken(null);
       setUser(null);
       setIsAuthenticated(false);
       setAuthError(null);
@@ -45,11 +45,11 @@ export const AuthProvider = ({ children }) => {
   const logout = (shouldRedirect = true) => {
     setUser(null);
     setIsAuthenticated(false);
-    base44.auth.logout(shouldRedirect ? window.location.href : undefined);
+    api.auth.logout(shouldRedirect ? window.location.href : undefined);
   };
 
   const navigateToLogin = () => {
-    base44.auth.redirectToLogin(window.location.href);
+    api.auth.redirectToLogin(window.location.href);
   };
 
   return (

@@ -1,6 +1,6 @@
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { base44 } from '@/api/base44Client';
+import { api } from '@/api/apiClient';
 import { Package, ShoppingBag, TrendingUp, Clock } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
@@ -14,8 +14,8 @@ const statusColors = {
 };
 
 export default function AdminDashboard() {
-  const { data: products = [] } = useQuery({ queryKey: ['products'], queryFn: () => base44.entities.Product.list() });
-  const { data: orders = [] } = useQuery({ queryKey: ['orders'], queryFn: () => base44.entities.Order.list('-created_date', 50) });
+  const { data: products = [] } = useQuery({ queryKey: ['products'], queryFn: () => api.entities.Product.list() });
+  const { data: orders = [] } = useQuery({ queryKey: ['orders'], queryFn: () => api.entities.Order.list('-created_date', 50) });
 
   const totalRevenue = orders.filter(o => o.status !== 'cancelado').reduce((s, o) => s + (o.total || 0), 0);
   const pendingOrders = orders.filter(o => o.status === 'pendente').length;

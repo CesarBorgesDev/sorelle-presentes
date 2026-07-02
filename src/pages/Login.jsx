@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { base44 } from "@/api/base44Client";
+import { api } from '@/api/apiClient';
 import { useAuth } from "@/lib/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,7 +22,7 @@ export default function Login() {
     setError("");
     setLoading(true);
     try {
-      await base44.auth.loginViaEmailPassword(email, password);
+      await api.auth.loginViaEmailPassword(email, password);
       await checkUserAuth();
       const returnUrl = searchParams.get('returnUrl') || '/';
       window.location.href = returnUrl;
@@ -34,7 +34,7 @@ export default function Login() {
   };
 
   const handleGoogle = () => {
-    base44.auth.loginWithProvider("google", "/");
+    api.auth.loginWithProvider("google", "/");
   };
 
   return (

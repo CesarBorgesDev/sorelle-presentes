@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { base44 } from '@/api/base44Client';
+import { api } from '@/api/apiClient';
 import {
   Settings, Key, Sparkles, Loader2, CheckCircle2,
   CreditCard, Circle, ExternalLink, AlertCircle, Truck, ShoppingBag,
@@ -65,7 +65,7 @@ export default function AdminSettings() {
 
   const { data, isLoading } = useQuery({
     queryKey: ['admin-settings'],
-    queryFn: () => base44.settings.get(),
+    queryFn: () => api.settings.get(),
   });
 
   React.useEffect(() => {
@@ -93,7 +93,7 @@ export default function AdminSettings() {
   }, [data?.image_model, data?.cielo, data?.payment, data?.correios]);
 
   const mutation = useMutation({
-    mutationFn: (payload) => base44.settings.update(payload),
+    mutationFn: (payload) => api.settings.update(payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-settings'] });
       setPollinationsKey('');

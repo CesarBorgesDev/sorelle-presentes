@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { base44 } from '@/api/base44Client';
+import { api } from '@/api/apiClient';
 import { X } from 'lucide-react';
 
 const CATEGORIES = ['ativo', 'inativo', 'pendente'];
@@ -21,8 +21,8 @@ export default function AffiliateFormModal({ affiliate, onClose }) {
   const mutation = useMutation({
     mutationFn: (data) =>
       affiliate
-        ? base44.entities.Affiliate.update(affiliate.id, data)
-        : base44.entities.Affiliate.create(data),
+        ? api.entities.Affiliate.update(affiliate.id, data)
+        : api.entities.Affiliate.create(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['affiliates'] });
       onClose();

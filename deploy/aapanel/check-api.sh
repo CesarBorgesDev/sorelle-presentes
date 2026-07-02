@@ -44,14 +44,39 @@ fi
 echo ""
 
 echo "API via Nginx (${BASE_URL}/api):"
-HTTP_CODE=$(curl -s -o /tmp/sorelle-health.json -w "%{http_code}" "${BASE_URL}/api/health" || echo "000")
-if [ "$HTTP_CODE" = "200" ]; then
+API_URL="${BASE_URL}/api/health"
+HTTP_CODE=$(curl -skL --connect-timeout 15 -o /tmp/sorelle-health.json -w "%{http_code}" "${API_URL}" 2>/dev/null || echo "000")
+HTTP_CODE="${HTTP_CODE//[^0-9]/}"
+if [ "$HTTP_CODE" = "200" ] && grep -q '"status"' /tmp/sorelle-health.json 2>/dev/null; then
   ok "HTTP ${HTTP_CODE} — $(cat /tmp/sorelle-health.json)"
 else
-  fail "HTTP ${HTTP_CODE} em ${BASE_URL}/api/health"
-  echo "  → bash deploy/aapanel/fix-access.sh"
+  fail "HTTP ${HTTP_CODE} em ${API_URL} (retornou HTML do React?)"
+  echo "  → bash deploy/aapanel/fix-nginx-api.sh"
+fi
+
+if ! is_ipv4 "${DOMAIN:-}"; then
+  WWW_URL="$(site_public_url "www.${DOMAIN}")/api/health"
+  WWW_CODE=$(curl -skL --connect-timeout 15 -o /tmp/sorelle-health-www.json -w "%{http_code}" "${WWW_URL}" 2>/dev/null || echo "000")
+  WWW_CODE="${WWW_CODE//[^0-9]/}"
+  if [ "$WWW_CODE" = "200" ] && grep -q '"status"' /tmp/sorelle-health-www.json 2>/dev/null; then
+    ok "HTTP ${WWW_CODE} — ${WWW_URL}"
+  else
+    fail "HTTP ${WWW_CODE} em ${WWW_URL}"
+    echo "  → bash deploy/aapanel/fix-nginx-api.sh"
+  fi
 fi
 echo ""
+
+if [ -n "${API_DOMAIN:-}" ] && ! is_ipv4 "${DOMAIN:-}"; then
+  echo "API subdomínio (${API_DOMAIN}) — opcional:"
+  SUB_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$(site_public_url "$API_DOMAIN")/api/health" || echo "000")
+  if [ "$SUB_CODE" = "200" ]; then
+    ok "HTTP ${SUB_CODE} — $(site_public_url "$API_DOMAIN")/api/health"
+  else
+    warn "HTTP ${SUB_CODE} — subdomínio não responde (use ${BASE_URL}/api)"
+  fi
+  echo ""
+fi
 
 echo "Frontend (${BASE_URL}/):"
 FRONT_CODE=$(curl -s -o /tmp/sorelle-front.html -w "%{http_code}" "${BASE_URL}/" || echo "000")
@@ -70,8 +95,9 @@ fi
 echo ""
 
 echo "Login admin (teste):"
+LOGIN_URL="${BASE_URL}/api/auth/login"
 LOGIN_CODE=$(curl -s -o /tmp/sorelle-login.json -w "%{http_code}" \
-  -X POST "${BASE_URL}/api/auth/login" \
+  -X POST "${LOGIN_URL}" \
   -H "Content-Type: application/json" \
   -d '{"email":"admin@sorelle.com.br","password":"__invalid__"}' || echo "000")
 if [ "$LOGIN_CODE" = "401" ]; then

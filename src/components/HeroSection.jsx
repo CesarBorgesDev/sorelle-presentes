@@ -4,10 +4,10 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowRight } from 'lucide-react';
 
 const categories = [
-  { key: 'casa', label: 'Casa', path: '/categoria/casa', image: 'https://media.base44.com/images/public/6a21b15344a3800af2fdb9ef/940205071_generated_f3e2d298.png' },
-  { key: 'decoracao', label: 'Decoração', path: '/categoria/decoracao', image: 'https://media.base44.com/images/public/6a21b15344a3800af2fdb9ef/215deeae0_generated_c3aec0c4.png' },
-  { key: 'fragancias', label: 'Fragrâncias', path: '/categoria/fragancias', image: 'https://media.base44.com/images/public/6a21b15344a3800af2fdb9ef/d954b3d6c_generated_61731479.png' },
-  { key: 'cama_mesa_banho', label: 'Cama, Mesa & Banho', path: '/categoria/cama_mesa_banho', image: 'https://media.base44.com/images/public/6a21b15344a3800af2fdb9ef/0fe8f6fa0_generated_0f6146fd.png' },
+  { key: 'casa', label: 'Casa', path: '/categoria/casa', image: 'https://media.api.com/images/public/6a21b15344a3800af2fdb9ef/940205071_generated_f3e2d298.png' },
+  { key: 'decoracao', label: 'Decoração', path: '/categoria/decoracao', image: 'https://media.api.com/images/public/6a21b15344a3800af2fdb9ef/215deeae0_generated_c3aec0c4.png' },
+  { key: 'fragancias', label: 'Fragrâncias', path: '/categoria/fragancias', image: 'https://media.api.com/images/public/6a21b15344a3800af2fdb9ef/d954b3d6c_generated_61731479.png' },
+  { key: 'cama_mesa_banho', label: 'Cama, Mesa & Banho', path: '/categoria/cama_mesa_banho', image: 'https://media.api.com/images/public/6a21b15344a3800af2fdb9ef/0fe8f6fa0_generated_0f6146fd.png' },
 ];
 
 export default function HeroSection() {

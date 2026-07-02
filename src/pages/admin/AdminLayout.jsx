@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useLocation, Outlet } from 'react-router-dom';
 import { LayoutDashboard, Package, ShoppingBag, Menu, X, LogOut, Users, Settings, FileText } from 'lucide-react';
-import { base44 } from '@/api/base44Client';
+import { api } from '@/api/apiClient';
 
 const navItems = [
   { label: 'Dashboard', icon: LayoutDashboard, path: '/admin' },
@@ -59,7 +59,7 @@ export default function AdminLayout() {
             Ver Loja
           </Link>
           <button
-            onClick={() => base44.auth.logout()}
+            onClick={() => api.auth.logout()}
             className="w-full flex items-center gap-3 px-4 py-3 text-muted-foreground hover:text-destructive text-sm font-body tracking-wide transition-colors"
           >
             <LogOut className="w-4 h-4" />

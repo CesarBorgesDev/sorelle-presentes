@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Minus, Plus, X, Gift, Package } from 'lucide-react';
-import { base44 } from '@/api/base44Client';
+import { api } from '@/api/apiClient';
 import { useAuth } from '@/lib/AuthContext';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
@@ -19,17 +19,17 @@ export default function CartDrawer({ open, onClose }) {
 
   const { data: items = [] } = useQuery({
     queryKey: ['cart'],
-    queryFn: () => base44.entities.CartItem.list(),
+    queryFn: () => api.entities.CartItem.list(),
     enabled: isAuthenticated && open,
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, data }) => base44.entities.CartItem.update(id, data),
+    mutationFn: ({ id, data }) => api.entities.CartItem.update(id, data),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['cart'] }),
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id) => base44.entities.CartItem.delete(id),
+    mutationFn: (id) => api.entities.CartItem.delete(id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['cart'] }),
   });
 

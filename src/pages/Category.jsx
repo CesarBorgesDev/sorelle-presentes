@@ -1,7 +1,7 @@
 import React from 'react';
 import { useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { base44 } from '@/api/base44Client';
+import { api } from '@/api/apiClient';
 import { motion } from 'framer-motion';
 import ProductCard from '../components/ProductCard';
 import ProductListRow from '../components/ProductListRow';
@@ -21,7 +21,7 @@ export default function Category() {
 
   const { data: products = [], isLoading } = useQuery({
     queryKey: ['products', slug],
-    queryFn: () => base44.entities.Product.filter({ category: slug }, '-created_date', 50),
+    queryFn: () => api.entities.Product.filter({ category: slug }, '-created_date', 50),
   });
 
   return (

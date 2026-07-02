@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { base44 } from '@/api/base44Client';
+import { api } from '@/api/apiClient';
 import { CheckCircle2, Clock, Copy, Loader2, QrCode } from 'lucide-react';
 
 const paymentStatusLabels = {
@@ -18,7 +18,7 @@ export default function PixPayment() {
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['pix-payment', orderId],
-    queryFn: () => base44.checkout.getPixDetails(orderId),
+    queryFn: () => api.checkout.getPixDetails(orderId),
     enabled: Boolean(orderId),
     refetchInterval: (query) => (
       query.state.data?.payment_status === 'aguardando_pagamento' ? 8000 : false

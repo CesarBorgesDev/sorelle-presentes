@@ -28,9 +28,15 @@ git pull
 
 log "Build frontend..."
 npm_ci_safe .
+export VITE_API_URL="$(vite_api_url)"
+log "VITE_API_URL=${VITE_API_URL}"
 npm run build
 
 publish_frontend "${APP_DIR}/dist" "$SITE_ROOT"
+write_nginx_vhost || true
+write_nginx_api_vhost || true
+update_server_env_urls || true
+reload_nginx || true
 
 log "Rebuild containers..."
 export POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-}"
@@ -41,4 +47,4 @@ run_db_migrate "$APP_DIR"
 echo ""
 echo "==> Deploy concluído."
 echo "    Site: $(site_public_url)/"
-echo "    API:  curl -s http://127.0.0.1:3001/api/health"
+echo "    API:  curl -s $(api_public_url)/api/health"

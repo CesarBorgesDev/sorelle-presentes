@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { base44 } from '@/api/base44Client';
+import { api } from '@/api/apiClient';
 import { useAuth } from '@/lib/AuthContext';
 import { motion } from 'framer-motion';
 import { ArrowLeft, Minus, Plus, ShoppingBag, Check, Heart } from 'lucide-react';
@@ -27,13 +27,13 @@ export default function ProductDetail() {
   const { data: product, isLoading } = useQuery({
     queryKey: ['product', id],
     queryFn: async () => {
-      const products = await base44.entities.Product.filter({ id });
+      const products = await api.entities.Product.filter({ id });
       return products[0];
     },
   });
 
   const addToCartMutation = useMutation({
-    mutationFn: (data) => base44.entities.CartItem.create(data),
+    mutationFn: (data) => api.entities.CartItem.create(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['cart'] });
       setAdded(true);
@@ -42,7 +42,7 @@ export default function ProductDetail() {
   });
 
   const wishlistMutation = useMutation({
-    mutationFn: (productId) => base44.account.addToWishlist(productId),
+    mutationFn: (productId) => api.account.addToWishlist(productId),
     onSuccess: () => {
       setWishlisted(true);
       queryClient.invalidateQueries({ queryKey: ['wishlist'] });

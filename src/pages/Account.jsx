@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, Navigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { base44 } from '@/api/base44Client';
+import { api } from '@/api/apiClient';
 import { useAuth } from '@/lib/AuthContext';
 import CustomerOrderDetail from '@/components/CustomerOrderDetail';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -51,7 +51,7 @@ function ProfileForm({ profile, onSaved }) {
   }, [profile]);
 
   const saveMutation = useMutation({
-    mutationFn: (data) => base44.account.updateProfile(data),
+    mutationFn: (data) => api.account.updateProfile(data),
     onSuccess: (updated) => {
       queryClient.setQueryData(['account-profile'], updated);
       queryClient.invalidateQueries({ queryKey: ['auth-me'] });
@@ -127,11 +127,11 @@ function WishlistSection() {
 
   const { data: items = [], isLoading } = useQuery({
     queryKey: ['wishlist'],
-    queryFn: () => base44.account.getWishlist(),
+    queryFn: () => api.account.getWishlist(),
   });
 
   const removeMutation = useMutation({
-    mutationFn: (productId) => base44.account.removeFromWishlist(productId),
+    mutationFn: (productId) => api.account.removeFromWishlist(productId),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['wishlist'] }),
   });
 
@@ -205,11 +205,11 @@ function RmaSection({ orders }) {
 
   const { data: requests = [], isLoading } = useQuery({
     queryKey: ['rma-requests'],
-    queryFn: () => base44.account.getRmaRequests(),
+    queryFn: () => api.account.getRmaRequests(),
   });
 
   const createMutation = useMutation({
-    mutationFn: (data) => base44.account.createRmaRequest(data),
+    mutationFn: (data) => api.account.createRmaRequest(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['rma-requests'] });
       setForm({ order_id: '', reason: 'defeito', description: '' });
@@ -392,13 +392,13 @@ export default function Account() {
 
   const { data: orders = [], isLoading: ordersLoading } = useQuery({
     queryKey: ['my-orders'],
-    queryFn: () => base44.checkout.listMyOrders(),
+    queryFn: () => api.checkout.listMyOrders(),
     enabled: isAuthenticated,
   });
 
   const { data: profile } = useQuery({
     queryKey: ['account-profile'],
-    queryFn: () => base44.account.getProfile(),
+    queryFn: () => api.account.getProfile(),
     enabled: isAuthenticated,
   });
 

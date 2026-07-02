@@ -7,22 +7,22 @@ const categoryData = {
   casa: {
     title: 'Casa',
     description: 'Objetos que transformam seu lar em um refúgio de estilo e conforto.',
-    image: 'https://media.base44.com/images/public/6a21b15344a3800af2fdb9ef/940205071_generated_f3e2d298.png',
+    image: 'https://media.api.com/images/public/6a21b15344a3800af2fdb9ef/940205071_generated_f3e2d298.png',
   },
   decoracao: {
     title: 'Decoração',
     description: 'Peças artesanais e escultóricas que contam histórias únicas.',
-    image: 'https://media.base44.com/images/public/6a21b15344a3800af2fdb9ef/215deeae0_generated_c3aec0c4.png',
+    image: 'https://media.api.com/images/public/6a21b15344a3800af2fdb9ef/215deeae0_generated_c3aec0c4.png',
   },
   fragancias: {
     title: 'Fragrâncias',
     description: 'Aromas que envolvem cada ambiente em uma experiência sensorial.',
-    image: 'https://media.base44.com/images/public/6a21b15344a3800af2fdb9ef/d954b3d6c_generated_61731479.png',
+    image: 'https://media.api.com/images/public/6a21b15344a3800af2fdb9ef/d954b3d6c_generated_61731479.png',
   },
   cama_mesa_banho: {
     title: 'Cama, Mesa & Banho',
     description: 'Tecidos nobres e texturas que acariciam os sentidos.',
-    image: 'https://media.base44.com/images/public/6a21b15344a3800af2fdb9ef/0fe8f6fa0_generated_0f6146fd.png',
+    image: 'https://media.api.com/images/public/6a21b15344a3800af2fdb9ef/0fe8f6fa0_generated_0f6146fd.png',
   },
 };
 

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { base44 } from '@/api/base44Client';
+import { api } from '@/api/apiClient';
 import { FileText, Loader2, CheckCircle2, ExternalLink } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Link } from 'react-router-dom';
@@ -88,11 +88,11 @@ export default function AdminContent() {
 
   const { data: pages = [], isLoading } = useQuery({
     queryKey: ['admin-content-pages'],
-    queryFn: () => base44.pages.list(),
+    queryFn: () => api.pages.list(),
   });
 
   const mutation = useMutation({
-    mutationFn: ({ slug, data }) => base44.pages.update(slug, data),
+    mutationFn: ({ slug, data }) => api.pages.update(slug, data),
     onSuccess: (_result, variables) => {
       queryClient.invalidateQueries({ queryKey: ['admin-content-pages'] });
       queryClient.invalidateQueries({ queryKey: ['content-page', variables.slug] });

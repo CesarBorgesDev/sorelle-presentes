@@ -9,7 +9,7 @@ grep -q $'\r' "$0" 2>/dev/null && sed -i 's/\r$//' "$0" && exec bash "$0" "$@"
 #
 #   export DOMAIN="loja.seudominio.com.br"
 #   export REPO_URL="https://github.com/SEU_USUARIO/sorelle-presentes.git"
-#   export APP_DIR="/www/server/sorelle-presentes"
+#   export APP_DIR="/home/deploy/sorelle-presentes"
 #   export DB_NAME="sorelle"
 #   export DB_USER="sorelle"
 #   export DB_PASS="senha_forte_aqui"
@@ -28,7 +28,7 @@ set -euo pipefail
 
 DOMAIN="${DOMAIN:-}"
 REPO_URL="${REPO_URL:-https://github.com/CesarBorgesDev/sorelle-presentes.git}"
-APP_DIR="${APP_DIR:-/www/server/sorelle-presentes}"
+APP_DIR="${APP_DIR:-/home/deploy/sorelle-presentes}"
 DB_NAME="${DB_NAME:-sorelle}"
 DB_USER="${DB_USER:-sorelle}"
 DB_PASS="${DB_PASS:-}"
@@ -132,7 +132,7 @@ pm2 start deploy/aapanel/ecosystem.config.cjs --cwd "$APP_DIR"
 pm2 save
 
 # --- Permissões do site aaPanel ---
-SITE_ROOT="${SITE_ROOT:-/www/wwwroot/sorelle-presentes}"
+SITE_ROOT="${SITE_ROOT:-/home/deploy/sorelle-presentes/dist}"
 if [ -d "$SITE_ROOT" ]; then
   log "Sincronizando dist → $SITE_ROOT"
   rsync -a --delete dist/ "$SITE_ROOT/"

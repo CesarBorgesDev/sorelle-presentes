@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { base44 } from '@/api/base44Client';
+import { api } from '@/api/apiClient';
 import { Search, ChevronDown, Plus } from 'lucide-react';
 import OrderFormModal from './OrderFormModal';
 import OrderDetailModal from './OrderDetailModal';
@@ -25,11 +25,11 @@ export default function AdminOrders() {
 
   const { data: orders = [], isLoading } = useQuery({
     queryKey: ['orders'],
-    queryFn: () => base44.entities.Order.list('-created_date', 100),
+    queryFn: () => api.entities.Order.list('-created_date', 100),
   });
 
   const updateStatusMutation = useMutation({
-    mutationFn: ({ id, status }) => base44.entities.Order.update(id, { status }),
+    mutationFn: ({ id, status }) => api.entities.Order.update(id, { status }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['orders'] }),
   });
 

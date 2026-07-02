@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Outlet, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { base44 } from '@/api/base44Client';
+import { api } from '@/api/apiClient';
 import { useAuth } from '@/lib/AuthContext';
 import Navbar from './Navbar';
 import Footer from './Footer';
@@ -14,7 +14,7 @@ export default function Layout() {
 
   const { data: cartItems = [] } = useQuery({
     queryKey: ['cart'],
-    queryFn: () => base44.entities.CartItem.list(),
+    queryFn: () => api.entities.CartItem.list(),
     enabled: isAuthenticated,
   });
 

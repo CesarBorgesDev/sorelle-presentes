@@ -8,7 +8,7 @@ API + PostgreSQL em **Docker**; frontend estático servido pelo **Nginx do aaPan
 
 ```
 Internet → Nginx (aaPanel, :80)
-              ├── /        → /www/wwwroot/sorelle-presentes
+              ├── /        → /home/deploy/sorelle-presentes/dist
               └── /api     → Docker sorelle-backend (:3001)
                               └── Docker sorelle-db (PostgreSQL)
 ```
@@ -32,8 +32,8 @@ Libere portas **80** e **443** em Security.
 
 ```bash
 export POSTGRES_PASSWORD='Sorelle@1975'
-git clone https://github.com/CesarBorgesDev/sorelle-presentes.git /www/server/sorelle-presentes
-bash /www/server/sorelle-presentes/install-aapanel-ubuntu.sh
+git clone https://github.com/CesarBorgesDev/sorelle-presentes.git /home/deploy/sorelle-presentes
+bash /home/deploy/sorelle-presentes/install-aapanel-ubuntu.sh
 ```
 
 **Opção B — curl** (após push no GitHub):
@@ -56,7 +56,7 @@ Repositório: [github.com/CesarBorgesDev/sorelle-presentes](https://github.com/C
 ### Servidor com repositório já clonado
 
 ```bash
-cd /www/server/sorelle-presentes
+cd /home/deploy/sorelle-presentes
 export POSTGRES_PASSWORD='Sorelle@1975'
 bash install-aapanel-ubuntu.sh
 ```
@@ -76,8 +76,8 @@ Exemplo de `deploy/aapanel/.env.deploy`:
 DOMAIN=191.252.205.7
 SITE_NAME=sorelle-presentes
 POSTGRES_PASSWORD='Sorelle@1975'
-APP_DIR=/www/server/sorelle-presentes
-SITE_ROOT=/www/wwwroot/sorelle-presentes
+APP_DIR=/home/deploy/sorelle-presentes
+SITE_ROOT=/home/deploy/sorelle-presentes/dist
 REPO_URL=https://github.com/CesarBorgesDev/sorelle-presentes.git
 ```
 
@@ -91,13 +91,13 @@ bash deploy/aapanel/open-firewall.sh
 
 No **aaPanel**:
 1. **Security → Firewall** → libere **80** e **443** (Status: Release)
-2. **Website → Add site** → nome: `sorelle-presentes` → raiz: `/www/wwwroot/sorelle-presentes`
+2. **Website → Add site** → nome: `sorelle-presentes` → raiz: `/home/deploy/sorelle-presentes/dist`
 3. No provedor VPS (Locaweb/etc.), libere 80/443 no firewall externo
 
 Se aparecer *"Website not found"* ou *"website has been stopped"*, rode novamente:
 
 ```bash
-cd /www/server/sorelle-presentes
+cd /home/deploy/sorelle-presentes
 git pull
 bash deploy/aapanel/install-docker.sh
 ```
@@ -109,7 +109,7 @@ Teste externo mostra **connection refused** quando o Nginx não está escutando 
 **No servidor (SSH como root):**
 
 ```bash
-cd /www/server/sorelle-presentes
+cd /home/deploy/sorelle-presentes
 git pull
 bash deploy/aapanel/fix-access.sh
 ```
@@ -141,7 +141,7 @@ O script `install-docker.sh`:
 1. Gera `server/.env` (se não existir)
 2. Sobe `sorelle-db` + `sorelle-backend` via Docker
 3. Faz build do frontend (`npm run build`)
-4. Publica `dist/` em `/www/wwwroot/sorelle-presentes`
+4. Publica `dist/` em `/home/deploy/sorelle-presentes/dist`
 5. Cria vhost Nginx em `/www/server/panel/vhost/nginx/SEU_DOMINIO.conf`
 6. Recarrega Nginx
 
@@ -226,7 +226,7 @@ O aaPanel cria um `index.html` genérico ao adicionar o site. Para substituir pe
 bash deploy/aapanel/fix-homepage.sh
 ```
 
-Confira no aaPanel: **Website → sorelle-presentes** (ou IP `191.252.205.7`) → raiz = `/www/wwwroot/sorelle-presentes`
+Confira no aaPanel: **Website → sorelle-presentes** (ou IP `191.252.205.7`) → raiz = `/home/deploy/sorelle-presentes/dist`
 | `.env.deploy.example` | Variáveis de deploy (copiar para `.env.deploy`) |
 | `docker-compose.backend.yml` | PostgreSQL + API |
 | `nginx-vhost.conf.template` | Vhost Nginx gerado automaticamente |
@@ -266,7 +266,7 @@ Confira no aaPanel: **Website → sorelle-presentes** (ou IP `191.252.205.7`) �
 **npm ERR_SOCKET_TIMEOUT / npmmirror** — O aaPanel pode usar mirror chinês lento. O projeto inclui `.npmrc` com `registry.npmjs.org`. No servidor:
 
 ```bash
-cd /www/server/sorelle-presentes
+cd /home/deploy/sorelle-presentes
 npm config set registry https://registry.npmjs.org/ --global
 rm -rf node_modules
 npm ci --registry=https://registry.npmjs.org/

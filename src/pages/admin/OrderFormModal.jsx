@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { base44 } from '@/api/base44Client';
+import { api } from '@/api/apiClient';
 import { X, Plus, Trash2 } from 'lucide-react';
 
 export default function OrderFormModal({ onClose }) {
   const queryClient = useQueryClient();
-  const { data: products = [] } = useQuery({ queryKey: ['products'], queryFn: () => base44.entities.Product.list() });
+  const { data: products = [] } = useQuery({ queryKey: ['products'], queryFn: () => api.entities.Product.list() });
 
   const [form, setForm] = useState({
     customer_name: '',
@@ -53,7 +53,7 @@ export default function OrderFormModal({ onClose }) {
   const subtotal = form.items.reduce((s, i) => s + (i.total || 0), 0);
 
   const mutation = useMutation({
-    mutationFn: (data) => base44.entities.Order.create(data),
+    mutationFn: (data) => api.entities.Order.create(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['orders'] });
       onClose();

@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { base44 } from '@/api/base44Client';
+import { api } from '@/api/apiClient';
 import { CheckCircle2, Clock, Loader2 } from 'lucide-react';
 
 const paymentStatusLabels = {
@@ -17,7 +17,7 @@ export default function PaymentReturn() {
 
   const { data: order, isLoading } = useQuery({
     queryKey: ['checkout-order', orderId],
-    queryFn: () => base44.checkout.getOrder(orderId),
+    queryFn: () => api.checkout.getOrder(orderId),
     enabled: Boolean(orderId),
     refetchInterval: (query) => (
       query.state.data?.payment_status === 'aguardando_pagamento' ? 5000 : false

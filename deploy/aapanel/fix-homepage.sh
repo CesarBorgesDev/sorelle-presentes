@@ -1,15 +1,15 @@
 #!/bin/bash
 grep -q $'\r' "$0" 2>/dev/null && sed -i 's/\r$//' "$0" && exec bash "$0" "$@"
 
-# Publica a loja React em /www/wwwroot/sorelle-presentes (substitui index padrão aaPanel)
+# Publica a loja React em /home/deploy/sorelle-presentes/dist
 #
 # Caminhos padrão:
-#   APP_DIR   = /www/server/sorelle-presentes
-#   SITE_ROOT = /www/wwwroot/sorelle-presentes
-#   DOMAIN    = 191.252.205.7
+#   APP_DIR   = /home/deploy/sorelle-presentes
+#   SITE_ROOT = /home/deploy/sorelle-presentes/dist
+#   DOMAIN    = sorellepresentes.com.br
 #
 # Uso (na VPS, como root):
-#   cd /www/server/sorelle-presentes
+#   cd /home/deploy/sorelle-presentes
 #   bash deploy/aapanel/fix-homepage.sh
 set -euo pipefail
 
@@ -51,11 +51,19 @@ fi
 
 log "Build do frontend..."
 npm_ci_safe .
+export VITE_API_URL="$(vite_api_url)"
+log "VITE_API_URL=${VITE_API_URL}"
 npm run build
 
 [ -d dist ] || fail "Build falhou — pasta dist/ não encontrada"
 
 publish_frontend "${APP_DIR}/dist" "$SITE_ROOT" || fail "Falha ao publicar em ${SITE_ROOT}"
+
+write_nginx_vhost || fail "Falha ao escrever ${AAPANEL_VHOST}"
+write_nginx_api_vhost || warn "Falha ao escrever vhost da API"
+patch_nginx_api_proxy || warn "Falha ao aplicar proxy /api no SSL"
+update_server_env_urls || true
+reload_nginx || true
 
 PUBLIC_URL="$(site_public_url)"
 
@@ -65,8 +73,8 @@ echo -e "${GREEN}Loja publicada com sucesso!${NC}"
 echo ""
 echo "  URL:        ${PUBLIC_URL}/"
 echo "  Site root:  ${SITE_ROOT}"
+echo "  Nginx:      ${AAPANEL_VHOST}"
 echo ""
 echo "No aaPanel: Website → ${SITE_NAME} → raiz = ${SITE_ROOT}"
-echo "Configure o Nginx manualmente (proxy /api → 127.0.0.1:3001)"
 echo "No navegador: Ctrl+F5 em ${PUBLIC_URL}/"
 echo "=============================================================================="

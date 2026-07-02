@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { base44 } from '@/api/base44Client';
+import { api } from '@/api/apiClient';
 import { Plus, Pencil, Trash2, Search } from 'lucide-react';
 import ProductViewToggle, { useProductViewMode } from '@/components/ProductViewToggle';
 import ProductFormModal from './ProductFormModal';
@@ -14,11 +14,11 @@ export default function AdminProducts() {
 
   const { data: products = [], isLoading } = useQuery({
     queryKey: ['products'],
-    queryFn: () => base44.entities.Product.list('-created_date'),
+    queryFn: () => api.entities.Product.list('-created_date'),
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id) => base44.entities.Product.delete(id),
+    mutationFn: (id) => api.entities.Product.delete(id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['products'] }),
   });
 

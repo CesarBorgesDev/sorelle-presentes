@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import ReactMarkdown from 'react-markdown';
 import { motion } from 'framer-motion';
 import { Loader2, ArrowLeft } from 'lucide-react';
-import { base44 } from '@/api/base44Client';
+import { api } from '@/api/apiClient';
 
 export default function InstitutionalPage({ pageSlug }) {
   const { slug: paramSlug } = useParams();
@@ -12,7 +12,7 @@ export default function InstitutionalPage({ pageSlug }) {
 
   const { data: page, isLoading, error } = useQuery({
     queryKey: ['content-page', slug],
-    queryFn: () => base44.pages.get(slug),
+    queryFn: () => api.pages.get(slug),
     enabled: Boolean(slug),
   });
 

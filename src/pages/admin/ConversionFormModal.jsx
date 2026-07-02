@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
 import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
-import { base44 } from '@/api/base44Client';
+import { api } from '@/api/apiClient';
 import { X } from 'lucide-react';
 
 export default function ConversionFormModal({ onClose }) {
   const queryClient = useQueryClient();
   const { data: affiliates = [] } = useQuery({
     queryKey: ['affiliates'],
-    queryFn: () => base44.entities.Affiliate.list(),
+    queryFn: () => api.entities.Affiliate.list(),
   });
 
   const [form, setForm] = useState({
@@ -46,7 +46,7 @@ export default function ConversionFormModal({ onClose }) {
   };
 
   const mutation = useMutation({
-    mutationFn: (data) => base44.entities.AffiliateConversion.create(data),
+    mutationFn: (data) => api.entities.AffiliateConversion.create(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['conversions'] });
       onClose();

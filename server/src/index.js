@@ -29,12 +29,20 @@ function buildAllowedOrigins() {
     'http://localhost:5173',
     'http://127.0.0.1:5173',
     'http://191.252.205.7',
+    'https://sorellepresentes.com.br',
+    'https://www.sorellepresentes.com.br',
     'https://sorelle-presentes.com.br',
-    ''
   ]);
   for (const key of ['CORS_ORIGIN', 'FRONTEND_URL', 'APP_PUBLIC_URL']) {
     const value = process.env[key];
-    if (value) origins.add(value.replace(/\/$/, ''));
+    if (!value) continue;
+    const normalized = value.replace(/\/$/, '');
+    origins.add(normalized);
+    if (normalized.includes('://www.')) {
+      origins.add(normalized.replace('://www.', '://'));
+    } else {
+      origins.add(normalized.replace('://', '://www.'));
+    }
   }
   return origins;
 }

@@ -53,7 +53,7 @@ bootstrap_deploy_env() {
 }
 
 generate_server_env() {
-  local encoded_pass db_url jwt_secret env_file template base_url
+  local encoded_pass db_url jwt_secret env_file template frontend_url api_url
 
   if [ -z "$POSTGRES_PASSWORD" ]; then
     fail "POSTGRES_PASSWORD vazio em .env.deploy"
@@ -64,19 +64,20 @@ generate_server_env() {
   jwt_secret="$(openssl rand -base64 48 | tr -d '/+=' | head -c 64)"
   env_file="${APP_DIR}/server/.env"
   template="${SCRIPT_DIR}/env.production.example"
-  base_url="$(site_public_url)"
+  frontend_url="$(site_public_url)"
+  api_url="$(api_public_url)"
 
   if [ ! -f "$template" ]; then
     fail "Template não encontrado: $template"
   fi
 
-  log "Gerando server/.env (URL pública: ${base_url})..."
+  log "Gerando server/.env (loja: ${frontend_url} | API: ${api_url})..."
   cp "$template" "$env_file"
   sed -i "s|DATABASE_URL=.*|DATABASE_URL=${db_url}|" "$env_file"
   sed -i "s|JWT_SECRET=.*|JWT_SECRET=${jwt_secret}|" "$env_file"
-  sed -i "s|CORS_ORIGIN=.*|CORS_ORIGIN=${base_url}|" "$env_file"
-  sed -i "s|FRONTEND_URL=.*|FRONTEND_URL=${base_url}|" "$env_file"
-  sed -i "s|APP_PUBLIC_URL=.*|APP_PUBLIC_URL=${base_url}|" "$env_file"
+  sed -i "s|CORS_ORIGIN=.*|CORS_ORIGIN=${frontend_url}|" "$env_file"
+  sed -i "s|FRONTEND_URL=.*|FRONTEND_URL=${frontend_url}|" "$env_file"
+  sed -i "s|APP_PUBLIC_URL=.*|APP_PUBLIC_URL=${api_url}|" "$env_file"
 }
 
 wait_for_api() {
@@ -156,6 +157,8 @@ wait_for_api
 # Frontend
 log "Instalando dependências e build do frontend..."
 npm_ci_safe .
+export VITE_API_URL="$(vite_api_url)"
+log "VITE_API_URL=${VITE_API_URL}"
 npm run build
 
 log "Publicando frontend em $SITE_ROOT ..."
@@ -163,6 +166,11 @@ publish_frontend "${APP_DIR}/dist" "$SITE_ROOT" || fail "Falha ao publicar front
 
 # Firewall
 open_firewall_ports
+
+# Nginx aaPanel
+write_nginx_vhost
+write_nginx_api_vhost || warn "Vhost API não criado — confira API_DOMAIN em .env.deploy"
+reload_nginx
 
 # Reinicia API com URLs atualizadas
 docker compose -f deploy/aapanel/docker-compose.backend.yml restart backend 2>/dev/null || true
@@ -178,12 +186,6 @@ echo "  curl -s $(site_public_url)/api/health"
 echo "  docker ps"
 echo ""
 echo "Acesso externo: $(site_public_url)/"
-echo ""
-echo "Configure o Nginx manualmente no aaPanel:"
-echo "  - root → ${SITE_ROOT}"
-echo "  - location /api → proxy_pass http://127.0.0.1:3001"
-echo "  - location / → try_files \$uri \$uri/ /index.html"
-echo "  - client_max_body_size 15m;"
 echo ""
 echo "Se ainda aparecer 'Website not found' no aaPanel:"
 echo "  1. Website → Add site → domínio/IP: ${DOMAIN}"

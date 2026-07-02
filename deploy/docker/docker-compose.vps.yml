@@ -1,0 +1,86 @@
+# Produção VPS — frontend Docker :3000 + backend Docker :3001 + PostgreSQL
+# Nginx do aaPanel (host) faz proxy público → 127.0.0.1:3000 e /api → 127.0.0.1:3001
+#
+# Uso:
+#   docker compose --env-file .env.docker -f deploy/docker/docker-compose.vps.yml up -d --build
+
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: sorelle-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Defina POSTGRES_PASSWORD em .env.docker}
+      POSTGRES_DB: sorelle
+    volumes:
+      - sorelle_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d sorelle"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - sorelle
+
+  backend:
+    build:
+      context: ../../server
+      dockerfile: Dockerfile
+    container_name: sorelle-backend
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3001:3001"
+    environment:
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/sorelle
+      DOCKER_DB_HOST: db
+      JWT_SECRET: ${JWT_SECRET:?Defina JWT_SECRET em .env.docker}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+      PORT: 3001
+      CORS_ORIGIN: ${CORS_ORIGIN:-https://sorellepresentes.com.br}
+      FRONTEND_URL: ${FRONTEND_URL:-https://sorellepresentes.com.br}
+      APP_PUBLIC_URL: ${APP_PUBLIC_URL:-https://sorellepresentes.com.br}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@sorelle.com.br}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin123}
+      CHECKOUT_PAYMENT_METHOD: ${CHECKOUT_PAYMENT_METHOD:-pix}
+      PIX_KEY: ${PIX_KEY:-}
+      PIX_HOLDER_NAME: ${PIX_HOLDER_NAME:-Sorelle Presentes}
+      CORREIOS_FALLBACK: ${CORREIOS_FALLBACK:-estimate}
+    volumes:
+      - sorelle_uploads:/app/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+    command: sh -c "npm run db:migrate && npm run db:seed && npm start"
+    networks:
+      - sorelle
+
+  frontend:
+    build:
+      context: ../..
+      dockerfile: Dockerfile.production
+      args:
+        VITE_API_URL: ${VITE_API_URL:-/api}
+    container_name: sorelle-frontend
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:3000/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    networks:
+      - sorelle
+
+volumes:
+  sorelle_pg_data:
+  sorelle_uploads:
+
+networks:
+  sorelle:
+    driver: bridge

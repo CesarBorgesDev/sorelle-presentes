@@ -1,6 +1,6 @@
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { base44 } from '@/api/base44Client';
+import { api } from '@/api/apiClient';
 import HeroSection from '../components/HeroSection';
 import FeaturedProducts from '../components/FeaturedProducts';
 import CategoryBanner from '../components/CategoryBanner';
@@ -9,7 +9,7 @@ import GiftBanner from '../components/GiftBanner';
 export default function Home() {
   const { data: products = [] } = useQuery({
     queryKey: ['products'],
-    queryFn: () => base44.entities.Product.list('-created_date', 50),
+    queryFn: () => api.entities.Product.list('-created_date', 50),
   });
 
   const casaProducts = products.filter(p => p.category === 'casa');

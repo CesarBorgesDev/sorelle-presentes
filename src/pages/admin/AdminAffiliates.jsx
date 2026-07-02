@@ -1,7 +1,7 @@
 // @ts-ignore
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { base44 } from '@/api/base44Client';
+import { api } from '@/api/apiClient';
 import { Plus, Pencil, Trash2, Users, TrendingUp, DollarSign, Search } from 'lucide-react';
 import AffiliateFormModal from './AffiliateFormModal';
 import ConversionFormModal from './ConversionFormModal';
@@ -29,22 +29,22 @@ export default function AdminAffiliates() {
 
   const { data: affiliates = [], isLoading: loadingAff } = useQuery({
     queryKey: ['affiliates'],
-    queryFn: () => base44.entities.Affiliate.list('-created_date'),
+    queryFn: () => api.entities.Affiliate.list('-created_date'),
   });
 
   const { data: conversions = [], isLoading: loadingConv } = useQuery({
     queryKey: ['conversions'],
-    queryFn: () => base44.entities.AffiliateConversion.list('-created_date', 100),
+    queryFn: () => api.entities.AffiliateConversion.list('-created_date', 100),
   });
 
   const deleteAffiliateMutation = useMutation({
-    mutationFn: (id) => base44.entities.Affiliate.delete(id),
+    mutationFn: (id) => api.entities.Affiliate.delete(id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['affiliates'] }),
   });
 
   const updateConversionMutation = useMutation({
     // @ts-ignore
-    mutationFn: ({ id, status }) => base44.entities.AffiliateConversion.update(id, { status }),
+    mutationFn: ({ id, status }) => api.entities.AffiliateConversion.update(id, { status }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['conversions'] }),
   });
 

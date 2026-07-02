@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { base44 } from '@/api/base44Client';
+import { api } from '@/api/apiClient';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { X, Upload, Sparkles, Loader2, ImageIcon, Link2 } from 'lucide-react';
 
@@ -69,8 +69,8 @@ export default function ProductFormModal({ product, onClose }) {
 
   const mutation = useMutation({
     mutationFn: (data) => isEditing
-      ? base44.entities.Product.update(product.id, data)
-      : base44.entities.Product.create(data),
+      ? api.entities.Product.update(product.id, data)
+      : api.entities.Product.create(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['products'] });
       onClose();
@@ -78,7 +78,7 @@ export default function ProductFormModal({ product, onClose }) {
   });
 
   const uploadMutation = useMutation({
-    mutationFn: () => base44.images.uploadProduct({
+    mutationFn: () => api.images.uploadProduct({
       image: uploadBase64,
       mime_type: uploadMimeType,
     }),
@@ -94,7 +94,7 @@ export default function ProductFormModal({ product, onClose }) {
   });
 
   const generateMutation = useMutation({
-    mutationFn: () => base44.images.generateScene({
+    mutationFn: () => api.images.generateScene({
       image: aiBase64,
       mime_type: aiMimeType,
       product_name: form.name,
