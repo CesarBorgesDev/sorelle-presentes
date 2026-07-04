@@ -161,11 +161,15 @@ else
 fi
 
 # Docker — DB + API + Frontend
-log "Subindo PostgreSQL + API + Frontend (Docker)..."
+log "Subindo PostgreSQL + API (Docker)..."
 export POSTGRES_PASSWORD
 docker compose -f deploy/aapanel/docker-compose.backend.yml up -d --build
 
 wait_for_api
+
+log "Subindo Frontend React (container separado)..."
+docker compose -f deploy/aapanel/docker-compose.frontend.yml up -d --build
+
 wait_for_frontend
 
 # Firewall + Nginx

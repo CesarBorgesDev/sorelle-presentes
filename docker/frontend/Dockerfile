@@ -1,5 +1,6 @@
-# @deprecated — use docker/frontend/Dockerfile
-# Mantido por compatibilidade com builds antigos.
+# Container dedicado — loja React (Nginx :3000)
+# Build a partir da raiz do repositório:
+#   docker build -f docker/frontend/Dockerfile --build-arg VITE_API_URL=/api -t sorelle-frontend .
 
 FROM node:20-alpine AS build
 
@@ -20,5 +21,8 @@ COPY docker/frontend/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /app/dist /usr/share/nginx/html
 
 EXPOSE 3000
+
+HEALTHCHECK --interval=10s --timeout=5s --retries=5 --start-period=15s \
+  CMD wget -q --spider http://127.0.0.1:3000/ || exit 1
 
 CMD ["nginx", "-g", "daemon off;"]

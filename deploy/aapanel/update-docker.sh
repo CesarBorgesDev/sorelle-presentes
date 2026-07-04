@@ -25,11 +25,14 @@ git pull
 
 update_server_env_urls || true
 
-log "Rebuild containers (frontend :3000 + backend :3001)..."
+log "Rebuild backend + banco..."
 export POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-}"
 docker compose -f deploy/aapanel/docker-compose.backend.yml up -d --build
 
 run_db_migrate "$APP_DIR"
+
+log "Rebuild frontend (container separado)..."
+docker compose -f deploy/aapanel/docker-compose.frontend.yml up -d --build
 
 if [ -f "${APP_DIR}/deploy/docker/patch-nginx-docker.sh" ]; then
   log "Reconfigurando Nginx → Docker..."

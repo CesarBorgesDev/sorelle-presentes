@@ -1,0 +1,31 @@
+# Container dedicado — Frontend React (Nginx :3000)
+# Requer rede sorelle-net criada pelo docker-compose.backend.yml
+#
+# Uso:
+#   docker compose -f deploy/aapanel/docker-compose.backend.yml up -d --build
+#   docker compose -f deploy/aapanel/docker-compose.frontend.yml up -d --build
+
+services:
+  frontend:
+    build:
+      context: ../..
+      dockerfile: docker/frontend/Dockerfile
+      args:
+        VITE_API_URL: /api
+    container_name: sorelle-frontend
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3000:3000"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:3000/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - sorelle-net
+
+networks:
+  sorelle-net:
+    name: sorelle-net
+    external: true
