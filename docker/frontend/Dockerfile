@@ -13,11 +13,14 @@ COPY package*.json ./
 RUN npm ci
 
 COPY . .
-RUN npm run build
+RUN npm run build \
+  && printf 'window.__SORELLE_API_URL__ = %s;\n' "'${VITE_API_URL}'" > /app/dist/sorelle-config.js
 
 FROM nginx:stable-alpine
 
 COPY docker/frontend/nginx.conf /etc/nginx/conf.d/default.conf
+COPY docker/frontend/docker-entrypoint.sh /docker-entrypoint.sh
+RUN chmod +x /docker-entrypoint.sh
 COPY --from=build /app/dist /usr/share/nginx/html
 
 EXPOSE 3000
@@ -25,4 +28,4 @@ EXPOSE 3000
 HEALTHCHECK --interval=10s --timeout=5s --retries=5 --start-period=15s \
   CMD wget -q --spider http://127.0.0.1:3000/ || exit 1
 
-CMD ["nginx", "-g", "daemon off;"]
+ENTRYPOINT ["/docker-entrypoint.sh"]

@@ -121,11 +121,13 @@ ensure_env_deploy() {
   log "Criando ${DEPLOY_DIR}/.env.deploy ..."
   cat > "${DEPLOY_DIR}/.env.deploy" << EOF
 DOMAIN=${DOMAIN}
+API_DOMAIN=api.${DOMAIN}
 SITE_NAME=${SITE_NAME}
 POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
 APP_DIR=${APP_DIR}
 SITE_ROOT=${SITE_ROOT}
 REPO_URL=${REPO_URL}
+VITE_API_URL=https://api.${DOMAIN}/api
 EOF
 }
 

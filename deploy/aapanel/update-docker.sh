@@ -25,6 +25,9 @@ git pull
 
 update_server_env_urls || true
 
+export VITE_API_URL="$(vite_api_url)"
+log "URL da API no frontend: ${VITE_API_URL}"
+
 log "Rebuild backend + banco..."
 export POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-}"
 docker compose -f deploy/aapanel/docker-compose.backend.yml up -d --build

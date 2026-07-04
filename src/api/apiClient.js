@@ -87,7 +87,7 @@ async function apiFetch(path, options = {}) {
       404: 'Recurso não encontrado',
       409: 'Este e-mail já está cadastrado',
       500: 'Erro interno no servidor',
-      502: 'API indisponível — reinicie o container sorelle-backend',
+      502: 'API indisponível — verifique se a URL da API está correta (api.sorellepresentes.com.br ou /api no Nginx)',
       503: 'Servidor temporariamente indisponível',
     };
 

@@ -115,6 +115,9 @@ configure_nginx_docker() {
     warn "patch-nginx-docker.sh não encontrado — configure Nginx manualmente."
     print_manual_nginx_hint
   fi
+  if [ -n "${API_DOMAIN:-}" ] && ! is_ipv4 "${DOMAIN:-}"; then
+    write_nginx_api_vhost || warn "Vhost API (${API_DOMAIN}) não criado — confira DNS e SSL no aaPanel."
+  fi
 }
 
 # --- main ---
@@ -166,6 +169,9 @@ export POSTGRES_PASSWORD
 docker compose -f deploy/aapanel/docker-compose.backend.yml up -d --build
 
 wait_for_api
+
+export VITE_API_URL="$(vite_api_url)"
+log "URL da API no frontend: ${VITE_API_URL}"
 
 log "Subindo Frontend React (container separado)..."
 docker compose -f deploy/aapanel/docker-compose.frontend.yml up -d --build
