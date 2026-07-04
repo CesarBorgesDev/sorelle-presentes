@@ -22,7 +22,7 @@ export VITE_API_URL="$(vite_api_url)"
 echo "==> URL da API: ${VITE_API_URL}"
 echo "==> Recriando container sorelle-frontend..."
 
-docker compose -f deploy/aapanel/docker-compose.frontend.yml up -d --build --force-recreate
+docker compose -f deploy/docker/docker-compose.frontend.yml up -d --build --force-recreate
 
 echo ""
 echo "Verifique no navegador (F12 → Console):"

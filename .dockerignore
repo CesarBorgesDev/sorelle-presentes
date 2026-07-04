@@ -6,5 +6,4 @@ dist
 npm-debug.log
 docker-compose.yml
 Dockerfile
-server
 README.md

@@ -30,12 +30,12 @@ log "URL da API no frontend: ${VITE_API_URL}"
 
 log "Rebuild backend + banco..."
 export POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-}"
-docker compose -f deploy/aapanel/docker-compose.backend.yml up -d --build
+docker compose -f deploy/docker/docker-compose.backend.yml up -d --build
 
 run_db_migrate "$APP_DIR"
 
 log "Rebuild frontend (container separado)..."
-docker compose -f deploy/aapanel/docker-compose.frontend.yml up -d --build
+docker compose -f deploy/docker/docker-compose.frontend.yml up -d --build
 
 if [ -f "${APP_DIR}/deploy/docker/patch-nginx-docker.sh" ]; then
   log "Reconfigurando Nginx → Docker..."

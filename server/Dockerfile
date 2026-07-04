@@ -1,3 +1,5 @@
+# @deprecated — prefira: docker build -f docker/backend/Dockerfile -t sorelle-backend .
+
 FROM node:20-alpine
 
 WORKDIR /app
@@ -17,7 +19,7 @@ EXPOSE 3001
 
 ENTRYPOINT ["/app/docker-entrypoint.sh"]
 
-HEALTHCHECK --interval=10s --timeout=5s --retries=5 --start-period=20s \
+HEALTHCHECK --interval=10s --timeout=5s --retries=5 --start-period=25s \
   CMD curl -f http://localhost:3001/api/health || exit 1
 
 CMD ["npm", "start"]

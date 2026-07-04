@@ -1,0 +1,60 @@
+# PostgreSQL + API Express — container dedicado sorelle-backend (:3001)
+#
+# Uso (VPS / aaPanel):
+#   export POSTGRES_PASSWORD='Sorelle1975'
+#   docker compose -f deploy/docker/docker-compose.backend.yml up -d --build
+#
+# Frontend separado:
+#   docker compose -f deploy/docker/docker-compose.frontend.yml up -d --build
+
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: sorelle-db
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:5432:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: sorelle
+    volumes:
+      - sorelle_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d sorelle"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - sorelle-net
+
+  backend:
+    build:
+      context: ../..
+      dockerfile: docker/backend/Dockerfile
+    container_name: sorelle-backend
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3001:3001"
+    env_file:
+      - ../../server/.env
+    environment:
+      DOCKER_DB_HOST: db
+      PORT: 3001
+    volumes:
+      - sorelle_uploads:/app/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+    command: sh -c "npm run db:migrate && npm run db:seed && npm start"
+    networks:
+      - sorelle-net
+
+volumes:
+  sorelle_pg_data:
+  sorelle_uploads:
+
+networks:
+  sorelle-net:
+    name: sorelle-net
+    driver: bridge

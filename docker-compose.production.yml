@@ -36,8 +36,8 @@ services:
 
   backend:
     build:
-      context: ./server
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: docker/backend/Dockerfile
     container_name: sorelle-backend
     restart: unless-stopped
     ports:

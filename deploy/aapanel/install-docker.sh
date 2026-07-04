@@ -166,7 +166,8 @@ fi
 # Docker — DB + API + Frontend
 log "Subindo PostgreSQL + API (Docker)..."
 export POSTGRES_PASSWORD
-docker compose -f deploy/aapanel/docker-compose.backend.yml up -d --build
+docker compose -f deploy/docker/docker-compose.backend.yml up -d --build
+# (compose canônico: deploy/docker/docker-compose.backend.yml + docker/backend/Dockerfile)
 
 wait_for_api
 
@@ -174,7 +175,7 @@ export VITE_API_URL="$(vite_api_url)"
 log "URL da API no frontend: ${VITE_API_URL}"
 
 log "Subindo Frontend React (container separado)..."
-docker compose -f deploy/aapanel/docker-compose.frontend.yml up -d --build
+docker compose -f deploy/docker/docker-compose.frontend.yml up -d --build
 
 wait_for_frontend
 
@@ -183,7 +184,7 @@ open_firewall_ports
 configure_nginx_docker
 
 # Reinicia API com URLs atualizadas
-docker compose -f deploy/aapanel/docker-compose.backend.yml restart backend 2>/dev/null || true
+docker compose -f deploy/docker/docker-compose.backend.yml restart backend 2>/dev/null || true
 
 echo ""
 echo "=============================================================================="
