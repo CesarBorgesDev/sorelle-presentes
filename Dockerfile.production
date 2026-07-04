@@ -1,4 +1,4 @@
-# Build React com API em subdomínio separado
+# Build React — API no mesmo domínio (/api)
 FROM node:20-alpine AS build
 
 WORKDIR /app

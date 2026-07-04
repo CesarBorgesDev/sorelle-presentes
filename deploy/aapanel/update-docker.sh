@@ -1,7 +1,7 @@
 #!/bin/bash
 grep -q $'\r' "$0" 2>/dev/null && sed -i 's/\r$//' "$0" && exec bash "$0" "$@"
 
-# Atualização — Docker (API + DB) + frontend no aaPanel
+# Atualização — Docker (DB + API + Frontend React)
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -20,28 +20,24 @@ load_deploy_env "$DEPLOY_ENV"
 
 cd "$APP_DIR"
 
-# shellcheck source=npm-install.sh
-source "${SCRIPT_DIR}/npm-install.sh"
-
 log "Atualizando código..."
 git pull
 
-log "Build frontend..."
-npm_ci_safe .
-export VITE_API_URL="$(vite_api_url)"
-log "VITE_API_URL=${VITE_API_URL}"
-npm run build
-
-publish_frontend "${APP_DIR}/dist" "$SITE_ROOT"
 update_server_env_urls || true
 
-log "Rebuild containers..."
+log "Rebuild containers (frontend :3000 + backend :3001)..."
 export POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-}"
 docker compose -f deploy/aapanel/docker-compose.backend.yml up -d --build
 
 run_db_migrate "$APP_DIR"
 
+if [ -f "${APP_DIR}/deploy/docker/patch-nginx-docker.sh" ]; then
+  log "Reconfigurando Nginx → Docker..."
+  bash "${APP_DIR}/deploy/docker/patch-nginx-docker.sh"
+fi
+
 echo ""
 echo "==> Deploy concluído."
 echo "    Site: $(site_public_url)/"
-echo "    API:  curl -s $(api_public_url)/api/health"
+echo "    API:  curl -s $(site_public_url)/api/health"
+echo "    Local frontend: curl -sI http://127.0.0.1:3000/"

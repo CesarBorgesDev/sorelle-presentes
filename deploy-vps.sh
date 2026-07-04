@@ -18,7 +18,7 @@ grep -q $'\r' "$0" 2>/dev/null && sed -i 's/\r$//' "$0" && exec bash "$0" "$@"
 # Só corrigir proxy Nginx /api (opcional — prefira config manual):
 #   bash deploy-vps.sh --nginx-only
 #
-# Pré-requisitos (aaPanel → App Store): Nginx, Node.js 20, Docker, Git
+# Pré-requisitos (aaPanel → App Store): Nginx, Docker, Git
 # =============================================================================
 
 set -euo pipefail
@@ -157,8 +157,12 @@ run_update() {
 }
 
 run_nginx_fix() {
-  log "Configurando proxy /api no Nginx..."
-  bash "${DEPLOY_DIR}/fix-nginx-api.sh"
+  log "Configurando Nginx → Docker (frontend :3000, /api :3001)..."
+  if [ -f "${APP_DIR}/deploy/docker/patch-nginx-docker.sh" ]; then
+    bash "${APP_DIR}/deploy/docker/patch-nginx-docker.sh"
+  else
+    bash "${DEPLOY_DIR}/fix-nginx-api.sh"
+  fi
 }
 
 run_check() {
@@ -181,10 +185,10 @@ print_summary() {
   echo ""
   echo "Comandos úteis:"
   echo "  bash deploy-vps.sh --update       # atualizar após git push"
-  echo "  bash deploy-vps.sh --nginx-only   # opcional: patch automático /api"
+  echo "  bash deploy-vps.sh --nginx-only   # reconfigurar proxy Nginx → Docker"
   echo "  bash deploy/aapanel/check-api.sh  # diagnóstico"
   echo ""
-  echo "Configure o Nginx manualmente (deploy/aapanel/nginx-site.conf.example)"
+  echo "  Frontend Docker: 127.0.0.1:3000 | Backend Docker: 127.0.0.1:3001"
   echo "=============================================================================="
 }
 

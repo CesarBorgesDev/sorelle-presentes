@@ -2,14 +2,14 @@
 grep -q $'\r' "$0" 2>/dev/null && sed -i 's/\r$//' "$0" && exec bash "$0" "$@"
 
 # =============================================================================
-# Instalação Sorelle — Docker (API + DB) + Frontend no aaPanel
+# Instalação Sorelle — Docker (DB + API + Frontend React)
 # =============================================================================
 # Uso:
 #   cp deploy/aapanel/.env.deploy.example deploy/aapanel/.env.deploy
 #   # edite .env.deploy (DOMAIN, POSTGRES_PASSWORD, etc.)
 #   bash deploy/aapanel/install-docker.sh
 #
-# Pré-requisitos (aaPanel App Store): Nginx, Node.js 20, Docker, Git
+# Pré-requisitos (aaPanel App Store): Nginx, Docker, Git
 # =============================================================================
 
 set -euo pipefail
@@ -83,7 +83,7 @@ generate_server_env() {
 wait_for_api() {
   local i
   log "Aguardando API em http://127.0.0.1:3001/api/health ..."
-  for i in $(seq 1 30); do
+  for i in $(seq 1 60); do
     if curl -sf http://127.0.0.1:3001/api/health >/dev/null 2>&1; then
       log "API respondendo."
       return 0
@@ -93,8 +93,29 @@ wait_for_api() {
   fail "API não respondeu a tempo. Verifique: docker logs sorelle-backend"
 }
 
-# shellcheck source=npm-install.sh
-source "${SCRIPT_DIR}/npm-install.sh"
+wait_for_frontend() {
+  local i
+  log "Aguardando frontend em http://127.0.0.1:3000 ..."
+  for i in $(seq 1 60); do
+    if curl -sf http://127.0.0.1:3000/ >/dev/null 2>&1; then
+      log "Frontend respondendo."
+      return 0
+    fi
+    sleep 2
+  done
+  fail "Frontend não respondeu a tempo. Verifique: docker logs sorelle-frontend"
+}
+
+configure_nginx_docker() {
+  local patch_script="${APP_DIR}/deploy/docker/patch-nginx-docker.sh"
+  if [ -f "$patch_script" ]; then
+    log "Configurando Nginx → frontend :3000 e /api → :3001 ..."
+    bash "$patch_script"
+  else
+    warn "patch-nginx-docker.sh não encontrado — configure Nginx manualmente."
+    print_manual_nginx_hint
+  fi
+}
 
 # --- main ---
 
@@ -103,19 +124,11 @@ bootstrap_deploy_env
 log "Caminhos:"
 print_deploy_paths
 require_cmd git
-require_cmd node
-require_cmd npm
 require_cmd curl
 require_cmd python3
-require_cmd rsync
 
 if ! docker compose version >/dev/null 2>&1; then
   fail "docker compose não disponível. Instale Docker pelo aaPanel."
-fi
-
-NODE_MAJOR=$(node -p "process.versions.node.split('.')[0]")
-if [ "$NODE_MAJOR" -lt 18 ]; then
-  fail "Node.js 18+ necessário para build do frontend."
 fi
 
 log "Domínio: $DOMAIN"
@@ -147,25 +160,17 @@ else
   update_server_env_urls
 fi
 
-# Docker
-log "Subindo PostgreSQL + API (Docker)..."
+# Docker — DB + API + Frontend
+log "Subindo PostgreSQL + API + Frontend (Docker)..."
 export POSTGRES_PASSWORD
 docker compose -f deploy/aapanel/docker-compose.backend.yml up -d --build
 
 wait_for_api
+wait_for_frontend
 
-# Frontend
-log "Instalando dependências e build do frontend..."
-npm_ci_safe .
-export VITE_API_URL="$(vite_api_url)"
-log "VITE_API_URL=${VITE_API_URL}"
-npm run build
-
-log "Publicando frontend em $SITE_ROOT ..."
-publish_frontend "${APP_DIR}/dist" "$SITE_ROOT" || fail "Falha ao publicar frontend"
-
-# Firewall
+# Firewall + Nginx
 open_firewall_ports
+configure_nginx_docker
 
 # Reinicia API com URLs atualizadas
 docker compose -f deploy/aapanel/docker-compose.backend.yml restart backend 2>/dev/null || true
@@ -176,13 +181,14 @@ echo -e "${GREEN}Instalação Docker concluída!${NC}"
 echo ""
 echo "Testes:"
 echo "  curl -s http://127.0.0.1:3001/api/health"
+echo "  curl -sI http://127.0.0.1:3000/"
 echo "  curl -I $(site_public_url)/"
 echo "  curl -s $(site_public_url)/api/health"
 echo "  docker ps"
 echo ""
 echo "Acesso externo: $(site_public_url)/"
 echo ""
-print_manual_nginx_hint
+echo "Frontend Docker: 127.0.0.1:3000 | Backend Docker: 127.0.0.1:3001"
 echo ""
 echo "Se ainda aparecer 'Website not found' no aaPanel:"
 echo "  1. Website → Add site → domínio/IP: ${DOMAIN}"

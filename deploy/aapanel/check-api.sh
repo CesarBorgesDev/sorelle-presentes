@@ -26,11 +26,24 @@ print_deploy_paths
 echo ""
 
 echo "Docker:"
-if docker ps --format '  {{.Names}}: {{.Status}}' 2>/dev/null | grep -E 'sorelle-(db|backend)'; then
+if docker ps --format '  {{.Names}}: {{.Status}}' 2>/dev/null | grep -E 'sorelle-(db|backend|frontend)'; then
   ok "Containers encontrados"
 else
-  fail "Containers sorelle-db / sorelle-backend não estão rodando"
+  fail "Containers sorelle-db / sorelle-backend / sorelle-frontend não estão rodando"
   echo "  → docker compose -f deploy/aapanel/docker-compose.backend.yml up -d --build"
+fi
+echo ""
+
+echo "Frontend local (127.0.0.1:3000):"
+if curl -sf http://127.0.0.1:3000/ >/dev/null; then
+  if curl -s http://127.0.0.1:3000/ | grep -q 'id="root"' 2>/dev/null; then
+    ok "Loja React respondendo no container"
+  else
+    warn "Responde mas conteúdo não parece React — docker logs sorelle-frontend"
+  fi
+else
+  fail "Frontend não responde em 127.0.0.1:3000"
+  echo "  → docker logs sorelle-frontend --tail 50"
 fi
 echo ""
 
@@ -85,9 +98,9 @@ if [ "$FRONT_CODE" = "200" ]; then
     ok "HTTP ${FRONT_CODE} — loja React"
   elif grep -q 'Congratulations' /tmp/sorelle-front.html 2>/dev/null; then
     fail "HTTP ${FRONT_CODE} — ainda é a página padrão do aaPanel"
-    echo "  → bash deploy/aapanel/fix-homepage.sh"
+    echo "  → bash deploy/docker/patch-nginx-docker.sh"
   else
-    warn "HTTP ${FRONT_CODE} — conteúdo inesperado em ${SITE_ROOT}"
+    warn "HTTP ${FRONT_CODE} — conteúdo inesperado (confira proxy Nginx → :3000)"
   fi
 else
   fail "HTTP ${FRONT_CODE}"

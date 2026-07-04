@@ -1,5 +1,6 @@
-# Stack local / VPS: PostgreSQL + API Express
-# Frontend: npm run build → publique dist/ no seu servidor web (Nginx configurado manualmente)
+# Stack local: PostgreSQL + API + Frontend React (Docker)
+# Uso: docker compose up -d --build
+# Loja: http://localhost:3000  |  API: http://localhost:3001/api/health
 
 services:
   db:
@@ -19,6 +20,8 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    networks:
+      - sorelle
 
   backend:
     build:
@@ -30,6 +33,7 @@ services:
       - "3001:3001"
     environment:
       DATABASE_URL: postgresql://postgres:postgres@db:5432/sorelle
+      DOCKER_DB_HOST: db
       JWT_SECRET: ${JWT_SECRET:-altere-esta-chave-secreta-em-producao}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
       PORT: 3001
@@ -46,7 +50,35 @@ services:
       db:
         condition: service_healthy
     command: sh -c "npm run db:migrate && npm run db:seed && npm start"
+    networks:
+      - sorelle
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.production
+      args:
+        VITE_API_URL: /api
+    container_name: sorelle-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:3000/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - sorelle
 
 volumes:
   postgres_data:
   backend_uploads:
+
+networks:
+  sorelle:
+    driver: bridge
