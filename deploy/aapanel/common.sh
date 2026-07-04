@@ -258,6 +258,122 @@ PY
   return 0
 }
 
+# Garante proxy → 127.0.0.1:3001 nos vhosts do subdomínio API (HTTP + HTTPS / aaPanel)
+patch_nginx_api_subdomain_proxy() {
+  local vhost_dir="/www/server/panel/vhost/nginx"
+  local tmp_block
+
+  [ -n "${API_DOMAIN:-}" ] || return 0
+  is_ipv4 "${DOMAIN:-}" && return 0
+  [ -d "$vhost_dir" ] || { warn "Pasta Nginx não encontrada: $vhost_dir"; return 0; }
+
+  tmp_block="$(mktemp)"
+  cat > "$tmp_block" << 'EOF'
+    location / {
+        proxy_pass http://127.0.0.1:3001;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
+        proxy_read_timeout 120s;
+        client_max_body_size 15m;
+    }
+EOF
+
+  log "Aplicando proxy API → 127.0.0.1:3001 em ${API_DOMAIN} (HTTP/HTTPS)..."
+  python3 - "$vhost_dir" "$API_DOMAIN" "$tmp_block" << 'PY'
+import re
+import sys
+from pathlib import Path
+
+vhost_dir, api_domain, block_file = sys.argv[1:4]
+api_block = Path(block_file).read_text()
+if not api_block.endswith("\n"):
+    api_block += "\n"
+
+markers = [api_domain, f"api.{api_domain.split('api.', 1)[-1]}" if api_domain.startswith('api.') else f"api.{api_domain}"]
+
+def block_matches(block: str) -> bool:
+    return api_domain in block
+
+def has_api_proxy(block: str) -> bool:
+    return "127.0.0.1:3001" in block and re.search(r"location\s+/\s*\{", block)
+
+def iter_server_blocks(text: str):
+    pos = 0
+    while pos < len(text):
+        match = re.search(r"\bserver\s*\{", text[pos:])
+        if not match:
+            break
+        start = pos + match.start()
+        brace = pos + match.end() - 1
+        depth = 0
+        end = None
+        for idx in range(brace, len(text)):
+            ch = text[idx]
+            if ch == "{":
+                depth += 1
+            elif ch == "}":
+                depth -= 1
+                if depth == 0:
+                    end = idx + 1
+                    break
+        if end is None:
+            break
+        yield start, end, text[start:end]
+        pos = end
+
+def replace_location_root(block: str) -> tuple[str, bool]:
+    if has_api_proxy(block):
+        return block, False
+    pattern = re.compile(
+        r"[ \t]*location[ \t]+/[ \t]*\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}\s*\n?",
+        re.MULTILINE | re.DOTALL,
+    )
+    new, n = pattern.subn(api_block + "\n", block, count=1)
+    if n:
+        return new, True
+    new, n = re.subn(r"\n\}\s*$", "\n" + api_block + "\n}\n", block, count=1)
+    return (new, True) if n else (block, False)
+
+for conf in sorted(Path(vhost_dir).rglob("*.conf")):
+    try:
+        original = conf.read_text(encoding="utf-8", errors="ignore")
+    except OSError:
+        continue
+    if api_domain not in original:
+        continue
+    spans = list(iter_server_blocks(original))
+    changed = False
+    parts = []
+    cursor = 0
+    for start, end, block in spans:
+        parts.append(original[cursor:start])
+        new_block = block
+        if block_matches(block):
+            new_block, block_changed = replace_location_root(block)
+            if block_changed:
+                changed = True
+        parts.append(new_block)
+        cursor = end
+    parts.append(original[cursor:])
+    if not changed:
+        continue
+    updated = "".join(parts)
+    backup = conf.with_suffix(conf.suffix + ".bak")
+    if not backup.exists():
+        backup.write_text(original, encoding="utf-8")
+    conf.write_text(updated, encoding="utf-8")
+    print(conf)
+PY
+
+  rm -f "$tmp_block"
+}
+
 _patch_nginx_api_inline() {
   patch_nginx_api_proxy
 }
@@ -542,6 +658,7 @@ write_nginx_api_vhost() {
   sed -e "s|{{API_DOMAIN}}|${API_DOMAIN}|g" \
       -e "s|{{NGINX_DEFAULT_SERVER}}|${default_flag}|g" \
       "$template" > "$AAPANEL_API_VHOST"
+  patch_nginx_api_subdomain_proxy || true
 }
 
 reload_nginx() {

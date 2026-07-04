@@ -31,6 +31,9 @@ function buildAllowedOrigins() {
     'http://191.252.205.7',
     'https://sorellepresentes.com.br',
     'https://www.sorellepresentes.com.br',
+    'http://sorellepresentes.com.br',
+    'http://www.sorellepresentes.com.br',
+    'https://api.sorellepresentes.com.br',
     'https://sorelle-presentes.com.br',
   ]);
   for (const key of ['CORS_ORIGIN', 'FRONTEND_URL', 'APP_PUBLIC_URL']) {
@@ -40,7 +43,7 @@ function buildAllowedOrigins() {
     origins.add(normalized);
     if (normalized.includes('://www.')) {
       origins.add(normalized.replace('://www.', '://'));
-    } else {
+    } else if (normalized.includes('://')) {
       origins.add(normalized.replace('://', '://www.'));
     }
   }
@@ -49,12 +52,28 @@ function buildAllowedOrigins() {
 
 const allowedOrigins = buildAllowedOrigins();
 
+function isAllowedOrigin(origin) {
+  if (!origin) return true;
+  if (allowedOrigins.has(origin)) return true;
+  try {
+    const { hostname, protocol } = new URL(origin);
+    if (protocol !== 'http:' && protocol !== 'https:') return false;
+    if (hostname === 'sorellepresentes.com.br' || hostname.endsWith('.sorellepresentes.com.br')) {
+      return true;
+    }
+  } catch {
+    return false;
+  }
+  return false;
+}
+
 app.use(cors({
   origin(origin, callback) {
-    if (!origin || allowedOrigins.has(origin)) {
-      callback(null, true);
+    if (isAllowedOrigin(origin)) {
+      callback(null, origin || true);
       return;
     }
+    console.warn('[CORS] Origem bloqueada:', origin);
     callback(null, false);
   },
   credentials: true,

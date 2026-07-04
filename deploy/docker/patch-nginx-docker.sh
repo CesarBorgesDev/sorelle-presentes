@@ -200,6 +200,8 @@ configure_nginx_docker() {
   write_nginx_docker_vhost || true
   patch_nginx_docker_frontend || true
   patch_nginx_api_proxy || true
+  write_nginx_api_vhost || true
+  patch_nginx_api_subdomain_proxy || true
   reload_nginx || true
 }
 

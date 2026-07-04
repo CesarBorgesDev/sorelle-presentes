@@ -16,7 +16,9 @@ function resolveApiBase() {
   return '/api';
 }
 
-const API_BASE = resolveApiBase();
+function getApiBase() {
+  return resolveApiBase();
+}
 
 class ApiError extends Error {
   constructor(message, status, details = {}) {
@@ -53,20 +55,21 @@ async function apiFetch(path, options = {}) {
   }
 
   let response;
+  const apiBase = getApiBase();
+  const requestUrl = `${apiBase}${path}`;
   try {
-    response = await fetch(`${API_BASE}${path}`, {
+    response = await fetch(requestUrl, {
       ...options,
       headers,
     });
   } catch (networkErr) {
-    const requestUrl = `${API_BASE}${path}`;
     const err = new ApiError(
-      `Não foi possível conectar ao servidor (${requestUrl}). Verifique se a API está online.`,
+      `Não foi possível conectar ao servidor (${requestUrl}). Verifique se a API está online, se o SSL de api.sorellepresentes.com.br está ativo no aaPanel e se o Nginx faz proxy para a porta 3001.`,
       0,
       { path, url: requestUrl }
     );
     err.cause = networkErr;
-    console.error('[Sorelle] Falha de rede na API', { url: requestUrl, cause: networkErr });
+    console.error('[Sorelle] Falha de rede na API', { url: requestUrl, apiBase, cause: networkErr });
     throw err;
   }
 
@@ -96,7 +99,7 @@ async function apiFetch(path, options = {}) {
       response.status,
       {
         path,
-        url: `${API_BASE}${path}`,
+        url: `${getApiBase()}${path}`,
         body: Object.keys(body).length ? body : null,
         rawBody,
       }
@@ -113,7 +116,7 @@ async function apiFetch(path, options = {}) {
       response.status,
       {
         path,
-        url: `${API_BASE}${path}`,
+        url: `${getApiBase()}${path}`,
         rawBody: rawBody?.slice(0, 200) ?? null,
       }
     );
