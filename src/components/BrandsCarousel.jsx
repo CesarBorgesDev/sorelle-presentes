@@ -2,14 +2,18 @@ import React from 'react';
 import { motion } from 'framer-motion';
 
 const BRANDS = [
-  { name: 'Maison Lumière', logo: 'https://media.base44.com/images/public/6a21b15344a3800af2fdb9ef/d0decc38a_generated_image.png' },
-  { name: 'Terra Nova', logo: 'https://media.base44.com/images/public/6a21b15344a3800af2fdb9ef/4af4b8f81_generated_image.png' },
-  { name: 'Casa Alvorada', logo: 'https://media.base44.com/images/public/6a21b15344a3800af2fdb9ef/b13b3d05d_generated_image.png' },
-  { name: 'Étoile Home', logo: 'https://media.base44.com/images/public/6a21b15344a3800af2fdb9ef/f80d556cc_generated_image.png' },
-  { name: 'Nordique', logo: 'https://media.base44.com/images/public/6a21b15344a3800af2fdb9ef/76c2d57a6_generated_image.png' },
-  { name: 'Vento Sul', logo: 'https://media.base44.com/images/public/6a21b15344a3800af2fdb9ef/3ce642ac2_generated_image.png' },
-  { name: 'Bruma Studio', logo: 'https://media.base44.com/images/public/6a21b15344a3800af2fdb9ef/a6d248cfa_generated_image.png' },
-  { name: 'Cristal & Cia', logo: 'https://media.base44.com/images/public/6a21b15344a3800af2fdb9ef/4d6b8286a_generated_image.png' },
+  'Buddemeyer',
+  'Altenburg',
+  'Karsten',
+  'Trousseau',
+  'Artex',
+  'Mundo do Enxoval',
+  'Zelo',
+  'mmartan',
+  'Casa Moysés',
+  'Santista',
+  'Scavone',
+  'Trussardi',
 ];
 
 export default function BrandsCarousel() {
@@ -28,12 +32,12 @@ export default function BrandsCarousel() {
           transition={{ duration: 25, ease: 'linear', repeat: Infinity }}
         >
           {items.map((brand, index) => (
-            <img
-              key={`${brand.name}-${index}`}
-              src={brand.logo}
-              alt={brand.name}
-              className="h-14 lg:h-16 w-auto object-contain shrink-0 opacity-70 hover:opacity-100 transition-opacity"
-            />
+            <span
+              key={`${brand}-${index}`}
+              className="font-display text-xl lg:text-2xl tracking-widest uppercase text-muted-foreground whitespace-nowrap opacity-70 hover:opacity-100 transition-opacity"
+            >
+              {brand}
+            </span>
           ))}
         </motion.div>
       </div>
