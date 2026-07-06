@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/api/apiClient';
-import { FileText, Loader2, CheckCircle2, ExternalLink } from 'lucide-react';
+import { FileText, ImageIcon, Loader2, CheckCircle2, ExternalLink } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Link } from 'react-router-dom';
+import HomeBannersEditor from './HomeBannersEditor';
 
 const PAGE_TABS = [
   { slug: 'sobre-nos', label: 'Sobre Nós', path: '/sobre-nos' },
@@ -83,6 +84,7 @@ function PageEditor({ page, onSave, saving, saved }) {
 
 export default function AdminContent() {
   const queryClient = useQueryClient();
+  const [mainTab, setMainTab] = useState('pages');
   const [activeTab, setActiveTab] = useState(PAGE_TABS[0].slug);
   const [savedSlug, setSavedSlug] = useState(null);
 
@@ -110,46 +112,65 @@ export default function AdminContent() {
           <FileText className="w-5 h-5 text-primary" />
         </div>
         <div>
-          <h1 className="font-display text-2xl tracking-wider text-foreground">Conteúdo institucional</h1>
+          <h1 className="font-display text-2xl tracking-wider text-foreground">Conteúdo</h1>
           <p className="font-body text-sm text-muted-foreground">
-            Edite as páginas exibidas no rodapé da loja
+            Páginas institucionais e banners da página inicial
           </p>
         </div>
       </div>
 
-      {isLoading ? (
-        <div className="flex items-center gap-3 text-muted-foreground font-body text-sm">
-          <Loader2 className="w-5 h-5 animate-spin" />
-          Carregando páginas...
-        </div>
-      ) : (
-        <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="mb-6">
-            {PAGE_TABS.map(({ slug, label }) => (
-              <TabsTrigger key={slug} value={slug}>
-                {label}
-              </TabsTrigger>
-            ))}
-          </TabsList>
+      <Tabs value={mainTab} onValueChange={setMainTab}>
+        <TabsList className="mb-8">
+          <TabsTrigger value="pages" className="gap-2">
+            <FileText className="w-4 h-4" />
+            Páginas
+          </TabsTrigger>
+          <TabsTrigger value="banners" className="gap-2">
+            <ImageIcon className="w-4 h-4" />
+            Banners da home
+          </TabsTrigger>
+        </TabsList>
 
-          {PAGE_TABS.map(({ slug }) => (
-            <TabsContent key={slug} value={slug}>
-              <PageEditor
-                page={pageBySlug[slug]}
-                saving={mutation.isPending && mutation.variables?.slug === slug}
-                saved={savedSlug === slug}
-                onSave={(data) => mutation.mutate({ slug, data })}
-              />
-            </TabsContent>
-          ))}
-        </Tabs>
-      )}
+        <TabsContent value="pages">
+          {isLoading ? (
+            <div className="flex items-center gap-3 text-muted-foreground font-body text-sm">
+              <Loader2 className="w-5 h-5 animate-spin" />
+              Carregando páginas...
+            </div>
+          ) : (
+            <Tabs value={activeTab} onValueChange={setActiveTab}>
+              <TabsList className="mb-6">
+                {PAGE_TABS.map(({ slug, label }) => (
+                  <TabsTrigger key={slug} value={slug}>
+                    {label}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
 
-      {mutation.isError && (
-        <p className="mt-4 font-body text-sm text-destructive">
-          {mutation.error.message || 'Erro ao salvar página'}
-        </p>
-      )}
+              {PAGE_TABS.map(({ slug }) => (
+                <TabsContent key={slug} value={slug}>
+                  <PageEditor
+                    page={pageBySlug[slug]}
+                    saving={mutation.isPending && mutation.variables?.slug === slug}
+                    saved={savedSlug === slug}
+                    onSave={(data) => mutation.mutate({ slug, data })}
+                  />
+                </TabsContent>
+              ))}
+            </Tabs>
+          )}
+
+          {mutation.isError && (
+            <p className="mt-4 font-body text-sm text-destructive">
+              {mutation.error.message || 'Erro ao salvar página'}
+            </p>
+          )}
+        </TabsContent>
+
+        <TabsContent value="banners">
+          <HomeBannersEditor />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

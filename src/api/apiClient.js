@@ -263,6 +263,19 @@ const pages = {
   },
 };
 
+const homeBanners = {
+  get() {
+    return apiFetch('/home-banners');
+  },
+
+  update(data) {
+    return apiFetch('/home-banners', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+};
+
 const images = {
   async uploadProduct({ image, mime_type }) {
     return apiFetch('/images/upload-product', {
@@ -387,6 +400,7 @@ export const api = {
   auth,
   settings,
   pages,
+  homeBanners,
   images,
   checkout,
   shipping,

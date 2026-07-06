@@ -2,20 +2,16 @@ import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowRight } from 'lucide-react';
+import { resolveMediaUrl } from '@/lib/resolveMediaUrl';
+import { DEFAULT_HOME_BANNERS } from '@/lib/homeBannersDefaults';
 
-const categories = [
-  { key: 'casa', label: 'Casa', path: '/categoria/casa', image: 'https://media.api.com/images/public/6a21b15344a3800af2fdb9ef/940205071_generated_f3e2d298.png' },
-  { key: 'decoracao', label: 'Decoração', path: '/categoria/decoracao', image: 'https://media.api.com/images/public/6a21b15344a3800af2fdb9ef/215deeae0_generated_c3aec0c4.png' },
-  { key: 'fragancias', label: 'Fragrâncias', path: '/categoria/fragancias', image: 'https://media.api.com/images/public/6a21b15344a3800af2fdb9ef/d954b3d6c_generated_61731479.png' },
-  { key: 'cama_mesa_banho', label: 'Cama, Mesa & Banho', path: '/categoria/cama_mesa_banho', image: 'https://media.api.com/images/public/6a21b15344a3800af2fdb9ef/0fe8f6fa0_generated_0f6146fd.png' },
-];
-
-export default function HeroSection() {
+export default function HeroSection({ config }) {
+  const hero = config?.hero || DEFAULT_HOME_BANNERS.hero;
+  const slides = hero.slides?.length ? hero.slides : DEFAULT_HOME_BANNERS.hero.slides;
   const [activeIndex, setActiveIndex] = useState(0);
 
   return (
     <section className="relative h-screen w-full overflow-hidden">
-      {/* Background Images */}
       <AnimatePresence mode="sync">
         <motion.div
           key={activeIndex}
@@ -26,17 +22,15 @@ export default function HeroSection() {
           className="absolute inset-0"
         >
           <img
-            src={categories[activeIndex].image}
-            alt={categories[activeIndex].label}
+            src={resolveMediaUrl(slides[activeIndex]?.image)}
+            alt={slides[activeIndex]?.label || 'Sorelle'}
             className="w-full h-full object-cover"
           />
           <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-black/20 to-black/60" />
         </motion.div>
       </AnimatePresence>
 
-      {/* Content */}
       <div className="relative z-10 h-full flex flex-col justify-end pb-16 lg:pb-24 px-6 lg:px-16">
-        {/* Brand Tagline */}
         <motion.div
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
@@ -44,16 +38,15 @@ export default function HeroSection() {
           className="mb-12 lg:mb-16"
         >
           <h1 className="font-display text-white text-4xl md:text-6xl lg:text-7xl tracking-widest leading-tight">
-            Sorelle
+            {hero.brandTitle}
             <span className="block text-lg md:text-xl lg:text-2xl tracking-widest opacity-80 mt-2 font-body font-light">
-              Presentes & Decoração
+              {hero.brandSubtitle}
             </span>
           </h1>
         </motion.div>
 
-        {/* Category Navigation */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6 max-w-5xl w-full">
-          {categories.map((cat, index) => (
+          {slides.map((cat, index) => (
             <Link
               key={cat.key}
               to={cat.path}
