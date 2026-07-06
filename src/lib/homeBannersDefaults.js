@@ -7,25 +7,25 @@ export const DEFAULT_HOME_BANNERS = {
         key: 'casa',
         label: 'Casa',
         path: '/categoria/casa',
-        image: 'https://media.api.com/images/public/6a21b15344a3800af2fdb9ef/940205071_generated_f3e2d298.png',
+        image: 'https://media.base44.com/images/public/6a21b15344a3800af2fdb9ef/b0b1ab800_generated_image.png',
       },
       {
         key: 'decoracao',
         label: 'Decoração',
         path: '/categoria/decoracao',
-        image: 'https://media.api.com/images/public/6a21b15344a3800af2fdb9ef/215deeae0_generated_c3aec0c4.png',
+        image: 'https://media.base44.com/images/public/6a21b15344a3800af2fdb9ef/cba61c4a7_generated_image.png',
       },
       {
         key: 'fragancias',
         label: 'Fragrâncias',
         path: '/categoria/fragancias',
-        image: 'https://media.api.com/images/public/6a21b15344a3800af2fdb9ef/d954b3d6c_generated_61731479.png',
+        image: 'https://media.base44.com/images/public/6a21b15344a3800af2fdb9ef/336a68e1d_generated_image.png',
       },
       {
         key: 'cama_mesa_banho',
         label: 'Cama, Mesa & Banho',
         path: '/categoria/cama_mesa_banho',
-        image: 'https://media.api.com/images/public/6a21b15344a3800af2fdb9ef/0fe8f6fa0_generated_0f6146fd.png',
+        image: 'https://media.base44.com/images/public/6a21b15344a3800af2fdb9ef/2f651059e_generated_image.png',
       },
     ],
   },
@@ -41,7 +41,7 @@ export const DEFAULT_HOME_BANNERS = {
       banner: {
         title: 'Decoração',
         description: 'Peças artesanais e escultóricas que contam histórias únicas.',
-        image: 'https://media.api.com/images/public/6a21b15344a3800af2fdb9ef/215deeae0_generated_c3aec0c4.png',
+        image: 'https://media.base44.com/images/public/6a21b15344a3800af2fdb9ef/cba61c4a7_generated_image.png',
         reverse: false,
       },
       featured: {
@@ -56,7 +56,7 @@ export const DEFAULT_HOME_BANNERS = {
       banner: {
         title: 'Fragrâncias',
         description: 'Aromas que envolvem cada ambiente em uma experiência sensorial.',
-        image: 'https://media.api.com/images/public/6a21b15344a3800af2fdb9ef/d954b3d6c_generated_61731479.png',
+        image: 'https://media.base44.com/images/public/6a21b15344a3800af2fdb9ef/336a68e1d_generated_image.png',
         reverse: true,
       },
       featured: {
@@ -71,7 +71,7 @@ export const DEFAULT_HOME_BANNERS = {
       banner: {
         title: 'Cama, Mesa & Banho',
         description: 'Tecidos nobres e texturas que acariciam os sentidos.',
-        image: 'https://media.api.com/images/public/6a21b15344a3800af2fdb9ef/0fe8f6fa0_generated_0f6146fd.png',
+        image: 'https://media.base44.com/images/public/6a21b15344a3800af2fdb9ef/2f651059e_generated_image.png',
         reverse: false,
       },
       featured: {
