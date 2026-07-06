@@ -6,6 +6,7 @@ import HeroSection from '../components/HeroSection';
 import FeaturedProducts from '../components/FeaturedProducts';
 import CategoryBanner from '../components/CategoryBanner';
 import GiftBanner from '../components/GiftBanner';
+import BrandsCarousel from '../components/BrandsCarousel';
 
 export default function Home() {
   const { data: banners = DEFAULT_HOME_BANNERS } = useQuery({
@@ -59,6 +60,8 @@ export default function Home() {
           {index === giftAfterSectionIndex && <GiftBanner />}
         </React.Fragment>
       ))}
+
+      <BrandsCarousel />
     </div>
   );
 }
