@@ -45,7 +45,7 @@ export default function HeroSection({ config }) {
           </h1>
         </motion.div>
 
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6 max-w-5xl w-full">
+        <div className="flex flex-wrap gap-6 lg:gap-10 max-w-5xl w-full">
           {slides.map((cat, index) => (
             <Link
               key={cat.key}
@@ -58,13 +58,14 @@ export default function HeroSection({ config }) {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.5 + index * 0.1, duration: 0.6 }}
-                className={`border border-white/30 rounded-sm px-5 py-4 lg:px-8 lg:py-5 transition-all duration-500 whitespace-nowrap flex flex-col items-center text-center
-                  ${activeIndex === index ? 'bg-white/20 backdrop-blur-sm border-white/60' : 'hover:bg-white/10 hover:border-white/50'}`}
+                className="whitespace-nowrap flex items-center gap-2"
               >
-                <span className="font-display text-white text-sm lg:text-base tracking-widest uppercase block">
+                <span className={`font-display text-white text-sm lg:text-base tracking-widest uppercase block transition-opacity duration-300 ${
+                  activeIndex === index ? 'opacity-100' : 'opacity-80 group-hover:opacity-100'
+                }`}>
                   {cat.label}
                 </span>
-                <ArrowRight className={`w-4 h-4 text-white mt-2 transition-all duration-300 ${
+                <ArrowRight className={`w-4 h-4 text-white transition-all duration-300 ${
                   activeIndex === index ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-2'
                 }`} />
               </motion.div>
