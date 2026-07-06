@@ -3,7 +3,7 @@
 # Portas expostas:
 #   frontend  → 3000  (loja React)
 #   backend   → 3001  (API Express)
-#   gateway   → 80    (Nginx roteia por domínio — opcional se usar aaPanel/Traefik)
+#   db        → 5432  (PostgreSQL — conexões externas; use senha forte + firewall)
 #
 # Uso:
 #   cp .env.docker.example .env.docker
@@ -20,6 +20,8 @@ services:
     image: postgres:15-alpine
     container_name: sorelle-db
     restart: unless-stopped
+    ports:
+      - "${DB_PORT_PUBLISH:-5432}:5432"
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Defina POSTGRES_PASSWORD em .env.docker}
