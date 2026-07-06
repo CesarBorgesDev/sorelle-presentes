@@ -16,7 +16,7 @@ function resolveApiBase() {
   return '/api';
 }
 
-function getApiBase() {
+export function getApiBase() {
   return resolveApiBase();
 }
 

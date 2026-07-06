@@ -56,6 +56,8 @@ import InstitutionalPage from '@/pages/InstitutionalPage';
 
 import AdminContent from '@/pages/admin/AdminContent';
 
+import ApiStatus from '@/pages/ApiStatus';
+
 
 
 function AppRoutes() {
@@ -71,6 +73,8 @@ function AppRoutes() {
       <Route path="/forgot-password" element={<ForgotPassword />} />
 
       <Route path="/reset-password" element={<ResetPassword />} />
+
+      <Route path="/diagnostico-api" element={<ApiStatus />} />
 
 
 
