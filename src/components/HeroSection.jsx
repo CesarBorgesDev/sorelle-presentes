@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowRight } from 'lucide-react';
@@ -9,6 +9,14 @@ export default function HeroSection({ config }) {
   const hero = config?.hero || DEFAULT_HOME_BANNERS.hero;
   const slides = hero.slides?.length ? hero.slides : DEFAULT_HOME_BANNERS.hero.slides;
   const [activeIndex, setActiveIndex] = useState(0);
+
+  useEffect(() => {
+    if (slides.length <= 1) return;
+    const interval = setInterval(() => {
+      setActiveIndex((prev) => (prev + 1) % slides.length);
+    }, 4000);
+    return () => clearInterval(interval);
+  }, [slides.length]);
 
   return (
     <section className="relative h-screen w-full overflow-hidden">
@@ -58,7 +66,8 @@ export default function HeroSection({ config }) {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.5 + index * 0.1, duration: 0.6 }}
-                className="whitespace-nowrap flex items-center gap-2"
+                className={`whitespace-nowrap flex items-center gap-2 lg:border-0 lg:px-0 lg:py-0 lg:bg-transparent lg:backdrop-blur-none border rounded-sm px-5 py-4 transition-all duration-500
+                  ${activeIndex === index ? 'border-white/60 bg-white/20 backdrop-blur-sm' : 'border-white/30 hover:bg-white/10 hover:border-white/50'}`}
               >
                 <span className={`font-display text-white text-sm lg:text-base tracking-widest uppercase block transition-opacity duration-300 ${
                   activeIndex === index ? 'opacity-100' : 'opacity-80 group-hover:opacity-100'
