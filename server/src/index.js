@@ -1,8 +1,9 @@
 import express from 'express';
-import cors from 'cors';
-import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { config, assertRequiredConfig } from './config/env.js';
+import { corsMiddleware } from './config/cors.js';
+import pool, { checkDatabaseConnection } from './config/db.js';
 import authRoutes from './routes/auth.js';
 import productRoutes from './routes/products.js';
 import orderRoutes from './routes/orders.js';
@@ -16,74 +17,34 @@ import shippingRoutes from './routes/shipping.js';
 import accountRoutes from './routes/account.js';
 import pagesRoutes from './routes/pages.js';
 
-dotenv.config();
-
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
-const PORT = process.env.PORT || 3001;
 
-function buildAllowedOrigins() {
-  const origins = new Set([
-    'http://localhost:3000',
-    'http://127.0.0.1:3000',
-    'http://localhost:5173',
-    'http://127.0.0.1:5173',
-    'http://191.252.205.7',
-    'https://sorellepresentes.com.br',
-    'https://www.sorellepresentes.com.br',
-    'http://sorellepresentes.com.br',
-    'http://www.sorellepresentes.com.br',
-    'https://api.sorellepresentes.com.br',
-    'https://sorelle-presentes.com.br',
-  ]);
-  for (const key of ['CORS_ORIGIN', 'FRONTEND_URL', 'APP_PUBLIC_URL']) {
-    const value = process.env[key];
-    if (!value) continue;
-    const normalized = value.replace(/\/$/, '');
-    origins.add(normalized);
-    if (normalized.includes('://www.')) {
-      origins.add(normalized.replace('://www.', '://'));
-    } else if (normalized.includes('://')) {
-      origins.add(normalized.replace('://', '://www.'));
-    }
-  }
-  return origins;
-}
+app.set('trust proxy', 1);
+app.disable('x-powered-by');
 
-const allowedOrigins = buildAllowedOrigins();
-
-function isAllowedOrigin(origin) {
-  if (!origin) return true;
-  if (allowedOrigins.has(origin)) return true;
-  try {
-    const { hostname, protocol } = new URL(origin);
-    if (protocol !== 'http:' && protocol !== 'https:') return false;
-    if (hostname === 'sorellepresentes.com.br' || hostname.endsWith('.sorellepresentes.com.br')) {
-      return true;
-    }
-  } catch {
-    return false;
-  }
-  return false;
-}
-
-app.use(cors({
-  origin(origin, callback) {
-    if (isAllowedOrigin(origin)) {
-      callback(null, origin || true);
-      return;
-    }
-    console.warn('[CORS] Origem bloqueada:', origin);
-    callback(null, false);
-  },
-  credentials: true,
-}));
+app.use(corsMiddleware);
 app.use(express.json({ limit: '15mb' }));
 
 app.use('/api/uploads', express.static(path.join(__dirname, '../uploads')));
 
-app.get('/api/health', (_req, res) => {
-  res.json({ status: 'ok', message: 'Sorelle API funcionando' });
+app.get('/api/health', async (_req, res) => {
+  try {
+    await checkDatabaseConnection();
+    res.json({
+      status: 'ok',
+      message: 'Sorelle API funcionando',
+      db: 'up',
+      env: config.nodeEnv,
+    });
+  } catch (err) {
+    console.error('[health] Banco indisponível:', err.message);
+    res.status(503).json({
+      status: 'degraded',
+      message: 'API online, banco de dados indisponível',
+      db: 'down',
+    });
+  }
 });
 
 app.use('/api/auth', authRoutes);
@@ -104,10 +65,24 @@ app.use((_req, res) => {
 });
 
 app.use((err, _req, res, _next) => {
-  console.error('Erro não tratado:', err);
+  console.error('[API] Erro não tratado:', err);
   res.status(500).json({ message: 'Erro interno do servidor' });
 });
 
-app.listen(PORT, () => {
-  console.log(`Servidor Sorelle rodando em http://localhost:${PORT}`);
+assertRequiredConfig();
+
+const server = app.listen(config.port, config.host, () => {
+  console.log(`[Sorelle API] ${config.nodeEnv} → http://${config.host}:${config.port}`);
+  console.log(`[Sorelle API] CORS FRONTEND=${config.frontendUrl || '(auto)'} | API=${config.appPublicUrl || '(auto)'}`);
 });
+
+function shutdown(signal) {
+  console.log(`[Sorelle API] Encerrando (${signal})...`);
+  server.close(async () => {
+    await pool.end().catch(() => {});
+    process.exit(0);
+  });
+}
+
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));

@@ -1,9 +1,6 @@
 import bcrypt from 'bcryptjs';
-import dotenv from 'dotenv';
 import pool from '../config/db.js';
 import { sampleProducts, syncProductImages } from './productImages.js';
-
-dotenv.config();
 
 async function seed() {
   console.log('Iniciando seed do banco de dados...');

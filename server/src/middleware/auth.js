@@ -1,10 +1,11 @@
 import jwt from 'jsonwebtoken';
+import { config } from '../config/env.js';
 
 export function generateToken(user) {
   return jwt.sign(
     { id: user.id, email: user.email, role: user.role },
-    process.env.JWT_SECRET,
-    { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
+    config.jwtSecret,
+    { expiresIn: config.jwtExpiresIn }
   );
 }
 
@@ -16,7 +17,7 @@ export function optionalAuth(req, res, next) {
 
   try {
     const token = header.slice(7);
-    req.user = jwt.verify(token, process.env.JWT_SECRET);
+    req.user = jwt.verify(token, config.jwtSecret);
   } catch {
     // token inválido — continua sem autenticação
   }
@@ -31,7 +32,7 @@ export function requireAuth(req, res, next) {
 
   try {
     const token = header.slice(7);
-    req.user = jwt.verify(token, process.env.JWT_SECRET);
+    req.user = jwt.verify(token, config.jwtSecret);
     next();
   } catch {
     return res.status(401).json({ message: 'Token inválido ou expirado' });

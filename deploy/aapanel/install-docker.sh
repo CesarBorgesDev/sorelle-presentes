@@ -78,6 +78,9 @@ generate_server_env() {
   sed -i "s|CORS_ORIGIN=.*|CORS_ORIGIN=${frontend_url}|" "$env_file"
   sed -i "s|FRONTEND_URL=.*|FRONTEND_URL=${frontend_url}|" "$env_file"
   sed -i "s|APP_PUBLIC_URL=.*|APP_PUBLIC_URL=${api_url}|" "$env_file"
+  sed -i "s|DOMAIN=.*|DOMAIN=${DOMAIN}|" "$env_file"
+  sed -i "s|NODE_ENV=.*|NODE_ENV=production|" "$env_file"
+  sed -i "s|HOST=.*|HOST=0.0.0.0|" "$env_file"
 }
 
 wait_for_api() {
@@ -166,7 +169,7 @@ fi
 # Docker — DB + API + Frontend
 log "Subindo PostgreSQL + API (Docker)..."
 export POSTGRES_PASSWORD
-docker compose -f deploy/docker/docker-compose.backend.yml up -d --build
+docker compose --env-file "$DEPLOY_ENV" -f deploy/docker/docker-compose.backend.yml up -d --build
 # (compose canônico: deploy/docker/docker-compose.backend.yml + docker/backend/Dockerfile)
 
 wait_for_api
@@ -184,7 +187,7 @@ open_firewall_ports
 configure_nginx_docker
 
 # Reinicia API com URLs atualizadas
-docker compose -f deploy/docker/docker-compose.backend.yml restart backend 2>/dev/null || true
+docker compose --env-file "$DEPLOY_ENV" -f deploy/docker/docker-compose.backend.yml restart backend 2>/dev/null || true
 
 echo ""
 echo "=============================================================================="

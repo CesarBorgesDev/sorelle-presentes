@@ -30,7 +30,7 @@ log "URL da API no frontend: ${VITE_API_URL}"
 
 log "Rebuild backend + banco..."
 export POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-}"
-docker compose -f deploy/docker/docker-compose.backend.yml up -d --build
+docker compose --env-file "$DEPLOY_ENV" -f deploy/docker/docker-compose.backend.yml up -d --build
 
 run_db_migrate "$APP_DIR"
 

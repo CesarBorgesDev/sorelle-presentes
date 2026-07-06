@@ -34,11 +34,30 @@ echo "==> Domínio API:   ${API_PUBLIC}"
 echo "==> URL no front:  ${API_URL}"
 echo ""
 
-echo "1) Backend local..."
+echo "1) Backend Docker..."
+COMPOSE_ENV=()
+if [ -f "$DEPLOY_ENV" ]; then
+  COMPOSE_ENV=(--env-file "$DEPLOY_ENV")
+fi
+export POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-}"
+
+if ! curl -sf http://127.0.0.1:3001/api/health 2>/dev/null | grep -q '"status"'; then
+  warn "Backend parado — subindo containers..."
+  docker compose "${COMPOSE_ENV[@]}" -f deploy/docker/docker-compose.backend.yml up -d --build
+  for i in $(seq 1 90); do
+    if curl -sf http://127.0.0.1:3001/api/health 2>/dev/null | grep -q '"status"'; then
+      break
+    fi
+    sleep 2
+  done
+fi
+
 if curl -sf http://127.0.0.1:3001/api/health >/dev/null; then
-  ok "127.0.0.1:3001/api/health"
+  ok "$(curl -s http://127.0.0.1:3001/api/health)"
 else
-  fail "Backend não responde — docker compose -f deploy/docker/docker-compose.backend.yml up -d --build"
+  fail "Backend não responde em 127.0.0.1:3001"
+  echo "  → bash deploy/docker/fix-backend.sh"
+  docker logs sorelle-backend --tail 50 2>&1 || true
   exit 1
 fi
 
@@ -57,7 +76,11 @@ fi
 echo ""
 echo "3) CORS (server/.env)..."
 update_server_env_urls || true
-docker compose -f deploy/docker/docker-compose.backend.yml restart backend 2>/dev/null || true
+COMPOSE_ENV=()
+if [ -f "$DEPLOY_ENV" ]; then
+  COMPOSE_ENV=(--env-file "$DEPLOY_ENV")
+fi
+docker compose "${COMPOSE_ENV[@]}" -f deploy/docker/docker-compose.backend.yml restart backend 2>/dev/null || true
 sleep 3
 ok "CORS_ORIGIN=$(grep '^CORS_ORIGIN=' server/.env | cut -d= -f2-)"
 

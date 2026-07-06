@@ -14,7 +14,8 @@ RUN npm ci --omit=dev
 COPY server/ .
 
 COPY docker/backend/docker-entrypoint.sh /docker-entrypoint.sh
-RUN chmod +x /docker-entrypoint.sh
+COPY docker/backend/docker-start.sh /docker-start.sh
+RUN chmod +x /docker-entrypoint.sh /docker-start.sh
 
 RUN mkdir -p uploads/generated uploads/products uploads/temp
 

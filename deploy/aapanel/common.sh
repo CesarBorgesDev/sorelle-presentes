@@ -687,10 +687,15 @@ update_server_env_urls() {
   [ -f "$env_file" ] || return 0
 
   log "Atualizando URLs em server/.env"
-  log "  FRONTEND → ${frontend_url} | API → ${api_url}"
+  log "  FRONTEND → ${frontend_url} | API → ${api_url} | DOMAIN → ${DOMAIN}"
   sed -i "s|CORS_ORIGIN=.*|CORS_ORIGIN=${frontend_url}|" "$env_file"
   sed -i "s|FRONTEND_URL=.*|FRONTEND_URL=${frontend_url}|" "$env_file"
   sed -i "s|APP_PUBLIC_URL=.*|APP_PUBLIC_URL=${api_url}|" "$env_file"
+  if grep -q '^DOMAIN=' "$env_file"; then
+    sed -i "s|DOMAIN=.*|DOMAIN=${DOMAIN}|" "$env_file"
+  else
+    echo "DOMAIN=${DOMAIN}" >> "$env_file"
+  fi
 }
 
 wait_for_db() {

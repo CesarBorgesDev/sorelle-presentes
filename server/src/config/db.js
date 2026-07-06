@@ -1,23 +1,21 @@
 import pg from 'pg';
-import dotenv from 'dotenv';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import { config, assertDatabaseConfig } from './env.js';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-dotenv.config({ path: path.join(__dirname, '../../.env') });
-
-if (!process.env.DATABASE_URL) {
-  throw new Error(
-    'DATABASE_URL não configurada. Copie server/.env.example para server/.env e ajuste a conexão com o PostgreSQL.'
-  );
-}
+assertDatabaseConfig();
 
 const pool = new pg.Pool({
-  connectionString: process.env.DATABASE_URL,
+  connectionString: config.databaseUrl,
+  max: config.isProduction ? 20 : 10,
+  idleTimeoutMillis: 30_000,
+  connectionTimeoutMillis: 10_000,
 });
 
 pool.on('error', (err) => {
-  console.error('Erro inesperado no pool PostgreSQL:', err);
+  console.error('[DB] Erro inesperado no pool PostgreSQL:', err.message);
 });
+
+export async function checkDatabaseConnection() {
+  await pool.query('SELECT 1 AS ok');
+}
 
 export default pool;

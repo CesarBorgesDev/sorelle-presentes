@@ -30,7 +30,7 @@ if docker ps --format '  {{.Names}}: {{.Status}}' 2>/dev/null | grep -E 'sorelle
   ok "Containers encontrados"
 else
   fail "Containers sorelle-db / sorelle-backend / sorelle-frontend não estão rodando"
-  echo "  → docker compose -f deploy/docker/docker-compose.backend.yml up -d --build"
+  echo "  → bash deploy/docker/fix-backend.sh"
   echo "  → docker compose -f deploy/docker/docker-compose.frontend.yml up -d --build"
 fi
 echo ""

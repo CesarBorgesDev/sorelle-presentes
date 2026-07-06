@@ -1,20 +1,18 @@
 import pg from 'pg';
-import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { config } from '../config/env.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-dotenv.config({ path: path.join(__dirname, '../../.env') });
 
 export async function ensureDatabase() {
-  const databaseUrl = process.env.DATABASE_URL;
-  if (!databaseUrl) {
+  if (!config.databaseUrl) {
     throw new Error(
-      'DATABASE_URL não configurada. Copie server/.env.example para server/.env e ajuste a conexão com o PostgreSQL.'
+      'DATABASE_URL não configurada. Copie server/.env.example para server/.env.'
     );
   }
 
-  const url = new URL(databaseUrl);
+  const url = new URL(config.databaseUrl);
   const dbName = url.pathname.slice(1);
   url.pathname = '/postgres';
 
