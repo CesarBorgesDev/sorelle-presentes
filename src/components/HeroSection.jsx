@@ -58,7 +58,7 @@ export default function HeroSection({ config }) {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.5 + index * 0.1, duration: 0.6 }}
-                className={`border border-white/30 rounded-sm px-5 py-4 lg:px-8 lg:py-5 transition-all duration-500 whitespace-nowrap
+                className={`border border-white/30 rounded-sm px-5 py-4 lg:px-8 lg:py-5 transition-all duration-500 whitespace-nowrap flex flex-col items-center text-center
                   ${activeIndex === index ? 'bg-white/20 backdrop-blur-sm border-white/60' : 'hover:bg-white/10 hover:border-white/50'}`}
               >
                 <span className="font-display text-white text-sm lg:text-base tracking-widest uppercase block">
