@@ -37,10 +37,8 @@ run_db_migrate "$APP_DIR"
 log "Rebuild frontend (container separado)..."
 docker compose -f deploy/docker/docker-compose.frontend.yml up -d --build
 
-if [ -f "${APP_DIR}/deploy/docker/patch-nginx-docker.sh" ]; then
-  log "Reconfigurando Nginx → Docker..."
-  bash "${APP_DIR}/deploy/docker/patch-nginx-docker.sh"
-fi
+log "Reiniciando Nginx..."
+reload_nginx || true
 
 echo ""
 echo "==> Deploy concluído."
