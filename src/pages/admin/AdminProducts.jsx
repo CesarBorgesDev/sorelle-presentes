@@ -86,64 +86,63 @@ export default function AdminProducts() {
       </div>
 
       {viewMode === 'grid' ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+        <div className="flex flex-wrap gap-3">
           {isLoading ? (
-            Array(6).fill(0).map((_, i) => (
-              <div key={i} className="animate-pulse bg-card border border-border rounded-sm overflow-hidden">
-                <div className="flex justify-center bg-secondary md:py-3">
-                  <div className="aspect-[4/5] w-full md:w-1/2 bg-secondary" />
-                </div>
-                <div className="p-4 space-y-2">
-                  <div className="h-4 bg-secondary rounded w-3/4" />
-                  <div className="h-3 bg-secondary rounded w-1/2" />
-                </div>
-              </div>
+            Array(12).fill(0).map((_, i) => (
+              <div
+                key={i}
+                className="animate-pulse w-[100px] h-[100px] shrink-0 bg-secondary border border-border rounded-sm"
+              />
             ))
           ) : filtered.length === 0 ? (
-            <div className="col-span-full py-12 text-center font-body text-muted-foreground bg-card border border-border rounded-sm">
+            <div className="w-full py-12 text-center font-body text-muted-foreground bg-card border border-border rounded-sm">
               Nenhum produto encontrado.
             </div>
           ) : (
             filtered.map((product) => (
-              <div key={product.id} className="bg-card border border-border rounded-sm overflow-hidden group">
-                <div className="flex justify-center bg-secondary md:py-3">
-                  <div className="aspect-[4/5] w-full md:w-1/2 bg-secondary overflow-hidden">
-                    {product.image_url ? (
-                      <img src={product.image_url} alt={product.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-muted-foreground font-body text-xs">Sem imagem</div>
-                    )}
+              <div
+                key={product.id}
+                className="relative group w-[100px] h-[100px] shrink-0 bg-secondary border border-border rounded-sm overflow-hidden"
+                title={product.name}
+              >
+                {product.image_url ? (
+                  <img
+                    src={product.image_url}
+                    alt={product.name}
+                    className="absolute inset-0 w-full h-full object-cover"
+                  />
+                ) : (
+                  <div className="absolute inset-0 flex items-center justify-center p-1 text-center text-[9px] leading-tight text-muted-foreground font-body">
+                    Sem imagem
                   </div>
-                </div>
-                <div className="p-4">
-                  <p className="font-body text-xs text-muted-foreground mb-1">
-                    {categoryLabels[product.category] || product.category}
-                    {product.subcategory ? ` · ${product.subcategory}` : ''}
-                    {product.internal_code ? ` · ${product.internal_code}` : ''}
+                )}
+
+                {Number(product.quantity) <= 0 && (
+                  <span className="absolute top-1 left-1 z-10 px-1 py-0.5 rounded-sm bg-red-600/90 text-white text-[8px] font-body leading-none">
+                    0
+                  </span>
+                )}
+
+                <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-1 bg-black/55 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
+                  <p className="px-1 text-[9px] leading-tight text-white font-body text-center line-clamp-2">
+                    {product.name}
                   </p>
-                  <h3 className="font-display text-base tracking-wide text-foreground mb-2 line-clamp-2">{product.name}</h3>
-                  <div className="flex items-center justify-between gap-2 mb-3">
-                    <p className="font-body text-sm text-foreground">R$ {product.price?.toFixed(2).replace('.', ',')}</p>
-                    <span className={`text-xs px-2 py-0.5 rounded-full font-body ${stockClass(product)}`}>
-                      {stockLabel(product)}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1">
                     <button
                       type="button"
                       onClick={() => handleEdit(product)}
-                      className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 border border-border rounded-sm font-body text-xs hover:bg-secondary transition-colors"
+                      className="p-1.5 rounded-sm bg-background/90 text-foreground hover:bg-background transition-colors"
+                      title="Editar"
                     >
-                      <Pencil className="w-3.5 h-3.5" />
-                      Editar
+                      <Pencil className="w-3 h-3" />
                     </button>
                     <button
                       type="button"
                       onClick={() => { if (confirm('Excluir este produto?')) deleteMutation.mutate(product.id); }}
-                      className="p-2 text-muted-foreground hover:text-destructive transition-colors"
+                      className="p-1.5 rounded-sm bg-background/90 text-destructive hover:bg-background transition-colors"
                       title="Excluir"
                     >
-                      <Trash2 className="w-4 h-4" />
+                      <Trash2 className="w-3 h-3" />
                     </button>
                   </div>
                 </div>
