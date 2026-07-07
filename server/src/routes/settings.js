@@ -56,6 +56,21 @@ async function buildSettingsResponse(message) {
       has_api_credentials: Boolean(
         (await getSetting('correios_api_user')) || process.env.CORREIOS_API_USER
       ),
+      has_post_card: Boolean(
+        (await getSetting('correios_post_card')) || process.env.CORREIOS_POST_CARD
+      ),
+      post_card_masked: maskToken((await getSetting('correios_post_card')) || process.env.CORREIOS_POST_CARD || ''),
+      contract_number: (
+        (await getSetting('correios_contract_number'))
+        || (await getSetting('correios_company_code'))
+        || process.env.CORREIOS_CONTRACT_NUMBER
+        || process.env.CORREIOS_COMPANY_CODE
+        || ''
+      ),
+      sender_number: (await getSetting('correios_sender_number')) || '',
+      sender_district: (await getSetting('correios_sender_district')) || '',
+      sender_complement: (await getSetting('correios_sender_complement')) || '',
+      sender_cnpj: (await getSetting('correios_sender_cnpj')) || '',
     },
     cielo: {
       ...cieloConfig,
@@ -95,11 +110,18 @@ router.put('/', requireAuth, requireAdmin, async (req, res) => {
       correios_password,
       correios_api_user,
       correios_api_password,
+      correios_post_card,
+      correios_contract_number,
+      correios_contract_dr,
       correios_sender_name,
       correios_sender_street,
+      correios_sender_number,
+      correios_sender_complement,
+      correios_sender_district,
       correios_sender_city,
       correios_sender_state,
       correios_sender_phone,
+      correios_sender_cnpj,
       shipping_carrier_enabled,
       shipping_carrier_name,
       shipping_carrier_price,
@@ -182,12 +204,36 @@ router.put('/', requireAuth, requireAdmin, async (req, res) => {
       await setSetting('correios_api_password', correios_api_password.trim());
     }
 
+    if (correios_post_card !== undefined && correios_post_card !== '') {
+      await setSetting('correios_post_card', correios_post_card.replace(/\D/g, '').trim());
+    }
+
+    if (correios_contract_number !== undefined && correios_contract_number !== '') {
+      await setSetting('correios_contract_number', correios_contract_number.trim());
+    }
+
+    if (correios_contract_dr !== undefined && correios_contract_dr !== '') {
+      await setSetting('correios_contract_dr', String(correios_contract_dr).trim());
+    }
+
     if (correios_sender_name !== undefined) {
       await setSetting('correios_sender_name', correios_sender_name.trim());
     }
 
     if (correios_sender_street !== undefined) {
       await setSetting('correios_sender_street', correios_sender_street.trim());
+    }
+
+    if (correios_sender_number !== undefined) {
+      await setSetting('correios_sender_number', correios_sender_number.trim());
+    }
+
+    if (correios_sender_complement !== undefined) {
+      await setSetting('correios_sender_complement', correios_sender_complement.trim());
+    }
+
+    if (correios_sender_district !== undefined) {
+      await setSetting('correios_sender_district', correios_sender_district.trim());
     }
 
     if (correios_sender_city !== undefined) {
@@ -200,6 +246,10 @@ router.put('/', requireAuth, requireAdmin, async (req, res) => {
 
     if (correios_sender_phone !== undefined) {
       await setSetting('correios_sender_phone', correios_sender_phone.trim());
+    }
+
+    if (correios_sender_cnpj !== undefined) {
+      await setSetting('correios_sender_cnpj', correios_sender_cnpj.replace(/\D/g, '').trim());
     }
 
     if (shipping_carrier_enabled !== undefined) {

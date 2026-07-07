@@ -401,6 +401,13 @@ const orderShipping = {
     return apiFetch(`/orders/${orderId}/rastreio`);
   },
 
+  generateTrackingCode(orderId) {
+    return apiFetch(`/orders/${orderId}/codigo-correios`, {
+      method: 'POST',
+      body: JSON.stringify({}),
+    });
+  },
+
   uploadInvoice(orderId, data) {
     return apiFetch(`/orders/${orderId}/nota-fiscal`, {
       method: 'POST',

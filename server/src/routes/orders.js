@@ -4,6 +4,7 @@ import { requireAuth, requireAdmin } from '../middleware/auth.js';
 import { parseSort, rowToEntity, rowsToEntities } from '../utils/helpers.js';
 import { generateCorreiosShippingLabel } from '../services/shippingLabels.js';
 import { normalizeTrackingCode, trackCorreiosPackage } from '../services/correiosTracking.js';
+import { generateCorreiosTrackingCode } from '../services/correiosPrePostagem.js';
 import { getInvoiceTypeConfig, saveInvoiceFile } from '../services/invoiceUpload.js';
 import { streamOrderInvoice, withInvoiceFlags, withInvoiceFlagsList } from '../services/invoiceAccess.js';
 
@@ -71,6 +72,41 @@ router.post('/:id/etiqueta', async (req, res) => {
   } catch (err) {
     console.error('Erro ao gerar etiqueta:', err);
     res.status(500).json({ message: err.message || 'Erro ao gerar etiqueta' });
+  }
+});
+
+router.post('/:id/codigo-correios', async (req, res) => {
+  try {
+    const order = await loadOrderOr404(req.params.id, res);
+    if (!order) return;
+
+    const generated = await generateCorreiosTrackingCode(order);
+    const label = await generateCorreiosShippingLabel(order, {
+      trackingCode: generated.tracking_code,
+    });
+
+    const result = await pool.query(
+      `UPDATE orders
+       SET tracking_code = $1,
+           shipping_label_url = $2,
+           status = CASE WHEN status IN ('confirmado', 'em_preparo', 'pendente') THEN 'enviado' ELSE status END,
+           shipped_at = COALESCE(shipped_at, NOW()),
+           updated_date = NOW()
+       WHERE id = $3
+       RETURNING *`,
+      [generated.tracking_code, label.label_url, order.id]
+    );
+
+    res.json({
+      message: 'Código de rastreio gerado com sucesso',
+      tracking_code: generated.tracking_code,
+      prepostagem_id: generated.prepostagem_id,
+      label_url: label.label_url,
+      order: withInvoiceFlags(rowToEntity(result.rows[0])),
+    });
+  } catch (err) {
+    console.error('Erro ao gerar código Correios:', err);
+    res.status(400).json({ message: err.message || 'Erro ao gerar código Correios' });
   }
 });
 

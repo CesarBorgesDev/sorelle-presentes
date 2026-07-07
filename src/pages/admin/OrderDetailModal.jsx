@@ -13,7 +13,7 @@ import {
   formatOrderDate,
   formatMoney,
 } from '@/lib/orderLabels';
-import { ExternalLink, Loader2, Printer, X } from 'lucide-react';
+import { ExternalLink, Loader2, Printer, ScanBarcode, X } from 'lucide-react';
 
 const STATUS_OPTIONS = ['pendente', 'confirmado', 'em_preparo', 'enviado', 'entregue', 'cancelado'];
 const PAYMENT_STATUS_OPTIONS = ['aguardando_pagamento', 'pago', 'recusado', 'cancelado'];
@@ -25,6 +25,7 @@ export default function OrderDetailModal({ order, onClose, onUpdated }) {
   const [cieloAuthorization, setCieloAuthorization] = useState(order.cielo_authorization_code || '');
   const [tracking, setTracking] = useState(null);
   const [trackingError, setTrackingError] = useState('');
+  const [trackingCodeError, setTrackingCodeError] = useState('');
   const [labelUrl, setLabelUrl] = useState(order.shipping_label_url || '');
   const [hasInvoicePdf, setHasInvoicePdf] = useState(Boolean(order.has_invoice_pdf));
   const [hasInvoiceXml, setHasInvoiceXml] = useState(Boolean(order.has_invoice_xml));
@@ -38,6 +39,7 @@ export default function OrderDetailModal({ order, onClose, onUpdated }) {
     setHasInvoiceXml(Boolean(order.has_invoice_xml));
     setTracking(null);
     setTrackingError('');
+    setTrackingCodeError('');
   }, [order]);
 
   const updateMutation = useMutation({
@@ -71,6 +73,24 @@ export default function OrderDetailModal({ order, onClose, onUpdated }) {
     },
     onError: (err) => {
       setTrackingError(err.message || 'Erro ao rastrear pedido');
+    },
+  });
+
+  const trackingCodeMutation = useMutation({
+    mutationFn: () => api.orderShipping.generateTrackingCode(order.id),
+    onSuccess: (result) => {
+      setTrackingCode(result.tracking_code || '');
+      setTrackingCodeError('');
+      if (result.label_url) {
+        setLabelUrl(result.label_url);
+      }
+      queryClient.invalidateQueries({ queryKey: ['orders'] });
+      if (result.order) {
+        onUpdated?.(result.order);
+      }
+    },
+    onError: (err) => {
+      setTrackingCodeError(err.message || 'Erro ao gerar código Correios');
     },
   });
 
@@ -218,7 +238,7 @@ export default function OrderDetailModal({ order, onClose, onUpdated }) {
             <div>
               <h3 className="font-display text-base tracking-wide text-foreground">Envio Correios</h3>
               <p className="font-body text-xs text-muted-foreground mt-1">
-                Gere a etiqueta para impressão e informe o código de rastreio após a postagem.
+                Gere o código de rastreio pela API dos Correios ou informe manualmente após a postagem.
               </p>
             </div>
 
@@ -234,15 +254,19 @@ export default function OrderDetailModal({ order, onClose, onUpdated }) {
               />
             </div>
 
+            {trackingCodeError && (
+              <p className="font-body text-xs text-destructive">{trackingCodeError}</p>
+            )}
+
             <div className="flex flex-wrap gap-3">
               <button
                 type="button"
-                onClick={() => labelMutation.mutate()}
-                disabled={labelMutation.isPending}
+                onClick={() => trackingCodeMutation.mutate()}
+                disabled={trackingCodeMutation.isPending}
                 className="inline-flex items-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground rounded-sm font-body text-sm hover:opacity-90 disabled:opacity-50"
               >
-                {labelMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Printer className="w-4 h-4" />}
-                Gerar etiqueta
+                {trackingCodeMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <ScanBarcode className="w-4 h-4" />}
+                Gerar código Correios
               </button>
               {labelUrl && (
                 <a
@@ -255,6 +279,15 @@ export default function OrderDetailModal({ order, onClose, onUpdated }) {
                   <ExternalLink className="w-4 h-4" />
                 </a>
               )}
+              <button
+                type="button"
+                onClick={() => labelMutation.mutate()}
+                disabled={labelMutation.isPending}
+                className="inline-flex items-center gap-2 px-4 py-2.5 border border-border rounded-sm font-body text-sm hover:bg-secondary disabled:opacity-50"
+              >
+                {labelMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Printer className="w-4 h-4" />}
+                {trackingCode ? 'Atualizar etiqueta' : 'Gerar etiqueta'}
+              </button>
               <button
                 type="button"
                 onClick={saveShippingPayment}

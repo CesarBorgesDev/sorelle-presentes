@@ -1,5 +1,6 @@
 import { getSetting } from './settings.js';
 import { getCorreiosConfig } from './correios.js';
+import { getCorreiosApiToken } from './correiosAuth.js';
 
 const TRACKING_URL_BASE = 'https://rastreamento.correios.com.br/app/index.php';
 
@@ -16,26 +17,8 @@ export function getCorreiosTrackingUrl(code) {
   return `${TRACKING_URL_BASE}?objetos=${encodeURIComponent(normalized)}`;
 }
 
-async function getCorreiosApiToken() {
-  const user = ((await getSetting('correios_api_user')) || process.env.CORREIOS_API_USER || '').trim();
-  const password = ((await getSetting('correios_api_password')) || process.env.CORREIOS_API_PASSWORD || '').trim();
-
-  if (!user || !password) {
-    return null;
-  }
-
-  const response = await fetch('https://api.correios.com.br/token/v1/autentica', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-    body: JSON.stringify({ numero: user, senha: password }),
-  });
-
-  if (!response.ok) {
-    throw new Error('Falha ao autenticar na API dos Correios');
-  }
-
-  const data = await response.json();
-  return data.token || data.access_token || null;
+async function getCorreiosApiTokenForTracking() {
+  return getCorreiosApiToken({ forPostagem: false });
 }
 
 function mapTrackingEvents(payload) {
@@ -68,7 +51,7 @@ export async function trackCorreiosPackage(trackingCode) {
   };
 
   try {
-    const token = await getCorreiosApiToken();
+    const token = await getCorreiosApiTokenForTracking();
     if (!token) {
       return {
         ...baseResult,
