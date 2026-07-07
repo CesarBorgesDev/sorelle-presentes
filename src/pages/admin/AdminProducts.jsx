@@ -90,7 +90,9 @@ export default function AdminProducts() {
           {isLoading ? (
             Array(6).fill(0).map((_, i) => (
               <div key={i} className="animate-pulse bg-card border border-border rounded-sm overflow-hidden">
-                <div className="aspect-[4/5] bg-secondary" />
+                <div className="flex justify-center bg-secondary md:py-3">
+                  <div className="aspect-[4/5] w-full md:w-1/2 bg-secondary" />
+                </div>
                 <div className="p-4 space-y-2">
                   <div className="h-4 bg-secondary rounded w-3/4" />
                   <div className="h-3 bg-secondary rounded w-1/2" />
@@ -104,12 +106,14 @@ export default function AdminProducts() {
           ) : (
             filtered.map((product) => (
               <div key={product.id} className="bg-card border border-border rounded-sm overflow-hidden group">
-                <div className="aspect-[4/5] bg-secondary overflow-hidden">
-                  {product.image_url ? (
-                    <img src={product.image_url} alt={product.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-muted-foreground font-body text-xs">Sem imagem</div>
-                  )}
+                <div className="flex justify-center bg-secondary md:py-3">
+                  <div className="aspect-[4/5] w-full md:w-1/2 bg-secondary overflow-hidden">
+                    {product.image_url ? (
+                      <img src={product.image_url} alt={product.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-muted-foreground font-body text-xs">Sem imagem</div>
+                    )}
+                  </div>
                 </div>
                 <div className="p-4">
                   <p className="font-body text-xs text-muted-foreground mb-1">
