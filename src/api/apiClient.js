@@ -501,6 +501,12 @@ const productsApi = {
   },
 };
 
+const productKitsApi = {
+  getByProduct(productId) {
+    return apiFetch(`/product-kits/by-product/${productId}`);
+  },
+};
+
 export const api = {
   auth,
   settings,
@@ -512,8 +518,10 @@ export const api = {
   shipping,
   account,
   products: productsApi,
+  productKits: productKitsApi,
   entities: {
     Product: createEntityClient('products'),
+    ProductKit: createEntityClient('product-kits'),
     Order: createEntityClient('orders'),
     Affiliate: createEntityClient('affiliates'),
     AffiliateConversion: createEntityClient('affiliate-conversions'),

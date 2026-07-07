@@ -40,6 +40,8 @@ import AdminDashboard from '@/pages/admin/AdminDashboard';
 
 import AdminProducts from '@/pages/admin/AdminProducts';
 
+import AdminKits from '@/pages/admin/AdminKits';
+
 import AdminOrders from '@/pages/admin/AdminOrders';
 
 import AdminAffiliates from '@/pages/admin/AdminAffiliates';
@@ -114,6 +116,8 @@ function AppRoutes() {
             <Route path="/admin" element={<AdminDashboard />} />
 
             <Route path="/admin/produtos" element={<AdminProducts />} />
+
+            <Route path="/admin/kits" element={<AdminKits />} />
 
             <Route path="/admin/pedidos" element={<AdminOrders />} />
 

@@ -6,6 +6,7 @@ import { corsMiddleware } from './config/cors.js';
 import pool, { checkDatabaseConnection } from './config/db.js';
 import authRoutes from './routes/auth.js';
 import productRoutes from './routes/products.js';
+import productKitRoutes from './routes/productKits.js';
 import orderRoutes from './routes/orders.js';
 import affiliateRoutes from './routes/affiliates.js';
 import affiliateConversionRoutes from './routes/affiliateConversions.js';
@@ -56,6 +57,7 @@ app.get('/api/health', async (_req, res) => {
 
 app.use('/api/auth', authRoutes);
 app.use('/api/products', productRoutes);
+app.use('/api/product-kits', productKitRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/affiliates', affiliateRoutes);
 app.use('/api/affiliate-conversions', affiliateConversionRoutes);

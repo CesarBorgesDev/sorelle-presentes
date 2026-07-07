@@ -9,6 +9,7 @@ import { getProductImages } from '@/lib/productImages';
 import { isProductAvailable, normalizeProductQuantity } from '@/lib/productStock';
 import { resolveMediaUrl } from '@/lib/resolveMediaUrl';
 import { Button } from '@/components/ui/button';
+import RelatedKitsCarousel from '@/components/RelatedKitsCarousel';
 
 const categoryLabels = {
   casa: 'Casa',
@@ -34,6 +35,14 @@ export default function ProductDetail() {
       return products[0];
     },
   });
+
+  const { data: relatedKitsData } = useQuery({
+    queryKey: ['product-kits', id],
+    queryFn: () => api.productKits.getByProduct(id),
+    enabled: !!id,
+  });
+
+  const relatedKits = relatedKitsData?.kits || [];
 
   const available = isProductAvailable(product);
   const stockQuantity = normalizeProductQuantity(product?.quantity);
@@ -276,6 +285,8 @@ export default function ProductDetail() {
             )}
           </motion.div>
         </div>
+
+        <RelatedKitsCarousel kits={relatedKits} />
       </div>
     </div>
   );

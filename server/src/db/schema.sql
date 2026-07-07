@@ -182,3 +182,25 @@ CREATE TABLE IF NOT EXISTS rma_requests (
 
 CREATE INDEX IF NOT EXISTS idx_wishlist_user_id ON wishlist_items(user_id);
 CREATE INDEX IF NOT EXISTS idx_rma_user_id ON rma_requests(user_id);
+
+CREATE TABLE IF NOT EXISTS product_kits (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name VARCHAR(255) NOT NULL,
+  product_id UUID NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  active BOOLEAN NOT NULL DEFAULT TRUE,
+  created_date TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_date TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS product_kit_items (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  kit_id UUID NOT NULL REFERENCES product_kits(id) ON DELETE CASCADE,
+  product_id UUID NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_date TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(kit_id, product_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_product_kits_product_id ON product_kits(product_id);
+CREATE INDEX IF NOT EXISTS idx_product_kit_items_kit_id ON product_kit_items(kit_id);
+CREATE INDEX IF NOT EXISTS idx_product_kit_items_product_id ON product_kit_items(product_id);
