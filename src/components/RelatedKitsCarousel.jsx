@@ -20,83 +20,79 @@ export default function RelatedKitsCarousel({ kits = [] }) {
 
   return (
     <section className="mt-16 lg:mt-24 pt-12 border-t border-border">
-      {kits.map((kit) => (
-        <div key={kit.id} className="mb-12 last:mb-0">
-          <div className="mb-6 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
-            <div>
+      <div className="space-y-6">
+        {kits.map((kit) => (
+          <article
+            key={kit.id}
+            className="bg-card border border-border rounded-sm overflow-hidden"
+          >
+            <div className="px-5 py-5 lg:px-6 lg:py-6 border-b border-border">
               <p className="text-xs tracking-[0.3em] uppercase text-muted-foreground font-body mb-2">
                 Kit relacionado
               </p>
-              <h2 className="font-display text-2xl lg:text-3xl tracking-wider text-foreground">
+              <h2 className="font-display text-xl lg:text-2xl tracking-wider text-foreground">
                 {kit.name}
               </h2>
-            </div>
-            <div className="flex flex-col sm:items-end gap-3">
+
               {kit.price != null && (
-                <>
-                  <div className="flex items-center gap-3">
-                    <span className="font-body text-xl font-medium text-foreground">
-                      {formatPrice(kit.price)}
+                <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1">
+                  <span className="font-body text-lg font-medium text-foreground">
+                    {formatPrice(kit.price)}
+                  </span>
+                  {kit.original_price != null && (
+                    <span className="font-body text-sm text-muted-foreground line-through">
+                      {formatPrice(kit.original_price)}
                     </span>
-                    {kit.original_price != null && (
-                      <span className="font-body text-sm text-muted-foreground line-through">
-                        {formatPrice(kit.original_price)}
-                      </span>
-                    )}
-                  </div>
+                  )}
                   {kit.discount_amount != null && kit.discount_amount > 0 && (
-                    <p className="font-body text-sm text-primary">
+                    <span className="font-body text-sm text-primary">
                       Economize {formatPrice(kit.discount_amount)}
                       {kit.discount_percent != null ? ` (${kit.discount_percent}%)` : ''}
-                    </p>
+                    </span>
                   )}
-                </>
+                </div>
               )}
+            </div>
+
+            <div className="px-5 py-5 lg:px-6">
+              <Carousel
+                opts={{
+                  align: 'start',
+                  loop: kit.products.length > 4,
+                }}
+                className="w-full"
+              >
+                <CarouselContent className="-ml-3 lg:-ml-4">
+                  {kit.products.map((product) => (
+                    <CarouselItem
+                      key={product.id}
+                      className="pl-3 lg:pl-4 basis-1/2 md:basis-1/3 lg:basis-1/4"
+                    >
+                      <ProductCard product={product} />
+                    </CarouselItem>
+                  ))}
+                </CarouselContent>
+                {kit.products.length > 2 && (
+                  <>
+                    <CarouselPrevious className="hidden md:flex -left-4 border-border bg-background/95" />
+                    <CarouselNext className="hidden md:flex -right-4 border-border bg-background/95" />
+                  </>
+                )}
+              </Carousel>
+            </div>
+
+            <div className="px-5 pb-5 lg:px-6 lg:pb-6 pt-0">
               <Link
                 to={`/kit/${kit.id}`}
-                className="inline-flex items-center gap-2 bg-foreground text-background px-5 py-2.5 rounded-sm font-body text-sm tracking-wider hover:bg-foreground/90 transition-colors"
+                className="flex w-full items-center justify-center gap-2 bg-foreground text-background px-5 py-3.5 rounded-sm font-body text-sm tracking-wider hover:bg-foreground/90 transition-colors"
               >
                 <ShoppingBag className="w-4 h-4" />
                 Comprar kit
               </Link>
             </div>
-          </div>
-
-          <Carousel
-            opts={{
-              align: 'start',
-              loop: kit.products.length > 4,
-            }}
-            className="w-full"
-          >
-            <CarouselContent className="-ml-3 lg:-ml-4">
-              {kit.products.map((product) => (
-                <CarouselItem
-                  key={product.id}
-                  className="pl-3 lg:pl-4 basis-1/2 md:basis-1/3 lg:basis-1/4"
-                >
-                  <ProductCard product={product} />
-                </CarouselItem>
-              ))}
-            </CarouselContent>
-            {kit.products.length > 2 && (
-              <>
-                <CarouselPrevious className="hidden md:flex -left-4 border-border bg-background/95" />
-                <CarouselNext className="hidden md:flex -right-4 border-border bg-background/95" />
-              </>
-            )}
-          </Carousel>
-
-          <div className="mt-4 md:hidden">
-            <Link
-              to={`/busca?q=${encodeURIComponent(kit.name)}`}
-              className="font-body text-sm text-muted-foreground hover:text-foreground transition-colors"
-            >
-              Ver mais produtos deste kit
-            </Link>
-          </div>
-        </div>
-      ))}
+          </article>
+        ))}
+      </div>
     </section>
   );
 }
