@@ -1,15 +1,33 @@
-import React from 'react';
+import React, { useState } from 'react';
+import { useMutation } from '@tanstack/react-query';
 import { X, Package } from 'lucide-react';
+import { api } from '@/api/apiClient';
+import OrderTrackingPanel from '@/components/OrderTrackingPanel';
 import {
   ORDER_STATUS_LABELS,
   ORDER_STATUS_COLORS,
   PAYMENT_STATUS_LABELS,
+  PAYMENT_STATUS_COLORS,
   PAYMENT_METHOD_LABELS,
   formatOrderDate,
   formatMoney,
 } from '@/lib/orderLabels';
 
 export default function CustomerOrderDetail({ order, onClose }) {
+  const [tracking, setTracking] = useState(null);
+  const [trackingError, setTrackingError] = useState('');
+
+  const trackMutation = useMutation({
+    mutationFn: () => api.checkout.trackOrder(order.id),
+    onSuccess: (result) => {
+      setTracking(result);
+      setTrackingError('');
+    },
+    onError: (err) => {
+      setTrackingError(err.message || 'Erro ao rastrear pedido');
+    },
+  });
+
   if (!order) return null;
 
   const items = Array.isArray(order.items) ? order.items : [];
@@ -34,10 +52,21 @@ export default function CustomerOrderDetail({ order, onClose }) {
               {ORDER_STATUS_LABELS[order.status] || order.status}
             </span>
             {order.payment_status && (
-              <span className="text-xs px-3 py-1 rounded-full font-body bg-secondary text-muted-foreground">
+              <span className={`text-xs px-3 py-1 rounded-full font-body ${PAYMENT_STATUS_COLORS[order.payment_status] || 'bg-secondary text-muted-foreground'}`}>
                 {PAYMENT_STATUS_LABELS[order.payment_status] || order.payment_status}
               </span>
             )}
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 rounded-sm bg-secondary/40 border border-border font-body text-sm">
+            <div>
+              <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Pagamento</p>
+              <p className="text-foreground">{PAYMENT_METHOD_LABELS[order.payment_method] || order.payment_method || '—'}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Status do pagamento</p>
+              <p className="text-foreground">{PAYMENT_STATUS_LABELS[order.payment_status] || order.payment_status || '—'}</p>
+            </div>
           </div>
 
           {order.shipping_service_name && (
@@ -52,6 +81,16 @@ export default function CustomerOrderDetail({ order, onClose }) {
                 )}
               </div>
             </div>
+          )}
+
+          {order.tracking_code && (
+            <OrderTrackingPanel
+              trackingCode={order.tracking_code}
+              tracking={tracking}
+              loading={trackMutation.isPending}
+              error={trackingError}
+              onTrack={() => trackMutation.mutate()}
+            />
           )}
 
           {order.customer_address && (
@@ -103,11 +142,6 @@ export default function CustomerOrderDetail({ order, onClose }) {
               <span>Total</span>
               <span>{formatMoney(order.total)}</span>
             </div>
-            {order.payment_method && (
-              <p className="text-xs text-muted-foreground pt-1">
-                Pagamento: {PAYMENT_METHOD_LABELS[order.payment_method] || order.payment_method}
-              </p>
-            )}
           </div>
         </div>
       </div>

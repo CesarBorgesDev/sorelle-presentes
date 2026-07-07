@@ -56,6 +56,13 @@ export default function AdminSettings() {
   const [correiosOriginZip, setCorreiosOriginZip] = useState('');
   const [correiosCompanyCode, setCorreiosCompanyCode] = useState('');
   const [correiosPassword, setCorreiosPassword] = useState('');
+  const [correiosSenderName, setCorreiosSenderName] = useState('');
+  const [correiosSenderStreet, setCorreiosSenderStreet] = useState('');
+  const [correiosSenderCity, setCorreiosSenderCity] = useState('');
+  const [correiosSenderState, setCorreiosSenderState] = useState('');
+  const [correiosSenderPhone, setCorreiosSenderPhone] = useState('');
+  const [correiosApiUser, setCorreiosApiUser] = useState('');
+  const [correiosApiPassword, setCorreiosApiPassword] = useState('');
   const [carrierEnabled, setCarrierEnabled] = useState(false);
   const [carrierName, setCarrierName] = useState('Transportadora');
   const [carrierPrice, setCarrierPrice] = useState('');
@@ -83,6 +90,11 @@ export default function AdminSettings() {
     }
     if (data?.correios) {
       setCorreiosOriginZip(data.correios.origin_zip || '');
+      setCorreiosSenderName(data.correios.sender_name || '');
+      setCorreiosSenderStreet(data.correios.sender_street || '');
+      setCorreiosSenderCity(data.correios.sender_city || '');
+      setCorreiosSenderState(data.correios.sender_state || '');
+      setCorreiosSenderPhone(data.correios.sender_phone || '');
       if (data.correios.carrier) {
         setCarrierEnabled(Boolean(data.correios.carrier.enabled));
         setCarrierName(data.correios.carrier.label || 'Transportadora');
@@ -102,6 +114,7 @@ export default function AdminSettings() {
       setCieloMerchantId('');
       setPixKey('');
       setCorreiosPassword('');
+      setCorreiosApiPassword('');
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     },
@@ -119,6 +132,11 @@ export default function AdminSettings() {
       checkout_payment_method: checkoutMethod,
       pix_holder_name: pixHolderName.trim(),
       correios_origin_zip: correiosOriginZip.replace(/\D/g, ''),
+      correios_sender_name: correiosSenderName.trim(),
+      correios_sender_street: correiosSenderStreet.trim(),
+      correios_sender_city: correiosSenderCity.trim(),
+      correios_sender_state: correiosSenderState.trim(),
+      correios_sender_phone: correiosSenderPhone.trim(),
       shipping_carrier_enabled: carrierEnabled,
       shipping_carrier_name: carrierName.trim(),
       shipping_carrier_deadline_days: carrierDeadlineDays,
@@ -130,6 +148,8 @@ export default function AdminSettings() {
     if (pixKey.trim()) payload.pix_key = pixKey.trim();
     if (correiosCompanyCode.trim()) payload.correios_company_code = correiosCompanyCode.trim();
     if (correiosPassword.trim()) payload.correios_password = correiosPassword.trim();
+    if (correiosApiUser.trim()) payload.correios_api_user = correiosApiUser.trim();
+    if (correiosApiPassword.trim()) payload.correios_api_password = correiosApiPassword.trim();
     if (carrierPrice.trim()) payload.shipping_carrier_price = carrierPrice.trim().replace(',', '.');
     mutation.mutate(payload);
   };
@@ -320,6 +340,87 @@ export default function AdminSettings() {
                   placeholder="Senha API Correios"
                   autoComplete="new-password"
                 />
+              </div>
+            </div>
+
+            <div className="pt-4 border-t border-border space-y-4">
+              <div>
+                <h3 className="font-display text-base tracking-wide text-foreground">Remetente (etiqueta)</h3>
+                <p className="font-body text-sm text-muted-foreground mt-1">
+                  Dados impressos na etiqueta Correios e credenciais opcionais para rastreio automático.
+                </p>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="sm:col-span-2">
+                  <label className={labelClass}>Nome do remetente</label>
+                  <input
+                    type="text"
+                    className={inputClass}
+                    value={correiosSenderName}
+                    onChange={(e) => setCorreiosSenderName(e.target.value)}
+                    placeholder="Sorelle Presentes"
+                  />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className={labelClass}>Endereço do remetente</label>
+                  <input
+                    type="text"
+                    className={inputClass}
+                    value={correiosSenderStreet}
+                    onChange={(e) => setCorreiosSenderStreet(e.target.value)}
+                    placeholder="Rua, número, complemento"
+                  />
+                </div>
+                <div>
+                  <label className={labelClass}>Cidade</label>
+                  <input
+                    type="text"
+                    className={inputClass}
+                    value={correiosSenderCity}
+                    onChange={(e) => setCorreiosSenderCity(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className={labelClass}>UF</label>
+                  <input
+                    type="text"
+                    className={inputClass}
+                    value={correiosSenderState}
+                    onChange={(e) => setCorreiosSenderState(e.target.value.toUpperCase().slice(0, 2))}
+                    placeholder="SP"
+                  />
+                </div>
+                <div>
+                  <label className={labelClass}>Telefone</label>
+                  <input
+                    type="text"
+                    className={inputClass}
+                    value={correiosSenderPhone}
+                    onChange={(e) => setCorreiosSenderPhone(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className={labelClass}>Usuário API Correios</label>
+                  <input
+                    type="text"
+                    className={inputClass}
+                    value={correiosApiUser}
+                    onChange={(e) => setCorreiosApiUser(e.target.value)}
+                    placeholder="Opcional — rastreio automático"
+                    autoComplete="off"
+                  />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className={labelClass}>Senha API Correios</label>
+                  <input
+                    type="password"
+                    className={inputClass}
+                    value={correiosApiPassword}
+                    onChange={(e) => setCorreiosApiPassword(e.target.value)}
+                    placeholder="Opcional — portal Meu Correios"
+                    autoComplete="new-password"
+                  />
+                </div>
               </div>
             </div>
 

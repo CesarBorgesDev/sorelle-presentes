@@ -322,6 +322,23 @@ const checkout = {
   async getPixDetails(orderId) {
     return apiFetch(`/checkout/pedido/${orderId}/pix`);
   },
+
+  async trackOrder(orderId) {
+    return apiFetch(`/checkout/pedido/${orderId}/rastreio`);
+  },
+};
+
+const orderShipping = {
+  generateLabel(orderId, data = {}) {
+    return apiFetch(`/orders/${orderId}/etiqueta`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  track(orderId) {
+    return apiFetch(`/orders/${orderId}/rastreio`);
+  },
 };
 
 const shipping = {
@@ -403,6 +420,7 @@ export const api = {
   homeBanners,
   images,
   checkout,
+  orderShipping,
   shipping,
   account,
   entities: {

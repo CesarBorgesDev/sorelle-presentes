@@ -16,6 +16,13 @@ import {
   resolveShippingQuote,
 } from '../services/correios.js';
 import { normalizeAddressInput, validateAddressFields } from '../utils/address.js';
+import {
+  extractCieloAuthorizationCode,
+  extractCieloMerchantOrderNumber,
+  extractCieloPaymentId,
+  mapCieloPaymentStatus,
+} from '../utils/cieloWebhook.js';
+import { trackCorreiosPackage } from '../services/correiosTracking.js';
 
 const router = Router();
 
@@ -289,8 +296,8 @@ router.get('/meus-pedidos', requireAuth, async (req, res) => {
   try {
     const result = await pool.query(
       `SELECT id, status, payment_status, payment_method, total, subtotal, wrapping_cost,
-              shipping_cost, shipping_service_name, shipping_deadline_days, items,
-              created_date, updated_date
+              shipping_cost, shipping_service_name, shipping_deadline_days, tracking_code,
+              shipping_label_url, cielo_authorization_code, items, created_date, updated_date
        FROM orders
        WHERE LOWER(customer_email) = LOWER($1)
        ORDER BY created_date DESC
@@ -310,7 +317,8 @@ router.get('/pedido/:id', requireAuth, async (req, res) => {
     const result = await pool.query(
       `SELECT id, status, payment_status, payment_method, total, subtotal, wrapping_cost,
               shipping_cost, shipping_service_code, shipping_service_name, shipping_deadline_days,
-              customer_name, customer_address, items, created_date, updated_date
+              tracking_code, shipping_label_url, cielo_authorization_code, gateway_order_number,
+              customer_name, customer_address, items, created_date, updated_date, shipped_at
        FROM orders WHERE id = $1 AND LOWER(customer_email) = LOWER($2)`,
       [req.params.id, req.user.email]
     );
@@ -322,6 +330,36 @@ router.get('/pedido/:id', requireAuth, async (req, res) => {
     res.json(rowToEntity(result.rows[0]));
   } catch (err) {
     res.status(500).json({ message: 'Erro ao buscar pedido' });
+  }
+});
+
+router.get('/pedido/:id/rastreio', requireAuth, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT id, tracking_code, status, payment_status, customer_email
+       FROM orders WHERE id = $1 AND LOWER(customer_email) = LOWER($2)`,
+      [req.params.id, req.user.email]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: 'Pedido não encontrado' });
+    }
+
+    const order = rowToEntity(result.rows[0]);
+    if (!order.tracking_code) {
+      return res.status(400).json({ message: 'Seu pedido ainda não possui código de rastreio' });
+    }
+
+    const tracking = await trackCorreiosPackage(order.tracking_code);
+    res.json({
+      order_id: order.id,
+      order_status: order.status,
+      payment_status: order.payment_status,
+      ...tracking,
+    });
+  } catch (err) {
+    console.error('Erro ao rastrear pedido do cliente:', err);
+    res.status(500).json({ message: err.message || 'Erro ao rastrear pedido' });
   }
 });
 
@@ -360,25 +398,31 @@ router.get('/pedido/:id/pix', requireAuth, async (req, res) => {
 
 router.post('/cielo/notificacao', async (req, res) => {
   try {
-    const merchantOrderNumber = req.body?.MerchantOrderNumber
-      || req.body?.merchantOrderNumber
-      || req.body?.order_number;
+    const merchantOrderNumber = extractCieloMerchantOrderNumber(req.body);
 
     if (!merchantOrderNumber) {
       return res.status(400).json({ message: 'Notificação inválida' });
     }
 
-    const paymentStatus = String(req.body?.payment_status || req.body?.PaymentStatus || '').toLowerCase();
-    const isPaid = paymentStatus === 'paid' || paymentStatus === 'pago' || req.body?.paid === true;
+    const paymentStatus = mapCieloPaymentStatus(req.body);
+    const isPaid = paymentStatus === 'pago';
+    const authorizationCode = extractCieloAuthorizationCode(req.body);
+    const paymentId = extractCieloPaymentId(req.body);
 
     const result = await pool.query(
       `UPDATE orders SET
         payment_status = $1,
-        status = CASE WHEN $2 THEN 'confirmado' ELSE status END,
+        status = CASE
+          WHEN $2 THEN 'confirmado'
+          WHEN $1 = 'recusado' OR $1 = 'cancelado' THEN 'cancelado'
+          ELSE status
+        END,
+        cielo_authorization_code = COALESCE($3, cielo_authorization_code),
+        cielo_payment_id = COALESCE($4, cielo_payment_id),
         updated_date = NOW()
-      WHERE gateway_order_number = $3
+      WHERE gateway_order_number = $5
       RETURNING id, customer_email`,
-      [isPaid ? 'pago' : 'aguardando_pagamento', isPaid, merchantOrderNumber]
+      [paymentStatus, isPaid, authorizationCode, paymentId, merchantOrderNumber]
     );
 
     if (isPaid && result.rows[0]) {

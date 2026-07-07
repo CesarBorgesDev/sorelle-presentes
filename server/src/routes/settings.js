@@ -48,6 +48,14 @@ async function buildSettingsResponse(message) {
       services: correiosConfig.services,
       fallback_mode: correiosConfig.fallbackMode,
       carrier: correiosConfig.carrier,
+      sender_name: (await getSetting('correios_sender_name')) || '',
+      sender_street: (await getSetting('correios_sender_street')) || '',
+      sender_city: (await getSetting('correios_sender_city')) || '',
+      sender_state: (await getSetting('correios_sender_state')) || '',
+      sender_phone: (await getSetting('correios_sender_phone')) || '',
+      has_api_credentials: Boolean(
+        (await getSetting('correios_api_user')) || process.env.CORREIOS_API_USER
+      ),
     },
     cielo: {
       ...cieloConfig,
@@ -85,6 +93,13 @@ router.put('/', requireAuth, requireAdmin, async (req, res) => {
       correios_origin_zip,
       correios_company_code,
       correios_password,
+      correios_api_user,
+      correios_api_password,
+      correios_sender_name,
+      correios_sender_street,
+      correios_sender_city,
+      correios_sender_state,
+      correios_sender_phone,
       shipping_carrier_enabled,
       shipping_carrier_name,
       shipping_carrier_price,
@@ -157,6 +172,34 @@ router.put('/', requireAuth, requireAdmin, async (req, res) => {
 
     if (correios_password !== undefined && correios_password !== '') {
       await setSetting('correios_password', correios_password.trim());
+    }
+
+    if (correios_api_user !== undefined) {
+      await setSetting('correios_api_user', correios_api_user.trim());
+    }
+
+    if (correios_api_password !== undefined && correios_api_password !== '') {
+      await setSetting('correios_api_password', correios_api_password.trim());
+    }
+
+    if (correios_sender_name !== undefined) {
+      await setSetting('correios_sender_name', correios_sender_name.trim());
+    }
+
+    if (correios_sender_street !== undefined) {
+      await setSetting('correios_sender_street', correios_sender_street.trim());
+    }
+
+    if (correios_sender_city !== undefined) {
+      await setSetting('correios_sender_city', correios_sender_city.trim());
+    }
+
+    if (correios_sender_state !== undefined) {
+      await setSetting('correios_sender_state', correios_sender_state.trim().toUpperCase().slice(0, 2));
+    }
+
+    if (correios_sender_phone !== undefined) {
+      await setSetting('correios_sender_phone', correios_sender_phone.trim());
     }
 
     if (shipping_carrier_enabled !== undefined) {

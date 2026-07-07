@@ -10,6 +10,7 @@ import {
   ORDER_STATUS_LABELS,
   ORDER_STATUS_COLORS,
   PAYMENT_STATUS_LABELS,
+  PAYMENT_STATUS_COLORS,
   formatOrderDate,
   formatMoney,
 } from '@/lib/orderLabels';
@@ -363,8 +364,8 @@ function OrdersSection({ orders, isLoading, onSelectOrder }) {
                   <span className={`text-xs px-2.5 py-0.5 rounded-full font-body ${ORDER_STATUS_COLORS[order.status] || 'bg-secondary'}`}>
                     {ORDER_STATUS_LABELS[order.status] || order.status}
                   </span>
-                  {order.payment_status && order.payment_status !== 'pago' && (
-                    <span className="text-xs text-muted-foreground font-body">
+                  {order.payment_status && (
+                    <span className={`text-xs px-2.5 py-0.5 rounded-full font-body ${PAYMENT_STATUS_COLORS[order.payment_status] || 'bg-secondary text-muted-foreground'}`}>
                       {PAYMENT_STATUS_LABELS[order.payment_status]}
                     </span>
                   )}
@@ -374,6 +375,7 @@ function OrdersSection({ orders, isLoading, onSelectOrder }) {
                   {formatOrderDate(order.created_date)}
                   {itemCount > 0 && ` · ${itemCount} item(ns)`}
                   {order.shipping_service_name && ` · ${order.shipping_service_name}`}
+                  {order.tracking_code && ` · ${order.tracking_code}`}
                 </p>
               </div>
               <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />

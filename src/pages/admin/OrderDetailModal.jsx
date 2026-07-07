@@ -1,40 +1,93 @@
-import React from 'react';
-import { X } from 'lucide-react';
-
-const statusColors = {
-  pendente: 'bg-yellow-100 text-yellow-700',
-  confirmado: 'bg-blue-100 text-blue-700',
-  em_preparo: 'bg-purple-100 text-purple-700',
-  enviado: 'bg-indigo-100 text-indigo-700',
-  entregue: 'bg-green-100 text-green-700',
-  cancelado: 'bg-red-100 text-red-700',
-};
+import React, { useEffect, useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { api } from '@/api/apiClient';
+import { resolveMediaUrl } from '@/lib/resolveMediaUrl';
+import OrderTrackingPanel from '@/components/OrderTrackingPanel';
+import {
+  ORDER_STATUS_LABELS,
+  ORDER_STATUS_COLORS,
+  PAYMENT_STATUS_LABELS,
+  PAYMENT_STATUS_COLORS,
+  PAYMENT_METHOD_LABELS,
+  formatOrderDate,
+  formatMoney,
+} from '@/lib/orderLabels';
+import { ExternalLink, Loader2, Printer, X } from 'lucide-react';
 
 const STATUS_OPTIONS = ['pendente', 'confirmado', 'em_preparo', 'enviado', 'entregue', 'cancelado'];
+const PAYMENT_STATUS_OPTIONS = ['aguardando_pagamento', 'pago', 'recusado', 'cancelado'];
 
-const paymentLabels = { pix: 'PIX', cartao_credito: 'Cartão de Crédito', boleto: 'Boleto', cielo: 'Cielo', test: 'Modo teste' };
+export default function OrderDetailModal({ order, onClose, onUpdated }) {
+  const queryClient = useQueryClient();
+  const [trackingCode, setTrackingCode] = useState(order.tracking_code || '');
+  const [paymentStatus, setPaymentStatus] = useState(order.payment_status || 'aguardando_pagamento');
+  const [cieloAuthorization, setCieloAuthorization] = useState(order.cielo_authorization_code || '');
+  const [tracking, setTracking] = useState(null);
+  const [trackingError, setTrackingError] = useState('');
+  const [labelUrl, setLabelUrl] = useState(order.shipping_label_url || '');
 
-const paymentStatusLabels = {
-  aguardando_pagamento: 'Aguardando pagamento',
-  pago: 'Pago',
-  recusado: 'Recusado',
-  cancelado: 'Cancelado',
-};
+  useEffect(() => {
+    setTrackingCode(order.tracking_code || '');
+    setPaymentStatus(order.payment_status || 'aguardando_pagamento');
+    setCieloAuthorization(order.cielo_authorization_code || '');
+    setLabelUrl(order.shipping_label_url || '');
+    setTracking(null);
+    setTrackingError('');
+  }, [order]);
 
-export default function OrderDetailModal({ order, onClose, onStatusChange }) {
-  const formatDate = (dateStr) => {
-    if (!dateStr) return '';
-    return new Date(dateStr).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-  };
+  const updateMutation = useMutation({
+    mutationFn: (data) => api.entities.Order.update(order.id, data),
+    onSuccess: (updated) => {
+      queryClient.invalidateQueries({ queryKey: ['orders'] });
+      onUpdated?.(updated);
+    },
+  });
+
+  const labelMutation = useMutation({
+    mutationFn: () => api.orderShipping.generateLabel(order.id, { tracking_code: trackingCode }),
+    onSuccess: (result) => {
+      setLabelUrl(result.label_url);
+      if (result.tracking_code) {
+        setTrackingCode(result.tracking_code);
+      }
+      queryClient.invalidateQueries({ queryKey: ['orders'] });
+      if (result.order) {
+        onUpdated?.(result.order);
+      }
+      window.open(resolveMediaUrl(result.label_url), '_blank', 'noopener,noreferrer');
+    },
+  });
+
+  const trackMutation = useMutation({
+    mutationFn: () => api.orderShipping.track(order.id),
+    onSuccess: (result) => {
+      setTracking(result);
+      setTrackingError('');
+    },
+    onError: (err) => {
+      setTrackingError(err.message || 'Erro ao rastrear pedido');
+    },
+  });
+
+  function saveShippingPayment() {
+    updateMutation.mutate({
+      tracking_code: trackingCode.trim() || null,
+      payment_status: paymentStatus,
+      cielo_authorization_code: cieloAuthorization.trim() || null,
+      status: trackingCode.trim() ? 'enviado' : order.status,
+    });
+  }
+
+  const items = Array.isArray(order.items) ? order.items : [];
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative bg-card border border-border rounded-sm w-full max-w-lg max-h-[90vh] overflow-auto shadow-xl">
-        <div className="flex items-center justify-between px-6 py-5 border-b border-border">
+      <div className="relative bg-card border border-border rounded-sm w-full max-w-2xl max-h-[90vh] overflow-auto shadow-xl">
+        <div className="flex items-center justify-between px-6 py-5 border-b border-border sticky top-0 bg-card z-10">
           <div>
             <h2 className="font-display text-xl tracking-wide text-foreground">Detalhes do Pedido</h2>
-            <p className="font-body text-xs text-muted-foreground mt-0.5">{formatDate(order.created_date)}</p>
+            <p className="font-body text-xs text-muted-foreground mt-0.5">{formatOrderDate(order.created_date)}</p>
           </div>
           <button onClick={onClose} className="text-muted-foreground hover:text-foreground transition-colors">
             <X className="w-5 h-5" />
@@ -42,19 +95,70 @@ export default function OrderDetailModal({ order, onClose, onStatusChange }) {
         </div>
 
         <div className="px-6 py-6 space-y-6">
-          {/* Status */}
-          <div className="flex items-center justify-between">
-            <p className="font-body text-xs text-muted-foreground tracking-wider uppercase">Status</p>
-            <select
-              value={order.status}
-              onChange={e => onStatusChange(order.id, e.target.value)}
-              className={`text-xs px-3 py-1.5 rounded-full font-body border-0 focus:outline-none cursor-pointer ${statusColors[order.status]}`}
-            >
-              {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s.replace('_', ' ')}</option>)}
-            </select>
+          <div className="flex flex-wrap gap-2">
+            <span className={`text-xs px-3 py-1 rounded-full font-body ${ORDER_STATUS_COLORS[order.status] || 'bg-secondary text-foreground'}`}>
+              {ORDER_STATUS_LABELS[order.status] || order.status}
+            </span>
+            <span className={`text-xs px-3 py-1 rounded-full font-body ${PAYMENT_STATUS_COLORS[paymentStatus] || 'bg-secondary text-foreground'}`}>
+              {PAYMENT_STATUS_LABELS[paymentStatus] || paymentStatus}
+            </span>
           </div>
 
-          {/* Customer */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block font-body text-xs text-muted-foreground tracking-wider uppercase mb-2">
+                Status do pedido
+              </label>
+              <select
+                value={order.status}
+                onChange={(e) => updateMutation.mutate({ status: e.target.value })}
+                className="w-full h-10 px-3 rounded-sm border border-border bg-background font-body text-sm"
+              >
+                {STATUS_OPTIONS.map((status) => (
+                  <option key={status} value={status}>{ORDER_STATUS_LABELS[status]}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block font-body text-xs text-muted-foreground tracking-wider uppercase mb-2">
+                Status do pagamento
+              </label>
+              <select
+                value={paymentStatus}
+                onChange={(e) => setPaymentStatus(e.target.value)}
+                className="w-full h-10 px-3 rounded-sm border border-border bg-background font-body text-sm"
+              >
+                {PAYMENT_STATUS_OPTIONS.map((status) => (
+                  <option key={status} value={status}>{PAYMENT_STATUS_LABELS[status]}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 rounded-sm border border-border bg-secondary/20">
+            <div>
+              <p className="font-body text-xs text-muted-foreground uppercase tracking-wider mb-1">Pagamento</p>
+              <p className="font-body text-sm text-foreground">
+                {PAYMENT_METHOD_LABELS[order.payment_method] || order.payment_method || '—'}
+              </p>
+            </div>
+            <div>
+              <p className="font-body text-xs text-muted-foreground uppercase tracking-wider mb-1">Pedido Cielo</p>
+              <p className="font-mono text-xs text-foreground break-all">{order.gateway_order_number || '—'}</p>
+            </div>
+            <div className="md:col-span-2">
+              <label className="block font-body text-xs text-muted-foreground tracking-wider uppercase mb-2">
+                Autorização Cielo
+              </label>
+              <input
+                className="w-full h-10 px-3 rounded-sm border border-border bg-background font-body text-sm font-mono"
+                value={cieloAuthorization}
+                onChange={(e) => setCieloAuthorization(e.target.value)}
+                placeholder="Código de autorização (ex.: 123456)"
+              />
+            </div>
+          </div>
+
           <div>
             <p className="font-body text-xs text-muted-foreground tracking-wider uppercase mb-3">Cliente</p>
             <div className="space-y-1.5">
@@ -65,53 +169,107 @@ export default function OrderDetailModal({ order, onClose, onStatusChange }) {
             </div>
           </div>
 
-          {/* Items */}
-          {order.items && order.items.length > 0 && (
+          {items.length > 0 && (
             <div>
               <p className="font-body text-xs text-muted-foreground tracking-wider uppercase mb-3">Itens</p>
               <div className="space-y-2">
-                {order.items.map((item, i) => (
+                {items.map((item, i) => (
                   <div key={i} className="flex justify-between items-center py-2 border-b border-border last:border-0">
                     <div>
                       <p className="font-body text-sm text-foreground">{item.product_name}</p>
-                      <p className="font-body text-xs text-muted-foreground">Qtd: {item.quantity} × R$ {item.unit_price?.toFixed(2).replace('.', ',')}</p>
+                      <p className="font-body text-xs text-muted-foreground">
+                        Qtd: {item.quantity} × {formatMoney(item.unit_price)}
+                      </p>
                     </div>
-                    <p className="font-body text-sm text-foreground">R$ {item.total?.toFixed(2).replace('.', ',')}</p>
+                    <p className="font-body text-sm text-foreground">{formatMoney(item.total)}</p>
                   </div>
                 ))}
               </div>
             </div>
           )}
 
-          {/* Totals */}
           <div className="pt-2 border-t border-border space-y-1.5">
-            {order.wrapping_cost > 0 && (
-              <div className="flex justify-between">
-                <p className="font-body text-sm text-muted-foreground">Embalagem</p>
-                <p className="font-body text-sm text-muted-foreground">R$ {order.wrapping_cost?.toFixed(2).replace('.', ',')}</p>
+            {Number(order.wrapping_cost) > 0 && (
+              <div className="flex justify-between font-body text-sm">
+                <span className="text-muted-foreground">Embalagem</span>
+                <span>{formatMoney(order.wrapping_cost)}</span>
               </div>
             )}
-            {order.shipping_cost > 0 && (
-              <div className="flex justify-between">
-                <p className="font-body text-sm text-muted-foreground">
+            {Number(order.shipping_cost) > 0 && (
+              <div className="flex justify-between font-body text-sm">
+                <span className="text-muted-foreground">
                   Frete{order.shipping_service_name ? ` (${order.shipping_service_name})` : ''}
-                </p>
-                <p className="font-body text-sm text-muted-foreground">R$ {Number(order.shipping_cost).toFixed(2).replace('.', ',')}</p>
+                </span>
+                <span>{formatMoney(order.shipping_cost)}</span>
               </div>
             )}
-            <div className="flex justify-between">
-              <p className="font-body text-sm font-medium text-foreground">Total</p>
-              <p className="font-body text-sm font-medium text-foreground">R$ {order.total?.toFixed(2).replace('.', ',')}</p>
+            <div className="flex justify-between font-body text-sm font-medium">
+              <span>Total</span>
+              <span>{formatMoney(order.total)}</span>
             </div>
-            {order.payment_method && (
-              <p className="font-body text-xs text-muted-foreground">{paymentLabels[order.payment_method] || order.payment_method}</p>
-            )}
-            {order.payment_status && (
-              <p className="font-body text-xs text-muted-foreground">{paymentStatusLabels[order.payment_status] || order.payment_status}</p>
-            )}
           </div>
 
-          {/* Notes */}
+          <div className="space-y-4 p-4 rounded-sm border border-border">
+            <div>
+              <h3 className="font-display text-base tracking-wide text-foreground">Envio Correios</h3>
+              <p className="font-body text-xs text-muted-foreground mt-1">
+                Gere a etiqueta para impressão e informe o código de rastreio após a postagem.
+              </p>
+            </div>
+
+            <div>
+              <label className="block font-body text-xs text-muted-foreground tracking-wider uppercase mb-2">
+                Código de rastreio
+              </label>
+              <input
+                className="w-full h-10 px-3 rounded-sm border border-border bg-background font-body text-sm font-mono uppercase"
+                value={trackingCode}
+                onChange={(e) => setTrackingCode(e.target.value.toUpperCase())}
+                placeholder="AA123456789BR"
+              />
+            </div>
+
+            <div className="flex flex-wrap gap-3">
+              <button
+                type="button"
+                onClick={() => labelMutation.mutate()}
+                disabled={labelMutation.isPending}
+                className="inline-flex items-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground rounded-sm font-body text-sm hover:opacity-90 disabled:opacity-50"
+              >
+                {labelMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Printer className="w-4 h-4" />}
+                Gerar etiqueta
+              </button>
+              {labelUrl && (
+                <a
+                  href={resolveMediaUrl(labelUrl)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 px-4 py-2.5 border border-border rounded-sm font-body text-sm hover:bg-secondary"
+                >
+                  Ver etiqueta
+                  <ExternalLink className="w-4 h-4" />
+                </a>
+              )}
+              <button
+                type="button"
+                onClick={saveShippingPayment}
+                disabled={updateMutation.isPending}
+                className="inline-flex items-center gap-2 px-4 py-2.5 border border-border rounded-sm font-body text-sm hover:bg-secondary disabled:opacity-50"
+              >
+                {updateMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                Salvar envio e pagamento
+              </button>
+            </div>
+
+            <OrderTrackingPanel
+              trackingCode={trackingCode}
+              tracking={tracking}
+              loading={trackMutation.isPending}
+              error={trackingError}
+              onTrack={() => trackMutation.mutate()}
+            />
+          </div>
+
           {order.notes && (
             <div>
               <p className="font-body text-xs text-muted-foreground tracking-wider uppercase mb-2">Observações</p>
