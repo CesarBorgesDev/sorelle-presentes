@@ -2,6 +2,7 @@ import { Router } from 'express';
 import pool from '../config/db.js';
 import { requireAuth, requireAdmin, optionalAuth } from '../middleware/auth.js';
 import { parseSort, rowToEntity, rowsToEntities } from '../utils/helpers.js';
+import { normalizeProductImages } from '../utils/productImages.js';
 
 const router = Router();
 
@@ -68,14 +69,16 @@ router.get('/:id', optionalAuth, async (req, res) => {
 router.post('/', requireAuth, requireAdmin, async (req, res) => {
   try {
     const data = req.body;
+    const images = normalizeProductImages(data);
     const result = await pool.query(
-      `INSERT INTO products (name, description, price, original_price, category, subcategory, image_url, images, featured, in_stock, sku, materials, dimensions)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *`,
+      `INSERT INTO products (name, description, price, original_price, category, subcategory, image_url, images, featured, in_stock, sku, materials, dimensions, weight_kg, length_cm, width_cm, height_cm)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) RETURNING *`,
       [
         data.name, data.description || null, data.price, data.original_price || null,
-        data.category, data.subcategory || null, data.image_url || null,
-        JSON.stringify(data.images || []), data.featured ?? false, data.in_stock ?? true,
+        data.category, data.subcategory || null, images.image_url,
+        JSON.stringify(images.images), data.featured ?? false, data.in_stock ?? true,
         data.sku || null, data.materials || null, data.dimensions || null,
+        data.weight_kg ?? null, data.length_cm ?? null, data.width_cm ?? null, data.height_cm ?? null,
       ]
     );
     res.status(201).json(rowToEntity(result.rows[0]));
@@ -87,7 +90,24 @@ router.post('/', requireAuth, requireAdmin, async (req, res) => {
 
 router.patch('/:id', requireAuth, requireAdmin, async (req, res) => {
   try {
-    const data = req.body;
+    const data = { ...req.body };
+
+    if (data.image_url !== undefined || data.images !== undefined) {
+      const current = await pool.query('SELECT image_url, images FROM products WHERE id = $1', [req.params.id]);
+      if (current.rows.length === 0) {
+        return res.status(404).json({ message: 'Produto não encontrado' });
+      }
+
+      const existing = current.rows[0];
+      const normalized = normalizeProductImages({
+        image_url: data.image_url !== undefined ? data.image_url : existing.image_url,
+        images: data.images !== undefined ? data.images : existing.images,
+      });
+
+      data.image_url = normalized.image_url;
+      data.images = normalized.images;
+    }
+
     const sets = [];
     const values = [];
     let idx = 1;

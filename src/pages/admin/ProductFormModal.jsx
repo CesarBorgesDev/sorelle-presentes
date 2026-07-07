@@ -1,8 +1,9 @@
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/api/apiClient';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { X, Upload, Sparkles, Loader2, ImageIcon, Link2 } from 'lucide-react';
+import { buildInitialProductImages, buildProductImagePayload } from '@/lib/productImages';
+import ProductImagesEditor from './ProductImagesEditor';
+import { X } from 'lucide-react';
 
 const CATEGORIES = [
   { value: 'casa', label: 'Casa' },
@@ -11,30 +12,14 @@ const CATEGORIES = [
   { value: 'cama_mesa_banho', label: 'Cama, Mesa & Banho' },
 ];
 
-function readFileAsDataUrl(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
-}
-
 function parseOptionalNumber(value) {
   if (value === '' || value === null || value === undefined) return null;
   const parsed = parseFloat(value);
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function resolveImageSrc(url) {
-  if (!url) return '';
-  return url;
-}
-
 export default function ProductFormModal({ product, onClose }) {
   const queryClient = useQueryClient();
-  const uploadFileRef = useRef(null);
-  const aiFileRef = useRef(null);
   const isEditing = !!product;
 
   const [form, setForm] = useState({
@@ -44,7 +29,6 @@ export default function ProductFormModal({ product, onClose }) {
     original_price: product?.original_price || '',
     category: product?.category || 'casa',
     subcategory: product?.subcategory || '',
-    image_url: product?.image_url || '',
     materials: product?.materials || '',
     dimensions: product?.dimensions || '',
     weight_kg: product?.weight_kg ?? '',
@@ -55,15 +39,7 @@ export default function ProductFormModal({ product, onClose }) {
     featured: product?.featured ?? false,
   });
 
-  const [imageTab, setImageTab] = useState('url');
-  const [uploadPreview, setUploadPreview] = useState(null);
-  const [uploadBase64, setUploadBase64] = useState(null);
-  const [uploadMimeType, setUploadMimeType] = useState('image/jpeg');
-  const [aiPreview, setAiPreview] = useState(null);
-  const [aiBase64, setAiBase64] = useState(null);
-  const [aiMimeType, setAiMimeType] = useState('image/jpeg');
-  const [imageError, setImageError] = useState('');
-  const [imageSuccess, setImageSuccess] = useState('');
+  const [productImages, setProductImages] = useState(() => buildInitialProductImages(product));
 
   const set = (field, value) => setForm((f) => ({ ...f, [field]: value }));
 
@@ -73,93 +49,17 @@ export default function ProductFormModal({ product, onClose }) {
       : api.entities.Product.create(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['products'] });
+      if (isEditing) {
+        queryClient.invalidateQueries({ queryKey: ['product', product.id] });
+      }
       onClose();
     },
   });
 
-  const uploadMutation = useMutation({
-    mutationFn: () => api.images.uploadProduct({
-      image: uploadBase64,
-      mime_type: uploadMimeType,
-    }),
-    onSuccess: (result) => {
-      set('image_url', result.image_url);
-      setImageError('');
-      setImageSuccess(result.message || 'Imagem enviada e aplicada ao produto');
-    },
-    onError: (err) => {
-      setImageSuccess('');
-      setImageError(err.message || 'Erro ao enviar imagem');
-    },
-  });
-
-  const generateMutation = useMutation({
-    mutationFn: () => api.images.generateScene({
-      image: aiBase64,
-      mime_type: aiMimeType,
-      product_name: form.name,
-      category: CATEGORIES.find((c) => c.value === form.category)?.label || form.category,
-      materials: form.materials,
-    }),
-    onSuccess: (result) => {
-      set('image_url', result.image_url);
-      setImageError('');
-      setImageSuccess(result.message || 'Imagem gerada com sucesso');
-    },
-    onError: (err) => {
-      setImageSuccess('');
-      setImageError(err.message || 'Erro ao gerar imagem');
-    },
-  });
-
-  const validateImageFile = (file) => {
-    if (!file.type.startsWith('image/')) {
-      return 'Selecione um arquivo de imagem (JPG, PNG ou WebP)';
-    }
-    if (file.size > 10 * 1024 * 1024) {
-      return 'A imagem deve ter no máximo 10 MB';
-    }
-    return null;
-  };
-
-  const handleUploadFileSelect = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const validationError = validateImageFile(file);
-    if (validationError) {
-      setImageError(validationError);
-      return;
-    }
-
-    setImageError('');
-    setImageSuccess('');
-    const dataUrl = await readFileAsDataUrl(file);
-    setUploadPreview(dataUrl);
-    setUploadBase64(dataUrl);
-    setUploadMimeType(file.type);
-  };
-
-  const handleAiFileSelect = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const validationError = validateImageFile(file);
-    if (validationError) {
-      setImageError(validationError);
-      return;
-    }
-
-    setImageError('');
-    setImageSuccess('');
-    const dataUrl = await readFileAsDataUrl(file);
-    setAiPreview(dataUrl);
-    setAiBase64(dataUrl);
-    setAiMimeType(file.type);
-  };
-
   const handleSubmit = (e) => {
     e.preventDefault();
+    const imagePayload = buildProductImagePayload(productImages);
+
     mutation.mutate({
       ...form,
       price: parseFloat(form.price),
@@ -168,12 +68,13 @@ export default function ProductFormModal({ product, onClose }) {
       length_cm: parseOptionalNumber(form.length_cm),
       width_cm: parseOptionalNumber(form.width_cm),
       height_cm: parseOptionalNumber(form.height_cm),
-      image_url: form.image_url?.trim() || null,
+      ...imagePayload,
     });
   };
 
   const inputClass = 'w-full px-3 py-2.5 bg-background border border-border rounded-sm font-body text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring';
   const labelClass = 'block font-body text-xs text-muted-foreground tracking-wider uppercase mb-1.5';
+  const selectedCategory = CATEGORIES.find((c) => c.value === form.category);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -217,175 +118,13 @@ export default function ProductFormModal({ product, onClose }) {
               <input type="number" step="0.01" min="0" className={inputClass} value={form.original_price} onChange={(e) => set('original_price', e.target.value)} placeholder="Deixe vazio se não houver desconto" />
             </div>
 
-            <div className="md:col-span-2 space-y-4 p-4 border border-border rounded-sm bg-secondary/30">
-              <p className="font-body text-sm font-medium text-foreground">Imagem do produto</p>
-
-              <div className="aspect-[4/5] max-w-xs rounded-sm border border-border bg-background overflow-hidden flex items-center justify-center">
-                {form.image_url ? (
-                  <img
-                    src={resolveImageSrc(form.image_url)}
-                    alt="Preview do produto"
-                    className="w-full h-full object-cover"
-                    onError={() => setImageError('Não foi possível carregar a imagem. Verifique a URL ou envie novamente.')}
-                  />
-                ) : (
-                  <div className="text-center text-muted-foreground p-4">
-                    <ImageIcon className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                    <p className="font-body text-xs">Nenhuma imagem selecionada</p>
-                  </div>
-                )}
-              </div>
-
-              {imageError && (
-                <div className="p-3 rounded-sm bg-destructive/10 text-destructive text-sm font-body">{imageError}</div>
-              )}
-              {imageSuccess && (
-                <div className="p-3 rounded-sm bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 text-sm font-body">{imageSuccess}</div>
-              )}
-
-              <Tabs value={imageTab} onValueChange={setImageTab}>
-                <TabsList className="w-full grid grid-cols-3 h-auto">
-                  <TabsTrigger value="url" className="gap-1.5 text-xs sm:text-sm">
-                    <Link2 className="w-3.5 h-3.5" />
-                    URL
-                  </TabsTrigger>
-                  <TabsTrigger value="upload" className="gap-1.5 text-xs sm:text-sm">
-                    <Upload className="w-3.5 h-3.5" />
-                    Upload
-                  </TabsTrigger>
-                  <TabsTrigger value="ai" className="gap-1.5 text-xs sm:text-sm">
-                    <Sparkles className="w-3.5 h-3.5" />
-                    Gerar IA
-                  </TabsTrigger>
-                </TabsList>
-
-                <TabsContent value="url" className="mt-4 space-y-3">
-                  <p className="font-body text-xs text-muted-foreground">
-                    Cole o link direto de uma imagem (Unsplash, CDN ou `/api/uploads/...`).
-                  </p>
-                  <div>
-                    <label className={labelClass}>URL da imagem</label>
-                    <input
-                      className={inputClass}
-                      value={form.image_url}
-                      onChange={(e) => {
-                        set('image_url', e.target.value);
-                        setImageError('');
-                        setImageSuccess('');
-                      }}
-                      placeholder="https://images.unsplash.com/..."
-                    />
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (!form.image_url?.trim()) {
-                        setImageError('Informe uma URL de imagem');
-                        return;
-                      }
-                      setImageError('');
-                      setImageSuccess('URL aplicada. Salve o produto para confirmar.');
-                    }}
-                    className="inline-flex items-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground rounded-sm font-body text-sm hover:opacity-80"
-                  >
-                    <Link2 className="w-4 h-4" />
-                    Usar esta URL
-                  </button>
-                </TabsContent>
-
-                <TabsContent value="upload" className="mt-4 space-y-3">
-                  <p className="font-body text-xs text-muted-foreground">
-                    Envie JPG, PNG ou WebP (até 10 MB). A imagem fica salva no servidor.
-                  </p>
-                  <input
-                    ref={uploadFileRef}
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp"
-                    className="hidden"
-                    onChange={handleUploadFileSelect}
-                  />
-                  <div className="flex flex-wrap gap-3">
-                    <button
-                      type="button"
-                      onClick={() => uploadFileRef.current?.click()}
-                      className="inline-flex items-center gap-2 px-4 py-2.5 border border-border rounded-sm font-body text-sm hover:bg-secondary transition-colors"
-                    >
-                      <Upload className="w-4 h-4" />
-                      Escolher arquivo
-                    </button>
-                    <button
-                      type="button"
-                      disabled={!uploadBase64 || uploadMutation.isPending}
-                      onClick={() => uploadMutation.mutate()}
-                      className="inline-flex items-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground rounded-sm font-body text-sm hover:opacity-80 disabled:opacity-50"
-                    >
-                      {uploadMutation.isPending ? (
-                        <>
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                          Enviando...
-                        </>
-                      ) : (
-                        <>
-                          <Upload className="w-4 h-4" />
-                          Enviar e usar imagem
-                        </>
-                      )}
-                    </button>
-                  </div>
-                  {uploadPreview && (
-                    <div className="max-w-[140px] aspect-[4/5] rounded-sm border border-border overflow-hidden">
-                      <img src={uploadPreview} alt="Arquivo selecionado" className="w-full h-full object-cover" />
-                    </div>
-                  )}
-                </TabsContent>
-
-                <TabsContent value="ai" className="mt-4 space-y-3">
-                  <p className="font-body text-xs text-muted-foreground">
-                    Envie uma foto do produto e gere um cenário sofisticado com IA (Stable Horde / Pollinations).
-                  </p>
-                  <input
-                    ref={aiFileRef}
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp"
-                    className="hidden"
-                    onChange={handleAiFileSelect}
-                  />
-                  <div className="flex flex-wrap gap-3">
-                    <button
-                      type="button"
-                      onClick={() => aiFileRef.current?.click()}
-                      className="inline-flex items-center gap-2 px-4 py-2.5 border border-border rounded-sm font-body text-sm hover:bg-secondary transition-colors"
-                    >
-                      <Upload className="w-4 h-4" />
-                      Foto de referência
-                    </button>
-                    <button
-                      type="button"
-                      disabled={!aiBase64 || generateMutation.isPending}
-                      onClick={() => generateMutation.mutate()}
-                      className="inline-flex items-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground rounded-sm font-body text-sm hover:opacity-80 disabled:opacity-50"
-                    >
-                      {generateMutation.isPending ? (
-                        <>
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                          Gerando...
-                        </>
-                      ) : (
-                        <>
-                          <Sparkles className="w-4 h-4" />
-                          Gerar cenário
-                        </>
-                      )}
-                    </button>
-                  </div>
-                  {aiPreview && (
-                    <div className="max-w-[140px] aspect-[4/5] rounded-sm border border-border overflow-hidden">
-                      <img src={aiPreview} alt="Referência IA" className="w-full h-full object-cover" />
-                    </div>
-                  )}
-                </TabsContent>
-              </Tabs>
-            </div>
+            <ProductImagesEditor
+              images={productImages}
+              onChange={setProductImages}
+              productName={form.name}
+              productCategory={selectedCategory?.label || form.category}
+              productMaterials={form.materials}
+            />
 
             <div className="md:col-span-2">
               <label className={labelClass}>Descrição</label>

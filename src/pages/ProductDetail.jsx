@@ -5,6 +5,8 @@ import { api } from '@/api/apiClient';
 import { useAuth } from '@/lib/AuthContext';
 import { motion } from 'framer-motion';
 import { ArrowLeft, Minus, Plus, ShoppingBag, Check, Heart } from 'lucide-react';
+import { getProductImages } from '@/lib/productImages';
+import { resolveMediaUrl } from '@/lib/resolveMediaUrl';
 import { Button } from '@/components/ui/button';
 
 const categoryLabels = {
@@ -98,7 +100,7 @@ export default function ProductDetail() {
     );
   }
 
-  const allImages = [product.image_url, ...(product.images || [])].filter(Boolean);
+  const allImages = getProductImages(product).map(resolveMediaUrl);
 
   return (
     <div className="pt-20 lg:pt-24">
