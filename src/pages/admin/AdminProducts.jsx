@@ -86,13 +86,16 @@ export default function AdminProducts() {
       </div>
 
       {viewMode === 'grid' ? (
-        <div className="flex flex-wrap gap-3">
+        <div className="flex flex-wrap gap-4">
           {isLoading ? (
             Array(12).fill(0).map((_, i) => (
-              <div
-                key={i}
-                className="animate-pulse w-[100px] h-[100px] shrink-0 bg-secondary border border-border rounded-sm"
-              />
+              <div key={i} className="w-[200px] shrink-0 animate-pulse">
+                <div className="w-[200px] h-[200px] bg-secondary border border-border rounded-sm" />
+                <div className="mt-2 space-y-2">
+                  <div className="h-3 bg-secondary rounded w-full" />
+                  <div className="h-6 bg-secondary rounded w-2/3" />
+                </div>
+              </div>
             ))
           ) : filtered.length === 0 ? (
             <div className="w-full py-12 text-center font-body text-muted-foreground bg-card border border-border rounded-sm">
@@ -100,50 +103,49 @@ export default function AdminProducts() {
             </div>
           ) : (
             filtered.map((product) => (
-              <div
-                key={product.id}
-                className="relative group w-[100px] h-[100px] shrink-0 bg-secondary border border-border rounded-sm overflow-hidden"
-                title={product.name}
-              >
-                {product.image_url ? (
-                  <img
-                    src={product.image_url}
-                    alt={product.name}
-                    className="absolute inset-0 w-full h-full object-cover"
-                  />
-                ) : (
-                  <div className="absolute inset-0 flex items-center justify-center p-1 text-center text-[9px] leading-tight text-muted-foreground font-body">
-                    Sem imagem
-                  </div>
-                )}
+              <div key={product.id} className="w-[200px] shrink-0">
+                <div className="w-[200px] h-[200px] bg-secondary border border-border rounded-sm overflow-hidden">
+                  {product.image_url ? (
+                    <img
+                      src={product.image_url}
+                      alt={product.name}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-muted-foreground font-body text-xs">
+                      Sem imagem
+                    </div>
+                  )}
+                </div>
 
-                {Number(product.quantity) <= 0 && (
-                  <span className="absolute top-1 left-1 z-10 px-1 py-0.5 rounded-sm bg-red-600/90 text-white text-[8px] font-body leading-none">
-                    0
-                  </span>
-                )}
-
-                <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-1 bg-black/55 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
-                  <p className="px-1 text-[9px] leading-tight text-white font-body text-center line-clamp-2">
+                <div className="mt-2 space-y-2">
+                  <h3 className="font-display text-sm tracking-wide text-foreground line-clamp-2 min-h-[2.5rem]">
                     {product.name}
-                  </p>
-                  <div className="flex items-center gap-1">
-                    <button
-                      type="button"
-                      onClick={() => handleEdit(product)}
-                      className="p-1.5 rounded-sm bg-background/90 text-foreground hover:bg-background transition-colors"
-                      title="Editar"
-                    >
-                      <Pencil className="w-3 h-3" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => { if (confirm('Excluir este produto?')) deleteMutation.mutate(product.id); }}
-                      className="p-1.5 rounded-sm bg-background/90 text-destructive hover:bg-background transition-colors"
-                      title="Excluir"
-                    >
-                      <Trash2 className="w-3 h-3" />
-                    </button>
+                  </h3>
+
+                  <div className="flex items-center justify-between gap-2">
+                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-body shrink-0 ${stockClass(product)}`}>
+                      {stockLabel(product)}
+                    </span>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => handleEdit(product)}
+                        className="inline-flex items-center gap-1 px-2 py-1 border border-border rounded-sm font-body text-[10px] hover:bg-secondary transition-colors"
+                        title="Editar"
+                      >
+                        <Pencil className="w-3 h-3" />
+                        Editar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { if (confirm('Excluir este produto?')) deleteMutation.mutate(product.id); }}
+                        className="p-1 text-muted-foreground hover:text-destructive transition-colors"
+                        title="Excluir"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>

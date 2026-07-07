@@ -59,9 +59,14 @@ export default function Navbar({ cartCount = 0, onCartClick }) {
 
             {/* Actions */}
             <div className="flex items-center gap-4">
-              <button className={`hidden lg:block transition-colors ${textColor} hover:opacity-60`}>
+              <Link
+                to="/busca"
+                className={`hidden lg:block transition-colors ${textColor} hover:opacity-60`}
+                title="Buscar produtos"
+                aria-label="Buscar produtos"
+              >
                 <Search className="w-5 h-5" />
-              </button>
+              </Link>
               <Link
                 to="/conta"
                 className={`transition-colors ${textColor} hover:opacity-60`}
@@ -111,6 +116,12 @@ export default function Navbar({ cartCount = 0, onCartClick }) {
                   {link.label}
                 </Link>
               ))}
+              <Link
+                to="/busca"
+                className="font-display text-2xl tracking-widest uppercase text-foreground hover:text-primary transition-colors"
+              >
+                Buscar
+              </Link>
               <Link
                 to="/conta"
                 className="font-display text-2xl tracking-widest uppercase text-foreground hover:text-primary transition-colors"

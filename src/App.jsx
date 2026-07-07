@@ -30,6 +30,8 @@ import Home from '@/pages/Home';
 
 import Category from '@/pages/Category';
 
+import SearchProducts from '@/pages/SearchProducts';
+
 import ProductDetail from '@/pages/ProductDetail';
 
 import AdminLayout from '@/pages/admin/AdminLayout';
@@ -83,6 +85,8 @@ function AppRoutes() {
         <Route path="/" element={<Home />} />
 
         <Route path="/categoria/:slug" element={<Category />} />
+
+        <Route path="/busca" element={<SearchProducts />} />
 
         <Route path="/produto/:id" element={<ProductDetail />} />
 
