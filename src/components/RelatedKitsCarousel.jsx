@@ -1,5 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import { ShoppingBag } from 'lucide-react';
 import ProductCard from '@/components/ProductCard';
 import {
   Carousel,
@@ -21,7 +22,7 @@ export default function RelatedKitsCarousel({ kits = [] }) {
     <section className="mt-16 lg:mt-24 pt-12 border-t border-border">
       {kits.map((kit) => (
         <div key={kit.id} className="mb-12 last:mb-0">
-          <div className="mb-6 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
+          <div className="mb-6 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
             <div>
               <p className="text-xs tracking-[0.3em] uppercase text-muted-foreground font-body mb-2">
                 Kit relacionado
@@ -30,18 +31,35 @@ export default function RelatedKitsCarousel({ kits = [] }) {
                 {kit.name}
               </h2>
             </div>
-            {kit.price != null && (
-              <div className="flex items-center gap-3">
-                <span className="font-body text-xl font-medium text-foreground">
-                  {formatPrice(kit.price)}
-                </span>
-                {kit.original_price != null && (
-                  <span className="font-body text-sm text-muted-foreground line-through">
-                    {formatPrice(kit.original_price)}
-                  </span>
-                )}
-              </div>
-            )}
+            <div className="flex flex-col sm:items-end gap-3">
+              {kit.price != null && (
+                <>
+                  <div className="flex items-center gap-3">
+                    <span className="font-body text-xl font-medium text-foreground">
+                      {formatPrice(kit.price)}
+                    </span>
+                    {kit.original_price != null && (
+                      <span className="font-body text-sm text-muted-foreground line-through">
+                        {formatPrice(kit.original_price)}
+                      </span>
+                    )}
+                  </div>
+                  {kit.discount_amount != null && kit.discount_amount > 0 && (
+                    <p className="font-body text-sm text-primary">
+                      Economize {formatPrice(kit.discount_amount)}
+                      {kit.discount_percent != null ? ` (${kit.discount_percent}%)` : ''}
+                    </p>
+                  )}
+                </>
+              )}
+              <Link
+                to={`/kit/${kit.id}`}
+                className="inline-flex items-center gap-2 bg-foreground text-background px-5 py-2.5 rounded-sm font-body text-sm tracking-wider hover:bg-foreground/90 transition-colors"
+              >
+                <ShoppingBag className="w-4 h-4" />
+                Comprar kit
+              </Link>
+            </div>
           </div>
 
           <Carousel

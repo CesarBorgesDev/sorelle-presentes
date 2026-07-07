@@ -49,6 +49,52 @@ async function replaceKitItems(kitId, productIds = []) {
   }
 }
 
+function buildKitPricing(kitRow, allProducts) {
+  const productsTotal = allProducts.reduce((sum, product) => sum + (Number(product.price) || 0), 0);
+  const kitPrice = kitRow.price != null ? Number(kitRow.price) : null;
+  const referencePrice = kitRow.original_price != null
+    ? Number(kitRow.original_price)
+    : productsTotal;
+
+  let discountAmount = null;
+  let discountPercent = null;
+
+  if (kitPrice != null && referencePrice > kitPrice) {
+    discountAmount = Math.round((referencePrice - kitPrice) * 100) / 100;
+    discountPercent = referencePrice > 0
+      ? Math.round((discountAmount / referencePrice) * 100)
+      : 0;
+  }
+
+  return {
+    all_products: allProducts,
+    products_total: Math.round(productsTotal * 100) / 100,
+    kit_price: kitPrice,
+    reference_price: Math.round(referencePrice * 100) / 100,
+    discount_amount: discountAmount,
+    discount_percent: discountPercent,
+  };
+}
+
+async function kitToStorefrontEntity(kitRow) {
+  const kit = await kitToEntity(kitRow);
+  const allProducts = [kit.anchor_product, ...kit.related_products].filter(Boolean);
+  const pricing = buildKitPricing(kitRow, allProducts);
+
+  return {
+    id: kit.id,
+    name: kit.name,
+    price: kit.price,
+    original_price: kit.original_price,
+    active: kit.active,
+    product_id: kit.product_id,
+    anchor_product: kit.anchor_product,
+    related_products: kit.related_products,
+    product_ids: kit.product_ids,
+    ...pricing,
+  };
+}
+
 router.get('/by-product/:productId', optionalAuth, async (req, res) => {
   try {
     const { productId } = req.params;
@@ -68,6 +114,7 @@ router.get('/by-product/:productId', optionalAuth, async (req, res) => {
     for (const row of kitsResult.rows) {
       const kit = await kitToEntity(row);
       const allProducts = [kit.anchor_product, ...kit.related_products].filter(Boolean);
+      const pricing = buildKitPricing(row, allProducts);
       const displayProducts = allProducts.filter((product) => product.id !== productId);
 
       if (displayProducts.length === 0) continue;
@@ -77,6 +124,8 @@ router.get('/by-product/:productId', optionalAuth, async (req, res) => {
         name: kit.name,
         price: kit.price,
         original_price: kit.original_price,
+        discount_amount: pricing.discount_amount,
+        discount_percent: pricing.discount_percent,
         products: displayProducts,
       });
     }
@@ -112,7 +161,12 @@ router.get('/:id', optionalAuth, async (req, res) => {
       return res.status(404).json({ message: 'Kit não encontrado' });
     }
 
-    res.json(await kitToEntity(result.rows[0]));
+    const kitRow = result.rows[0];
+    if (!kitRow.active) {
+      return res.status(404).json({ message: 'Kit não encontrado' });
+    }
+
+    res.json(await kitToStorefrontEntity(kitRow));
   } catch (err) {
     console.error('Erro ao buscar kit:', err);
     res.status(500).json({ message: 'Erro ao buscar kit' });

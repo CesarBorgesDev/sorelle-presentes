@@ -505,6 +505,9 @@ const productKitsApi = {
   getByProduct(productId) {
     return apiFetch(`/product-kits/by-product/${productId}`);
   },
+  getById(id) {
+    return apiFetch(`/product-kits/${id}`);
+  },
 };
 
 export const api = {

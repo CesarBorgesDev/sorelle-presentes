@@ -34,6 +34,8 @@ import SearchProducts from '@/pages/SearchProducts';
 
 import ProductDetail from '@/pages/ProductDetail';
 
+import KitDetail from '@/pages/KitDetail';
+
 import AdminLayout from '@/pages/admin/AdminLayout';
 
 import AdminDashboard from '@/pages/admin/AdminDashboard';
@@ -91,6 +93,8 @@ function AppRoutes() {
         <Route path="/busca" element={<SearchProducts />} />
 
         <Route path="/produto/:id" element={<ProductDetail />} />
+
+        <Route path="/kit/:id" element={<KitDetail />} />
 
         <Route path="/sobre-nos" element={<InstitutionalPage pageSlug="sobre-nos" />} />
 
