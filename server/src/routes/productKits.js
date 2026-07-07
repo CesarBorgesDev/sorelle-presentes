@@ -75,6 +75,8 @@ router.get('/by-product/:productId', optionalAuth, async (req, res) => {
       kits.push({
         id: kit.id,
         name: kit.name,
+        price: kit.price,
+        original_price: kit.original_price,
         products: displayProducts,
       });
     }
@@ -119,7 +121,7 @@ router.get('/:id', optionalAuth, async (req, res) => {
 
 router.post('/', requireAuth, requireAdmin, async (req, res) => {
   try {
-    const { name, product_id, active = true, product_ids = [] } = req.body;
+    const { name, product_id, active = true, product_ids = [], price, original_price } = req.body;
 
     if (!name?.trim()) {
       return res.status(400).json({ message: 'Nome do kit é obrigatório' });
@@ -136,10 +138,16 @@ router.post('/', requireAuth, requireAdmin, async (req, res) => {
     const filteredIds = product_ids.filter((id) => id && id !== product_id);
 
     const result = await pool.query(
-      `INSERT INTO product_kits (name, product_id, active)
-       VALUES ($1, $2, $3)
+      `INSERT INTO product_kits (name, product_id, price, original_price, active)
+       VALUES ($1, $2, $3, $4, $5)
        RETURNING *`,
-      [name.trim(), product_id, active !== false]
+      [
+        name.trim(),
+        product_id,
+        price ?? null,
+        original_price ?? null,
+        active !== false,
+      ]
     );
 
     const kit = result.rows[0];
@@ -154,7 +162,7 @@ router.post('/', requireAuth, requireAdmin, async (req, res) => {
 
 router.patch('/:id', requireAuth, requireAdmin, async (req, res) => {
   try {
-    const { name, product_id, active, product_ids } = req.body;
+    const { name, product_id, active, product_ids, price, original_price } = req.body;
     const existing = await pool.query('SELECT * FROM product_kits WHERE id = $1', [req.params.id]);
 
     if (existing.rows.length === 0) {
@@ -175,13 +183,17 @@ router.patch('/:id', requireAuth, requireAdmin, async (req, res) => {
       `UPDATE product_kits
        SET name = $1,
            product_id = $2,
-           active = $3,
+           price = $3,
+           original_price = $4,
+           active = $5,
            updated_date = NOW()
-       WHERE id = $4
+       WHERE id = $6
        RETURNING *`,
       [
         name?.trim() || current.name,
         nextProductId,
+        price !== undefined ? price : current.price,
+        original_price !== undefined ? original_price : current.original_price,
         active !== undefined ? active !== false : current.active,
         req.params.id,
       ]

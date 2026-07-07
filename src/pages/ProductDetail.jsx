@@ -4,12 +4,17 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/api/apiClient';
 import { useAuth } from '@/lib/AuthContext';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Minus, Plus, ShoppingBag, Check, Heart } from 'lucide-react';
+import { ArrowLeft, Minus, Plus, ShoppingBag, Check, Heart, ChevronDown } from 'lucide-react';
 import { getProductImages } from '@/lib/productImages';
 import { isProductAvailable, normalizeProductQuantity } from '@/lib/productStock';
 import { resolveMediaUrl } from '@/lib/resolveMediaUrl';
 import { Button } from '@/components/ui/button';
 import RelatedKitsCarousel from '@/components/RelatedKitsCarousel';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible';
 
 const categoryLabels = {
   casa: 'Casa',
@@ -17,6 +22,54 @@ const categoryLabels = {
   fragancias: 'Fragrâncias',
   cama_mesa_banho: 'Cama, Mesa & Banho',
 };
+
+function ProductAccordionSection({ title, children, defaultOpen = false }) {
+  const [open, setOpen] = useState(defaultOpen);
+
+  return (
+    <Collapsible open={open} onOpenChange={setOpen} className="border-b border-border">
+      <CollapsibleTrigger className="flex w-full items-center justify-between py-4 text-left group">
+        <span className="font-display text-sm tracking-widest uppercase text-foreground">
+          {title}
+        </span>
+        <ChevronDown
+          className={`w-4 h-4 text-muted-foreground transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
+        />
+      </CollapsibleTrigger>
+      <CollapsibleContent className="pb-5">
+        {children}
+      </CollapsibleContent>
+    </Collapsible>
+  );
+}
+
+function buildTechnicalSpecs(product) {
+  const specs = [];
+
+  if (product.materials) {
+    specs.push({ label: 'Material', value: product.materials });
+  }
+  if (product.dimensions) {
+    specs.push({ label: 'Dimensões', value: product.dimensions });
+  }
+  if (product.weight_kg) {
+    specs.push({ label: 'Peso', value: `${product.weight_kg} kg` });
+  }
+  if (product.length_cm || product.width_cm || product.height_cm) {
+    const parts = [product.length_cm, product.width_cm, product.height_cm].filter(Boolean);
+    if (parts.length > 0) {
+      specs.push({ label: 'Medidas (C x L x A)', value: `${parts.join(' x ')} cm` });
+    }
+  }
+  if (product.internal_code) {
+    specs.push({ label: 'Código interno', value: product.internal_code });
+  }
+  if (product.sku) {
+    specs.push({ label: 'SKU', value: product.sku });
+  }
+
+  return specs;
+}
 
 export default function ProductDetail() {
   const { id } = useParams();
@@ -121,11 +174,17 @@ export default function ProductDetail() {
   }
 
   const allImages = getProductImages(product).map(resolveMediaUrl);
+  const technicalSpecs = buildTechnicalSpecs(product);
+
+  const thumbnailButtonClass = (isActive) => (
+    `rounded-sm overflow-hidden border-2 transition-all ${
+      isActive ? 'border-primary opacity-100' : 'border-transparent opacity-60 hover:opacity-100'
+    }`
+  );
 
   return (
     <div className="pt-20 lg:pt-24">
       <div className="max-w-7xl mx-auto px-6 lg:px-16 py-8 lg:py-12">
-        {/* Breadcrumb */}
         <Link
           to={`/categoria/${product.category}`}
           className="inline-flex items-center gap-2 font-body text-sm text-muted-foreground hover:text-foreground transition-colors mb-8"
@@ -135,28 +194,46 @@ export default function ProductDetail() {
         </Link>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-16">
-          {/* Images - Scrollable Left */}
           <motion.div
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.6 }}
           >
-            <div className="aspect-[4/5] rounded-sm overflow-hidden bg-secondary mb-4">
-              <img
-                src={allImages[activeImage]}
-                alt={product.name}
-                className="w-full h-full object-cover"
-              />
+            <div className="flex gap-3 lg:gap-4">
+              {allImages.length > 1 && (
+                <div className="hidden lg:flex flex-col gap-2 w-[72px] shrink-0">
+                  {allImages.map((img, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => setActiveImage(i)}
+                      className={`w-[72px] h-[88px] ${thumbnailButtonClass(activeImage === i)}`}
+                    >
+                      <img src={img} alt="" className="w-full h-full object-cover" />
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              <div className="flex-1 min-w-0">
+                <div className="aspect-[4/5] rounded-sm overflow-hidden bg-secondary">
+                  <img
+                    src={allImages[activeImage]}
+                    alt={product.name}
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+              </div>
             </div>
+
             {allImages.length > 1 && (
-              <div className="flex gap-2">
+              <div className="flex gap-2 mt-4 overflow-x-auto lg:hidden pb-1">
                 {allImages.map((img, i) => (
                   <button
                     key={i}
+                    type="button"
                     onClick={() => setActiveImage(i)}
-                    className={`w-16 h-20 rounded-sm overflow-hidden border-2 transition-all ${
-                      activeImage === i ? 'border-primary' : 'border-transparent opacity-60 hover:opacity-100'
-                    }`}
+                    className={`w-16 h-20 shrink-0 ${thumbnailButtonClass(activeImage === i)}`}
                   >
                     <img src={img} alt="" className="w-full h-full object-cover" />
                   </button>
@@ -165,7 +242,6 @@ export default function ProductDetail() {
             )}
           </motion.div>
 
-          {/* Info - Sticky Right */}
           <motion.div
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
@@ -180,7 +256,7 @@ export default function ProductDetail() {
               {product.name}
             </h1>
 
-            <div className="flex items-center gap-3 mb-6">
+            <div className="flex items-center gap-3 mb-8">
               <span className="font-body text-xl font-medium text-foreground">
                 R$ {product.price?.toFixed(2).replace('.', ',')}
               </span>
@@ -191,41 +267,29 @@ export default function ProductDetail() {
               )}
             </div>
 
-            {product.description && (
-              <p className="font-body text-sm text-muted-foreground leading-relaxed mb-8">
-                {product.description}
-              </p>
-            )}
+            <div className="mb-8">
+              {product.description && (
+                <ProductAccordionSection title="Descrição">
+                  <p className="font-body text-sm text-muted-foreground leading-relaxed whitespace-pre-line">
+                    {product.description}
+                  </p>
+                </ProductAccordionSection>
+              )}
 
-            {/* Details */}
-            <div className="space-y-3 mb-8 pb-8 border-b border-border">
-              {product.materials && (
-                <div className="flex justify-between font-body text-sm">
-                  <span className="text-muted-foreground">Material</span>
-                  <span className="text-foreground">{product.materials}</span>
-                </div>
-              )}
-              {product.dimensions && (
-                <div className="flex justify-between font-body text-sm">
-                  <span className="text-muted-foreground">Dimensões</span>
-                  <span className="text-foreground">{product.dimensions}</span>
-                </div>
-              )}
-              {product.internal_code && (
-                <div className="flex justify-between font-body text-sm">
-                  <span className="text-muted-foreground">Código interno</span>
-                  <span className="text-foreground">{product.internal_code}</span>
-                </div>
-              )}
-              {product.sku && (
-                <div className="flex justify-between font-body text-sm">
-                  <span className="text-muted-foreground">SKU</span>
-                  <span className="text-foreground">{product.sku}</span>
-                </div>
+              {technicalSpecs.length > 0 && (
+                <ProductAccordionSection title="Especificações técnicas">
+                  <div className="space-y-3">
+                    {technicalSpecs.map((spec) => (
+                      <div key={spec.label} className="flex justify-between gap-4 font-body text-sm">
+                        <span className="text-muted-foreground shrink-0">{spec.label}</span>
+                        <span className="text-foreground text-right">{spec.value}</span>
+                      </div>
+                    ))}
+                  </div>
+                </ProductAccordionSection>
               )}
             </div>
 
-            {/* Quantity */}
             {available && (
               <div className="flex items-center gap-4 mb-6">
                 <span className="font-body text-sm text-muted-foreground">Quantidade</span>
@@ -253,7 +317,6 @@ export default function ProductDetail() {
               </div>
             )}
 
-            {/* Add to Cart */}
             <Button
               onClick={handleAddToCart}
               disabled={addToCartMutation.isPending || !available}

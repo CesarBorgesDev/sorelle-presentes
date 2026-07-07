@@ -9,6 +9,11 @@ import {
   CarouselPrevious,
 } from '@/components/ui/carousel';
 
+function formatPrice(value) {
+  if (value == null) return null;
+  return `R$ ${Number(value).toFixed(2).replace('.', ',')}`;
+}
+
 export default function RelatedKitsCarousel({ kits = [] }) {
   if (!kits.length) return null;
 
@@ -16,13 +21,27 @@ export default function RelatedKitsCarousel({ kits = [] }) {
     <section className="mt-16 lg:mt-24 pt-12 border-t border-border">
       {kits.map((kit) => (
         <div key={kit.id} className="mb-12 last:mb-0">
-          <div className="mb-6">
-            <p className="text-xs tracking-[0.3em] uppercase text-muted-foreground font-body mb-2">
-              Kit relacionado
-            </p>
-            <h2 className="font-display text-2xl lg:text-3xl tracking-wider text-foreground">
-              {kit.name}
-            </h2>
+          <div className="mb-6 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
+            <div>
+              <p className="text-xs tracking-[0.3em] uppercase text-muted-foreground font-body mb-2">
+                Kit relacionado
+              </p>
+              <h2 className="font-display text-2xl lg:text-3xl tracking-wider text-foreground">
+                {kit.name}
+              </h2>
+            </div>
+            {kit.price != null && (
+              <div className="flex items-center gap-3">
+                <span className="font-body text-xl font-medium text-foreground">
+                  {formatPrice(kit.price)}
+                </span>
+                {kit.original_price != null && (
+                  <span className="font-body text-sm text-muted-foreground line-through">
+                    {formatPrice(kit.original_price)}
+                  </span>
+                )}
+              </div>
+            )}
           </div>
 
           <Carousel

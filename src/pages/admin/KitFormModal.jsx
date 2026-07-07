@@ -6,6 +6,12 @@ import { X, Search } from 'lucide-react';
 const inputClass = 'w-full px-3 py-2 bg-background border border-border rounded-sm font-body text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring';
 const labelClass = 'block font-body text-xs text-muted-foreground tracking-wider uppercase mb-1.5';
 
+function parseOptionalNumber(value) {
+  if (value === '' || value === null || value === undefined) return null;
+  const parsed = parseFloat(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 export default function KitFormModal({ kit, onClose }) {
   const queryClient = useQueryClient();
   const isEditing = !!kit;
@@ -13,6 +19,8 @@ export default function KitFormModal({ kit, onClose }) {
   const [form, setForm] = useState({
     name: kit?.name || '',
     product_id: kit?.product_id || '',
+    price: kit?.price ?? '',
+    original_price: kit?.original_price ?? '',
     active: kit?.active ?? true,
   });
   const [selectedIds, setSelectedIds] = useState(() => kit?.product_ids || []);
@@ -75,6 +83,8 @@ export default function KitFormModal({ kit, onClose }) {
     mutation.mutate({
       name: form.name.trim(),
       product_id: form.product_id,
+      price: parseOptionalNumber(form.price),
+      original_price: parseOptionalNumber(form.original_price),
       active: form.active,
       product_ids: selectedIds.filter((id) => id !== form.product_id),
     });
@@ -123,6 +133,33 @@ export default function KitFormModal({ kit, onClose }) {
                 </option>
               ))}
             </select>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className={labelClass}>Preço do kit</label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={form.price}
+                onChange={(e) => set('price', e.target.value)}
+                className={inputClass}
+                placeholder="Valor promocional do kit"
+              />
+            </div>
+            <div>
+              <label className={labelClass}>Preço original (opcional)</label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={form.original_price}
+                onChange={(e) => set('original_price', e.target.value)}
+                className={inputClass}
+                placeholder="Soma ou preço de referência"
+              />
+            </div>
           </div>
 
           <div>

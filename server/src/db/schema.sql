@@ -187,6 +187,8 @@ CREATE TABLE IF NOT EXISTS product_kits (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name VARCHAR(255) NOT NULL,
   product_id UUID NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  price NUMERIC(10, 2),
+  original_price NUMERIC(10, 2),
   active BOOLEAN NOT NULL DEFAULT TRUE,
   created_date TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_date TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -204,3 +206,6 @@ CREATE TABLE IF NOT EXISTS product_kit_items (
 CREATE INDEX IF NOT EXISTS idx_product_kits_product_id ON product_kits(product_id);
 CREATE INDEX IF NOT EXISTS idx_product_kit_items_kit_id ON product_kit_items(kit_id);
 CREATE INDEX IF NOT EXISTS idx_product_kit_items_product_id ON product_kit_items(product_id);
+
+ALTER TABLE product_kits ADD COLUMN IF NOT EXISTS price NUMERIC(10, 2);
+ALTER TABLE product_kits ADD COLUMN IF NOT EXISTS original_price NUMERIC(10, 2);

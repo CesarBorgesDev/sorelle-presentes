@@ -85,6 +85,7 @@ export default function AdminKits() {
                 <th className="text-left px-6 py-3 font-body text-xs text-muted-foreground tracking-widest uppercase">Kit</th>
                 <th className="text-left px-6 py-3 font-body text-xs text-muted-foreground tracking-widest uppercase hidden md:table-cell">Produto principal</th>
                 <th className="text-left px-6 py-3 font-body text-xs text-muted-foreground tracking-widest uppercase hidden lg:table-cell">Produtos relacionados</th>
+                <th className="text-left px-6 py-3 font-body text-xs text-muted-foreground tracking-widest uppercase hidden md:table-cell">Preço do kit</th>
                 <th className="text-left px-6 py-3 font-body text-xs text-muted-foreground tracking-widest uppercase">Status</th>
                 <th className="px-6 py-3" />
               </tr>
@@ -111,6 +112,22 @@ export default function AdminKits() {
                     <p className="font-body text-sm text-muted-foreground">
                       {(kit.related_products || []).length} produto(s)
                     </p>
+                  </td>
+                  <td className="px-6 py-4 hidden md:table-cell">
+                    {kit.price != null ? (
+                      <div>
+                        <p className="font-body text-sm text-foreground">
+                          R$ {Number(kit.price).toFixed(2).replace('.', ',')}
+                        </p>
+                        {kit.original_price != null && (
+                          <p className="font-body text-xs text-muted-foreground line-through">
+                            R$ {Number(kit.original_price).toFixed(2).replace('.', ',')}
+                          </p>
+                        )}
+                      </div>
+                    ) : (
+                      <p className="font-body text-sm text-muted-foreground">—</p>
+                    )}
                   </td>
                   <td className="px-6 py-4">
                     <span className={`text-xs px-2.5 py-1 rounded-full font-body ${
@@ -144,7 +161,7 @@ export default function AdminKits() {
               ))}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="px-6 py-12 text-center font-body text-muted-foreground">
+                  <td colSpan={6} className="px-6 py-12 text-center font-body text-muted-foreground">
                     Nenhum kit encontrado.
                   </td>
                 </tr>
