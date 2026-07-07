@@ -23,6 +23,7 @@ import {
   mapCieloPaymentStatus,
 } from '../utils/cieloWebhook.js';
 import { trackCorreiosPackage } from '../services/correiosTracking.js';
+import { streamOrderInvoice, withInvoiceFlags, withInvoiceFlagsList } from '../services/invoiceAccess.js';
 
 const router = Router();
 
@@ -305,7 +306,7 @@ router.get('/meus-pedidos', requireAuth, async (req, res) => {
       [req.user.email]
     );
 
-    res.json(rowsToEntities(result.rows));
+    res.json(withInvoiceFlagsList(rowsToEntities(result.rows)));
   } catch (err) {
     console.error('Erro ao listar pedidos do cliente:', err);
     res.status(500).json({ message: 'Erro ao carregar seus pedidos' });
@@ -327,7 +328,7 @@ router.get('/pedido/:id', requireAuth, async (req, res) => {
       return res.status(404).json({ message: 'Pedido não encontrado' });
     }
 
-    res.json(rowToEntity(result.rows[0]));
+    res.json(withInvoiceFlags(rowToEntity(result.rows[0])));
   } catch (err) {
     res.status(500).json({ message: 'Erro ao buscar pedido' });
   }
@@ -360,6 +361,30 @@ router.get('/pedido/:id/rastreio', requireAuth, async (req, res) => {
   } catch (err) {
     console.error('Erro ao rastrear pedido do cliente:', err);
     res.status(500).json({ message: err.message || 'Erro ao rastrear pedido' });
+  }
+});
+
+router.get('/pedido/:id/nota-fiscal/:type', requireAuth, async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT * FROM orders WHERE id = $1 AND LOWER(customer_email) = LOWER($2)',
+      [req.params.id, req.user.email]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: 'Pedido não encontrado' });
+    }
+
+    const order = rowToEntity(result.rows[0]);
+    streamOrderInvoice({
+      order,
+      type: req.params.type,
+      res,
+      downloadName: `nota-fiscal-${order.id}.${req.params.type}`,
+    });
+  } catch (err) {
+    console.error('Erro ao baixar nota fiscal do cliente:', err);
+    res.status(500).json({ message: 'Erro ao baixar nota fiscal' });
   }
 });
 

@@ -13,7 +13,7 @@ COPY . .
 
 RUN chmod +x docker-entrypoint.sh
 
-RUN mkdir -p uploads/generated uploads/products uploads/temp
+RUN mkdir -p uploads/generated uploads/products uploads/temp uploads/invoices uploads/labels
 
 EXPOSE 3001
 

@@ -4,6 +4,8 @@ import { requireAuth, requireAdmin } from '../middleware/auth.js';
 import { parseSort, rowToEntity, rowsToEntities } from '../utils/helpers.js';
 import { generateCorreiosShippingLabel } from '../services/shippingLabels.js';
 import { normalizeTrackingCode, trackCorreiosPackage } from '../services/correiosTracking.js';
+import { getInvoiceTypeConfig, saveInvoiceFile } from '../services/invoiceUpload.js';
+import { streamOrderInvoice, withInvoiceFlags, withInvoiceFlagsList } from '../services/invoiceAccess.js';
 
 const router = Router();
 
@@ -34,7 +36,7 @@ router.get('/', async (req, res) => {
       `SELECT * FROM orders ORDER BY ${column} ${direction} LIMIT $1`,
       [parseInt(limit) || 100]
     );
-    res.json(rowsToEntities(result.rows));
+    res.json(withInvoiceFlagsList(rowsToEntities(result.rows)));
   } catch (err) {
     res.status(500).json({ message: 'Erro ao listar pedidos' });
   }
@@ -72,6 +74,57 @@ router.post('/:id/etiqueta', async (req, res) => {
   }
 });
 
+router.post('/:id/nota-fiscal', async (req, res) => {
+  try {
+    const order = await loadOrderOr404(req.params.id, res);
+    if (!order) return;
+
+    const type = String(req.body?.type || '').toLowerCase();
+    const config = getInvoiceTypeConfig(type);
+    if (!config) {
+      return res.status(400).json({ message: 'Informe type como pdf ou xml' });
+    }
+
+    const saved = saveInvoiceFile({
+      orderId: order.id,
+      type,
+      file: req.body?.file,
+      mimeTypeHint: req.body?.mime_type,
+    });
+
+    const result = await pool.query(
+      `UPDATE orders SET ${config.column} = $1, updated_date = NOW() WHERE id = $2 RETURNING *`,
+      [saved.storage_path, order.id]
+    );
+
+    res.json({
+      message: `Nota fiscal ${config.label} anexada com sucesso`,
+      type,
+      order: withInvoiceFlags(rowToEntity(result.rows[0])),
+    });
+  } catch (err) {
+    console.error('Erro ao anexar nota fiscal:', err);
+    res.status(400).json({ message: err.message || 'Erro ao anexar nota fiscal' });
+  }
+});
+
+router.get('/:id/nota-fiscal/:type', async (req, res) => {
+  try {
+    const order = await loadOrderOr404(req.params.id, res);
+    if (!order) return;
+
+    streamOrderInvoice({
+      order,
+      type: req.params.type,
+      res,
+      downloadName: `nota-fiscal-${order.id}.${req.params.type}`,
+    });
+  } catch (err) {
+    console.error('Erro ao baixar nota fiscal:', err);
+    res.status(500).json({ message: 'Erro ao baixar nota fiscal' });
+  }
+});
+
 router.get('/:id/rastreio', async (req, res) => {
   try {
     const order = await loadOrderOr404(req.params.id, res);
@@ -98,7 +151,7 @@ router.get('/:id', async (req, res) => {
   try {
     const order = await loadOrderOr404(req.params.id, res);
     if (!order) return;
-    res.json(order);
+    res.json(withInvoiceFlags(order));
   } catch (err) {
     res.status(500).json({ message: 'Erro ao buscar pedido' });
   }

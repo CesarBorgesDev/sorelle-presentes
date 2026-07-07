@@ -3,6 +3,7 @@ import { useMutation } from '@tanstack/react-query';
 import { X, Package } from 'lucide-react';
 import { api } from '@/api/apiClient';
 import OrderTrackingPanel from '@/components/OrderTrackingPanel';
+import OrderInvoiceSection from '@/components/OrderInvoiceSection';
 import {
   ORDER_STATUS_LABELS,
   ORDER_STATUS_COLORS,
@@ -92,6 +93,13 @@ export default function CustomerOrderDetail({ order, onClose }) {
               onTrack={() => trackMutation.mutate()}
             />
           )}
+
+          <OrderInvoiceSection
+            orderId={order.id}
+            hasInvoicePdf={order.has_invoice_pdf}
+            hasInvoiceXml={order.has_invoice_xml}
+            mode="customer"
+          />
 
           {order.customer_address && (
             <div>

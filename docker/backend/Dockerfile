@@ -17,7 +17,7 @@ COPY docker/backend/docker-entrypoint.sh /docker-entrypoint.sh
 COPY docker/backend/docker-start.sh /docker-start.sh
 RUN chmod +x /docker-entrypoint.sh /docker-start.sh
 
-RUN mkdir -p uploads/generated uploads/products uploads/temp
+RUN mkdir -p uploads/generated uploads/products uploads/temp uploads/invoices uploads/labels
 
 EXPOSE 3001
 

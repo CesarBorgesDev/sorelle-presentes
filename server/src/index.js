@@ -27,6 +27,12 @@ app.disable('x-powered-by');
 app.use(corsMiddleware);
 app.use(express.json({ limit: '15mb' }));
 
+app.use('/api/uploads', (req, res, next) => {
+  if (req.path.startsWith('/invoices')) {
+    return res.status(404).json({ message: 'Recurso não encontrado' });
+  }
+  next();
+});
 app.use('/api/uploads', express.static(path.join(__dirname, '../uploads')));
 
 app.get('/api/health', async (_req, res) => {

@@ -369,6 +369,11 @@ function OrdersSection({ orders, isLoading, onSelectOrder }) {
                       {PAYMENT_STATUS_LABELS[order.payment_status]}
                     </span>
                   )}
+                  {(order.has_invoice_pdf || order.has_invoice_xml) && (
+                    <span className="text-xs px-2.5 py-0.5 rounded-full font-body bg-blue-50 text-blue-800">
+                      NF disponível
+                    </span>
+                  )}
                 </div>
                 <p className="font-body text-sm text-foreground">{formatMoney(order.total)}</p>
                 <p className="font-body text-xs text-muted-foreground mt-0.5">

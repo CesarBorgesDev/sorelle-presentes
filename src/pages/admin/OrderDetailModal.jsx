@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/api/apiClient';
 import { resolveMediaUrl } from '@/lib/resolveMediaUrl';
 import OrderTrackingPanel from '@/components/OrderTrackingPanel';
+import OrderInvoiceSection from '@/components/OrderInvoiceSection';
 import {
   ORDER_STATUS_LABELS,
   ORDER_STATUS_COLORS,
@@ -25,12 +26,16 @@ export default function OrderDetailModal({ order, onClose, onUpdated }) {
   const [tracking, setTracking] = useState(null);
   const [trackingError, setTrackingError] = useState('');
   const [labelUrl, setLabelUrl] = useState(order.shipping_label_url || '');
+  const [hasInvoicePdf, setHasInvoicePdf] = useState(Boolean(order.has_invoice_pdf));
+  const [hasInvoiceXml, setHasInvoiceXml] = useState(Boolean(order.has_invoice_xml));
 
   useEffect(() => {
     setTrackingCode(order.tracking_code || '');
     setPaymentStatus(order.payment_status || 'aguardando_pagamento');
     setCieloAuthorization(order.cielo_authorization_code || '');
     setLabelUrl(order.shipping_label_url || '');
+    setHasInvoicePdf(Boolean(order.has_invoice_pdf));
+    setHasInvoiceXml(Boolean(order.has_invoice_xml));
     setTracking(null);
     setTrackingError('');
   }, [order]);
@@ -269,6 +274,19 @@ export default function OrderDetailModal({ order, onClose, onUpdated }) {
               onTrack={() => trackMutation.mutate()}
             />
           </div>
+
+          <OrderInvoiceSection
+            orderId={order.id}
+            hasInvoicePdf={hasInvoicePdf}
+            hasInvoiceXml={hasInvoiceXml}
+            mode="admin"
+            onUploaded={(updated) => {
+              setHasInvoicePdf(Boolean(updated?.has_invoice_pdf));
+              setHasInvoiceXml(Boolean(updated?.has_invoice_xml));
+              queryClient.invalidateQueries({ queryKey: ['orders'] });
+              onUpdated?.(updated);
+            }}
+          />
 
           {order.notes && (
             <div>

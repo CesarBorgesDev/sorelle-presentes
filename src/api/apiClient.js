@@ -125,6 +125,63 @@ async function apiFetch(path, options = {}) {
   return response.json();
 }
 
+async function apiFetchBlob(path, options = {}) {
+  const token = getToken();
+  const headers = {
+    ...options.headers,
+  };
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
+  const apiBase = getApiBase();
+  const requestUrl = `${apiBase}${path}`;
+  let response;
+  try {
+    response = await fetch(requestUrl, {
+      ...options,
+      headers,
+    });
+  } catch (networkErr) {
+    const err = new ApiError(
+      `Não foi possível conectar ao servidor (${requestUrl}).`,
+      0,
+      { path, url: requestUrl }
+    );
+    err.cause = networkErr;
+    throw err;
+  }
+
+  if (!response.ok) {
+    const contentType = response.headers.get('content-type') || '';
+    let body = {};
+    let rawBody = null;
+
+    if (contentType.includes('application/json')) {
+      body = await response.json().catch(() => ({}));
+    } else {
+      rawBody = await response.text().catch(() => null);
+    }
+
+    throw new ApiError(
+      body.message || `Erro na requisição (${response.status})`,
+      response.status,
+      { path, url: requestUrl, body: Object.keys(body).length ? body : null, rawBody }
+    );
+  }
+
+  const blob = await response.blob();
+  const contentType = response.headers.get('content-type') || 'application/octet-stream';
+  const disposition = response.headers.get('content-disposition') || '';
+  const filenameMatch = disposition.match(/filename="([^"]+)"/);
+
+  return {
+    blob,
+    contentType,
+    filename: filenameMatch?.[1] || null,
+  };
+}
+
 function createEntityClient(resourcePath) {
   return {
     async list(sort = '-created_date', limit = 100) {
@@ -326,6 +383,10 @@ const checkout = {
   async trackOrder(orderId) {
     return apiFetch(`/checkout/pedido/${orderId}/rastreio`);
   },
+
+  downloadInvoice(orderId, type) {
+    return apiFetchBlob(`/checkout/pedido/${orderId}/nota-fiscal/${type}`);
+  },
 };
 
 const orderShipping = {
@@ -338,6 +399,17 @@ const orderShipping = {
 
   track(orderId) {
     return apiFetch(`/orders/${orderId}/rastreio`);
+  },
+
+  uploadInvoice(orderId, data) {
+    return apiFetch(`/orders/${orderId}/nota-fiscal`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  downloadInvoice(orderId, type) {
+    return apiFetchBlob(`/orders/${orderId}/nota-fiscal/${type}`);
   },
 };
 
