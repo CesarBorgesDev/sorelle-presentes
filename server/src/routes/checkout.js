@@ -23,6 +23,7 @@ import {
   mapCieloPaymentStatus,
 } from '../utils/cieloWebhook.js';
 import { trackCorreiosPackage } from '../services/correiosTracking.js';
+import { normalizeProductQuantity } from '../utils/productStock.js';
 import { streamOrderInvoice, withInvoiceFlags, withInvoiceFlagsList } from '../services/invoiceAccess.js';
 
 const router = Router();
@@ -88,6 +89,29 @@ async function loadCart(userId) {
   return cartResult.rows;
 }
 
+async function validateCartStock(userId) {
+  const result = await pool.query(
+    `SELECT ci.product_name, ci.quantity AS cart_quantity, p.quantity AS stock_quantity
+     FROM cart_items ci
+     JOIN products p ON p.id = ci.product_id
+     WHERE ci.user_id = $1`,
+    [userId]
+  );
+
+  for (const item of result.rows) {
+    const stockQuantity = normalizeProductQuantity(item.stock_quantity);
+    const cartQuantity = normalizeProductQuantity(item.cart_quantity);
+
+    if (stockQuantity <= 0) {
+      throw new Error(`"${item.product_name}" está indisponível (estoque zerado).`);
+    }
+
+    if (cartQuantity > stockQuantity) {
+      throw new Error(`Estoque insuficiente para "${item.product_name}". Disponível: ${stockQuantity}.`);
+    }
+  }
+}
+
 async function createOrderFromCart({ userId, customer, paymentMethod, shipping }) {
   const cartItems = await loadCart(userId);
 
@@ -96,6 +120,8 @@ async function createOrderFromCart({ userId, customer, paymentMethod, shipping }
     err.status = 400;
     throw err;
   }
+
+  await validateCartStock(userId);
 
   const { subtotal, wrappingCost, shippingCost, total } = calcTotals(cartItems, shipping.price);
   const orderItems = cartItems.map((item) => ({

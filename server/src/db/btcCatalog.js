@@ -69,6 +69,7 @@ export function mapBtcProduct(vtexProduct, meta) {
     images,
     featured: meta.featured ?? false,
     in_stock: (offer?.AvailableQuantity ?? 0) > 0,
+    quantity: Math.max(0, Number(offer?.AvailableQuantity ?? 0) || ((offer?.AvailableQuantity ?? 0) > 0 ? 1 : 0)),
     sku: (vtexProduct.productReference || vtexProduct.productReferenceCode || slug).toUpperCase(),
     materials: readSpec(vtexProduct, 'Material'),
     dimensions: readSpec(vtexProduct, 'Dimensão (cm)'),
@@ -110,6 +111,7 @@ export async function upsertProduct(pool, product) {
     JSON.stringify(product.images || []),
     product.featured,
     product.in_stock,
+    product.quantity ?? (product.in_stock ? 1 : 0),
     product.sku,
     product.materials,
     product.dimensions,
@@ -128,10 +130,11 @@ export async function upsertProduct(pool, product) {
            images = $8::jsonb,
            featured = $9,
            in_stock = $10,
-           materials = $11,
-           dimensions = $12,
+           quantity = $11,
+           materials = $12,
+           dimensions = $13,
            updated_date = NOW()
-       WHERE sku = $13`,
+       WHERE sku = $14`,
       [...values, product.sku]
     );
     return 'updated';
@@ -140,8 +143,8 @@ export async function upsertProduct(pool, product) {
   await pool.query(
     `INSERT INTO products (
        name, description, price, original_price, category, subcategory,
-       image_url, images, featured, in_stock, sku, materials, dimensions
-     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9,$10,$11,$12,$13)`,
+       image_url, images, featured, in_stock, quantity, sku, materials, dimensions
+     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9,$10,$11,$12,$13,$14)`,
     values
   );
   return 'inserted';

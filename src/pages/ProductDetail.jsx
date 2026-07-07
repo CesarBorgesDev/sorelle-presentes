@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/api/apiClient';
@@ -6,6 +6,7 @@ import { useAuth } from '@/lib/AuthContext';
 import { motion } from 'framer-motion';
 import { ArrowLeft, Minus, Plus, ShoppingBag, Check, Heart } from 'lucide-react';
 import { getProductImages } from '@/lib/productImages';
+import { isProductAvailable, normalizeProductQuantity } from '@/lib/productStock';
 import { resolveMediaUrl } from '@/lib/resolveMediaUrl';
 import { Button } from '@/components/ui/button';
 
@@ -33,6 +34,16 @@ export default function ProductDetail() {
       return products[0];
     },
   });
+
+  const available = isProductAvailable(product);
+  const stockQuantity = normalizeProductQuantity(product?.quantity);
+  const maxQuantity = available ? stockQuantity : 0;
+
+  useEffect(() => {
+    if (maxQuantity > 0 && quantity > maxQuantity) {
+      setQuantity(maxQuantity);
+    }
+  }, [maxQuantity, quantity]);
 
   const addToCartMutation = useMutation({
     mutationFn: (data) => api.entities.CartItem.create(data),
@@ -191,6 +202,12 @@ export default function ProductDetail() {
                   <span className="text-foreground">{product.dimensions}</span>
                 </div>
               )}
+              {product.internal_code && (
+                <div className="flex justify-between font-body text-sm">
+                  <span className="text-muted-foreground">Código interno</span>
+                  <span className="text-foreground">{product.internal_code}</span>
+                </div>
+              )}
               {product.sku && (
                 <div className="flex justify-between font-body text-sm">
                   <span className="text-muted-foreground">SKU</span>
@@ -200,29 +217,37 @@ export default function ProductDetail() {
             </div>
 
             {/* Quantity */}
-            <div className="flex items-center gap-4 mb-6">
-              <span className="font-body text-sm text-muted-foreground">Quantidade</span>
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                  className="w-9 h-9 border border-border rounded-sm flex items-center justify-center hover:bg-secondary transition-colors"
-                >
-                  <Minus className="w-4 h-4" />
-                </button>
-                <span className="font-body text-sm w-8 text-center">{quantity}</span>
-                <button
-                  onClick={() => setQuantity(quantity + 1)}
-                  className="w-9 h-9 border border-border rounded-sm flex items-center justify-center hover:bg-secondary transition-colors"
-                >
-                  <Plus className="w-4 h-4" />
-                </button>
+            {available && (
+              <div className="flex items-center gap-4 mb-6">
+                <span className="font-body text-sm text-muted-foreground">Quantidade</span>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                    className="w-9 h-9 border border-border rounded-sm flex items-center justify-center hover:bg-secondary transition-colors"
+                  >
+                    <Minus className="w-4 h-4" />
+                  </button>
+                  <span className="font-body text-sm w-8 text-center">{quantity}</span>
+                  <button
+                    type="button"
+                    onClick={() => setQuantity(Math.min(maxQuantity, quantity + 1))}
+                    disabled={quantity >= maxQuantity}
+                    className="w-9 h-9 border border-border rounded-sm flex items-center justify-center hover:bg-secondary transition-colors disabled:opacity-50"
+                  >
+                    <Plus className="w-4 h-4" />
+                  </button>
+                </div>
+                <span className="font-body text-xs text-muted-foreground">
+                  {stockQuantity} em estoque
+                </span>
               </div>
-            </div>
+            )}
 
             {/* Add to Cart */}
             <Button
               onClick={handleAddToCart}
-              disabled={addToCartMutation.isPending || !product.in_stock}
+              disabled={addToCartMutation.isPending || !available}
               className="w-full bg-foreground text-background hover:bg-foreground/90 font-body tracking-wider uppercase text-sm py-6 rounded-sm"
             >
               {added ? (
@@ -246,7 +271,7 @@ export default function ProductDetail() {
               )}
             </Button>
 
-            {!product.in_stock && (
+            {!available && (
               <p className="font-body text-sm text-destructive mt-3 text-center">Produto indisponível</p>
             )}
           </motion.div>

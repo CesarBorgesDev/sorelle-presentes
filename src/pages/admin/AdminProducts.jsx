@@ -24,8 +24,19 @@ export default function AdminProducts() {
 
   const filtered = products.filter(p =>
     p.name?.toLowerCase().includes(search.toLowerCase()) ||
-    p.category?.toLowerCase().includes(search.toLowerCase())
+    p.category?.toLowerCase().includes(search.toLowerCase()) ||
+    p.internal_code?.toLowerCase().includes(search.toLowerCase())
   );
+
+  const stockLabel = (product) => {
+    const qty = Number(product.quantity) || 0;
+    return qty > 0 ? `${qty} un.` : 'Sem estoque';
+  };
+
+  const stockClass = (product) => {
+    const qty = Number(product.quantity) || 0;
+    return qty > 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700';
+  };
 
   const categoryLabels = {
     casa: 'Casa',
@@ -104,12 +115,13 @@ export default function AdminProducts() {
                   <p className="font-body text-xs text-muted-foreground mb-1">
                     {categoryLabels[product.category] || product.category}
                     {product.subcategory ? ` · ${product.subcategory}` : ''}
+                    {product.internal_code ? ` · ${product.internal_code}` : ''}
                   </p>
                   <h3 className="font-display text-base tracking-wide text-foreground mb-2 line-clamp-2">{product.name}</h3>
                   <div className="flex items-center justify-between gap-2 mb-3">
                     <p className="font-body text-sm text-foreground">R$ {product.price?.toFixed(2).replace('.', ',')}</p>
-                    <span className={`text-xs px-2 py-0.5 rounded-full font-body ${product.in_stock ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                      {product.in_stock ? 'Em estoque' : 'Sem estoque'}
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-body ${stockClass(product)}`}>
+                      {stockLabel(product)}
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
@@ -162,6 +174,9 @@ export default function AdminProducts() {
                       )}
                       <div>
                         <p className="font-body text-sm text-foreground font-medium">{product.name}</p>
+                        {product.internal_code && (
+                          <p className="font-body text-xs text-muted-foreground">{product.internal_code}</p>
+                        )}
                         {product.subcategory && <p className="font-body text-xs text-muted-foreground">{product.subcategory}</p>}
                       </div>
                     </div>
@@ -176,8 +191,8 @@ export default function AdminProducts() {
                     )}
                   </td>
                   <td className="px-6 py-4 hidden lg:table-cell">
-                    <span className={`text-xs px-2.5 py-1 rounded-full font-body ${product.in_stock ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                      {product.in_stock ? 'Em estoque' : 'Sem estoque'}
+                    <span className={`text-xs px-2.5 py-1 rounded-full font-body ${stockClass(product)}`}>
+                      {stockLabel(product)}
                     </span>
                   </td>
                   <td className="px-6 py-4">
@@ -213,6 +228,7 @@ export default function AdminProducts() {
 
       {modalOpen && (
         <ProductFormModal
+          key={editingProduct?.id || 'new'}
           product={editingProduct}
           onClose={() => setModalOpen(false)}
         />

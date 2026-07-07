@@ -57,7 +57,7 @@ router.get('/wishlist', async (req, res) => {
   try {
     const result = await pool.query(
       `SELECT w.id, w.product_id, w.created_date,
-              p.name AS product_name, p.price, p.original_price, p.image_url, p.in_stock, p.category
+              p.name AS product_name, p.price, p.original_price, p.image_url, p.in_stock, p.quantity, p.category
        FROM wishlist_items w
        JOIN products p ON p.id = w.product_id
        WHERE w.user_id = $1

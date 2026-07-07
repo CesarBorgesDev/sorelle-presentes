@@ -26,6 +26,8 @@ CREATE TABLE IF NOT EXISTS products (
   images JSONB DEFAULT '[]',
   featured BOOLEAN NOT NULL DEFAULT FALSE,
   in_stock BOOLEAN NOT NULL DEFAULT TRUE,
+  quantity INTEGER NOT NULL DEFAULT 0,
+  internal_code VARCHAR(100),
   sku VARCHAR(100),
   materials TEXT,
   dimensions TEXT,
@@ -136,6 +138,10 @@ ALTER TABLE products ADD COLUMN IF NOT EXISTS weight_kg NUMERIC(8, 3);
 ALTER TABLE products ADD COLUMN IF NOT EXISTS length_cm NUMERIC(8, 2);
 ALTER TABLE products ADD COLUMN IF NOT EXISTS width_cm NUMERIC(8, 2);
 ALTER TABLE products ADD COLUMN IF NOT EXISTS height_cm NUMERIC(8, 2);
+ALTER TABLE products ADD COLUMN IF NOT EXISTS quantity INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE products ADD COLUMN IF NOT EXISTS internal_code VARCHAR(100);
+UPDATE products SET quantity = 1 WHERE in_stock = true AND quantity = 0;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_products_internal_code ON products(internal_code) WHERE internal_code IS NOT NULL AND internal_code <> '';
 
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS shipping_cost NUMERIC(10, 2) DEFAULT 0;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS shipping_service_code VARCHAR(20);

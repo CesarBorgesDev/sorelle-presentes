@@ -6,6 +6,7 @@ import { useAuth } from '@/lib/AuthContext';
 import CustomerOrderDetail from '@/components/CustomerOrderDetail';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
+import { isProductAvailable } from '@/lib/productStock';
 import {
   ORDER_STATUS_LABELS,
   ORDER_STATUS_COLORS,
@@ -179,7 +180,7 @@ function WishlistSection() {
               {item.product_name}
             </Link>
             <p className="font-body text-sm mt-1">{formatMoney(item.price)}</p>
-            {!item.in_stock && (
+            {!isProductAvailable(item) && (
               <p className="font-body text-xs text-amber-600 mt-0.5">Fora de estoque</p>
             )}
           </div>

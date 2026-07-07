@@ -1,7 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { api } from '@/api/apiClient';
-import { buildInitialProductImages, buildProductImagePayload } from '@/lib/productImages';
+import { api } from '@/api/apiClient';import { buildInitialProductImages, buildProductImagePayload } from '@/lib/productImages';
 import ProductImagesEditor from './ProductImagesEditor';
 import { X } from 'lucide-react';
 
@@ -35,13 +34,52 @@ export default function ProductFormModal({ product, onClose }) {
     length_cm: product?.length_cm ?? '',
     width_cm: product?.width_cm ?? '',
     height_cm: product?.height_cm ?? '',
-    in_stock: product?.in_stock ?? true,
+    quantity: product?.quantity ?? 0,
+    internal_code: product?.internal_code || '',
     featured: product?.featured ?? false,
   });
 
   const [productImages, setProductImages] = useState(() => buildInitialProductImages(product));
+  const [internalCodeError, setInternalCodeError] = useState('');
+  const [checkingInternalCode, setCheckingInternalCode] = useState(false);
+  const [submitError, setSubmitError] = useState('');
 
-  const set = (field, value) => setForm((f) => ({ ...f, [field]: value }));
+  const set = (field, value) => {
+    setForm((f) => ({ ...f, [field]: value }));
+    if (field === 'internal_code') {
+      setInternalCodeError('');
+      setSubmitError('');
+    }
+  };
+
+  useEffect(() => {
+    const code = form.internal_code.trim();
+    if (!code) {
+      setInternalCodeError('');
+      setCheckingInternalCode(false);
+      return undefined;
+    }
+
+    setCheckingInternalCode(true);
+    const timer = setTimeout(async () => {
+      try {
+        const result = await api.products.checkInternalCode(code, isEditing ? product.id : null);
+        if (!result.available && result.conflict) {
+          setInternalCodeError(
+            `Código já usado por "${result.conflict.name}" (${result.conflict.internal_code}).`
+          );
+        } else {
+          setInternalCodeError('');
+        }
+      } catch {
+        setInternalCodeError('');
+      } finally {
+        setCheckingInternalCode(false);
+      }
+    }, 400);
+
+    return () => clearTimeout(timer);
+  }, [form.internal_code, isEditing, product?.id]);
 
   const mutation = useMutation({
     mutationFn: (data) => isEditing
@@ -54,10 +92,36 @@ export default function ProductFormModal({ product, onClose }) {
       }
       onClose();
     },
+    onError: (err) => {
+      setSubmitError(err.message || 'Erro ao salvar produto');
+      if (err.status === 409) {
+        setInternalCodeError(err.message || 'Este código interno já existe.');
+      }
+    },
   });
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    setSubmitError('');
+
+    const trimmedCode = form.internal_code.trim();
+    if (trimmedCode) {
+      try {
+        const result = await api.products.checkInternalCode(trimmedCode, isEditing ? product.id : null);
+        if (!result.available) {
+          setInternalCodeError(
+            result.conflict
+              ? `Código já usado por "${result.conflict.name}" (${result.conflict.internal_code}).`
+              : 'Este código interno já existe.'
+          );
+          return;
+        }
+      } catch (err) {
+        setSubmitError(err.message || 'Erro ao validar código interno');
+        return;
+      }
+    }
+
     const imagePayload = buildProductImagePayload(productImages);
 
     mutation.mutate({
@@ -68,6 +132,8 @@ export default function ProductFormModal({ product, onClose }) {
       length_cm: parseOptionalNumber(form.length_cm),
       width_cm: parseOptionalNumber(form.width_cm),
       height_cm: parseOptionalNumber(form.height_cm),
+      quantity: Math.max(0, parseInt(form.quantity, 10) || 0),
+      internal_code: trimmedCode || null,
       ...imagePayload,
     });
   };
@@ -118,6 +184,43 @@ export default function ProductFormModal({ product, onClose }) {
               <input type="number" step="0.01" min="0" className={inputClass} value={form.original_price} onChange={(e) => set('original_price', e.target.value)} placeholder="Deixe vazio se não houver desconto" />
             </div>
 
+            <div>
+              <label className={labelClass}>Código interno</label>
+              <input
+                className={`${inputClass} ${internalCodeError ? 'border-destructive focus:ring-destructive' : ''}`}
+                value={form.internal_code}
+                onChange={(e) => set('internal_code', e.target.value)}
+                placeholder="Ex: SOR-001"
+                autoComplete="off"
+              />
+              {checkingInternalCode && (
+                <p className="font-body text-xs text-muted-foreground mt-1">Verificando código...</p>
+              )}
+              {internalCodeError && (
+                <p className="font-body text-xs text-destructive mt-1">{internalCodeError}</p>
+              )}
+              {!internalCodeError && !checkingInternalCode && form.internal_code.trim() && (
+                <p className="font-body text-xs text-emerald-700 mt-1">Código disponível</p>
+              )}
+            </div>
+
+            <div>
+              <label className={labelClass}>Quantidade em estoque *</label>
+              <input
+                required
+                type="number"
+                min="0"
+                step="1"
+                className={inputClass}
+                value={form.quantity}
+                onChange={(e) => set('quantity', e.target.value)}
+                placeholder="0"
+              />
+              <p className="font-body text-xs text-muted-foreground mt-1">
+                Com quantidade zero, o produto fica indisponível para venda.
+              </p>
+            </div>
+
             <ProductImagesEditor
               images={productImages}
               onChange={setProductImages}
@@ -164,15 +267,14 @@ export default function ProductFormModal({ product, onClose }) {
             </p>
 
             <div className="flex items-center gap-3">
-              <input type="checkbox" id="in_stock" checked={form.in_stock} onChange={(e) => set('in_stock', e.target.checked)} className="w-4 h-4 rounded" />
-              <label htmlFor="in_stock" className="font-body text-sm text-foreground">Em estoque</label>
-            </div>
-
-            <div className="flex items-center gap-3">
               <input type="checkbox" id="featured" checked={form.featured} onChange={(e) => set('featured', e.target.checked)} className="w-4 h-4 rounded" />
               <label htmlFor="featured" className="font-body text-sm text-foreground">Produto em destaque</label>
             </div>
           </div>
+
+          {submitError && !internalCodeError && (
+            <p className="font-body text-sm text-destructive">{submitError}</p>
+          )}
 
           <div className="flex items-center justify-end gap-3 pt-4 border-t border-border">
             <button type="button" onClick={onClose} className="px-5 py-2.5 font-body text-sm text-muted-foreground hover:text-foreground tracking-wider transition-colors">
@@ -180,7 +282,7 @@ export default function ProductFormModal({ product, onClose }) {
             </button>
             <button
               type="submit"
-              disabled={mutation.isPending}
+              disabled={mutation.isPending || checkingInternalCode || Boolean(internalCodeError)}
               className="px-6 py-2.5 bg-primary text-primary-foreground rounded-sm font-body text-sm tracking-wider hover:opacity-80 transition-opacity disabled:opacity-50"
             >
               {mutation.isPending ? 'Salvando...' : isEditing ? 'Salvar Alterações' : 'Criar Produto'}

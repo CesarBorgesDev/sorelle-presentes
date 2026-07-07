@@ -1,5 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import { isProductAvailable } from '@/lib/productStock';
 
 export default function ProductListRow({ product, className = '' }) {
   const discount = product.original_price
@@ -49,7 +50,7 @@ export default function ProductListRow({ product, className = '' }) {
               R$ {product.original_price?.toFixed(2).replace('.', ',')}
             </span>
           )}
-          {!product.in_stock && (
+          {!isProductAvailable(product) && (
             <span className="font-body text-xs text-destructive ml-2">Indisponível</span>
           )}
         </div>

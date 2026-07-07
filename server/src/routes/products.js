@@ -3,12 +3,14 @@ import pool from '../config/db.js';
 import { requireAuth, requireAdmin, optionalAuth } from '../middleware/auth.js';
 import { parseSort, rowToEntity, rowsToEntities } from '../utils/helpers.js';
 import { normalizeProductImages } from '../utils/productImages.js';
+import { normalizeProductStockFields } from '../utils/productStock.js';
+import { assertInternalCodeAvailable, findInternalCodeConflict } from '../utils/productInternalCode.js';
 
 const router = Router();
 
 const ALLOWED_FIELDS = [
   'name', 'description', 'price', 'original_price', 'category', 'subcategory',
-  'image_url', 'images', 'featured', 'in_stock', 'sku', 'materials', 'dimensions',
+  'image_url', 'images', 'featured', 'in_stock', 'quantity', 'internal_code', 'sku', 'materials', 'dimensions',
   'weight_kg', 'length_cm', 'width_cm', 'height_cm',
 ];
 
@@ -54,6 +56,30 @@ router.get('/filter', optionalAuth, async (req, res) => {
   }
 });
 
+router.get('/internal-code/check', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const code = String(req.query.code || '').trim();
+    const excludeId = req.query.exclude_id || null;
+
+    if (!code) {
+      return res.json({ available: true, code: null, conflict: null });
+    }
+
+    const conflict = await findInternalCodeConflict(pool, code, excludeId);
+
+    res.json({
+      available: !conflict,
+      code,
+      conflict: conflict
+        ? { id: conflict.id, name: conflict.name, internal_code: conflict.internal_code }
+        : null,
+    });
+  } catch (err) {
+    console.error('Erro ao validar código interno:', err);
+    res.status(500).json({ message: 'Erro ao validar código interno' });
+  }
+});
+
 router.get('/:id', optionalAuth, async (req, res) => {
   try {
     const result = await pool.query('SELECT * FROM products WHERE id = $1', [req.params.id]);
@@ -68,29 +94,33 @@ router.get('/:id', optionalAuth, async (req, res) => {
 
 router.post('/', requireAuth, requireAdmin, async (req, res) => {
   try {
-    const data = req.body;
+    const data = normalizeProductStockFields(req.body);
+    await assertInternalCodeAvailable(pool, data.internal_code);
     const images = normalizeProductImages(data);
     const result = await pool.query(
-      `INSERT INTO products (name, description, price, original_price, category, subcategory, image_url, images, featured, in_stock, sku, materials, dimensions, weight_kg, length_cm, width_cm, height_cm)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) RETURNING *`,
+      `INSERT INTO products (name, description, price, original_price, category, subcategory, image_url, images, featured, in_stock, quantity, internal_code, sku, materials, dimensions, weight_kg, length_cm, width_cm, height_cm)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19) RETURNING *`,
       [
         data.name, data.description || null, data.price, data.original_price || null,
         data.category, data.subcategory || null, images.image_url,
-        JSON.stringify(images.images), data.featured ?? false, data.in_stock ?? true,
-        data.sku || null, data.materials || null, data.dimensions || null,
+        JSON.stringify(images.images), data.featured ?? false, data.in_stock ?? false,
+        data.quantity ?? 0, data.internal_code || null, data.sku || null, data.materials || null, data.dimensions || null,
         data.weight_kg ?? null, data.length_cm ?? null, data.width_cm ?? null, data.height_cm ?? null,
       ]
     );
     res.status(201).json(rowToEntity(result.rows[0]));
   } catch (err) {
     console.error('Erro ao criar produto:', err);
+    if (err.status === 409 || err.code === '23505') {
+      return res.status(409).json({ message: err.message || 'Já existe um produto com este código interno' });
+    }
     res.status(500).json({ message: 'Erro ao criar produto' });
   }
 });
 
 router.patch('/:id', requireAuth, requireAdmin, async (req, res) => {
   try {
-    const data = { ...req.body };
+    const data = normalizeProductStockFields({ ...req.body });
 
     if (data.image_url !== undefined || data.images !== undefined) {
       const current = await pool.query('SELECT image_url, images FROM products WHERE id = $1', [req.params.id]);
@@ -106,6 +136,10 @@ router.patch('/:id', requireAuth, requireAdmin, async (req, res) => {
 
       data.image_url = normalized.image_url;
       data.images = normalized.images;
+    }
+
+    if (data.internal_code !== undefined) {
+      await assertInternalCodeAvailable(pool, data.internal_code, req.params.id);
     }
 
     const sets = [];
@@ -137,6 +171,9 @@ router.patch('/:id', requireAuth, requireAdmin, async (req, res) => {
     res.json(rowToEntity(result.rows[0]));
   } catch (err) {
     console.error('Erro ao atualizar produto:', err);
+    if (err.status === 409 || err.code === '23505') {
+      return res.status(409).json({ message: err.message || 'Já existe um produto com este código interno' });
+    }
     res.status(500).json({ message: 'Erro ao atualizar produto' });
   }
 });

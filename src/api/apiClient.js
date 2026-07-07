@@ -492,6 +492,15 @@ export function logApiError(context, err, extra = {}) {
   }
 }
 
+const productsApi = {
+  checkInternalCode(code, excludeId) {
+    const params = new URLSearchParams();
+    if (code?.trim()) params.set('code', code.trim());
+    if (excludeId) params.set('exclude_id', excludeId);
+    return apiFetch(`/products/internal-code/check?${params}`);
+  },
+};
+
 export const api = {
   auth,
   settings,
@@ -502,6 +511,7 @@ export const api = {
   orderShipping,
   shipping,
   account,
+  products: productsApi,
   entities: {
     Product: createEntityClient('products'),
     Order: createEntityClient('orders'),
