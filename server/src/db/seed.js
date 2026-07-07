@@ -1,6 +1,6 @@
 import bcrypt from 'bcryptjs';
 import pool from '../config/db.js';
-import { sampleProducts, syncProductImages } from './productImages.js';
+import { seedBtcProducts } from './seedBtcProducts.js';
 
 async function seed() {
   console.log('Iniciando seed do banco de dados...');
@@ -22,22 +22,10 @@ async function seed() {
   }
 
   const productCount = await pool.query('SELECT COUNT(*) FROM products');
-  if (parseInt(productCount.rows[0].count) === 0) {
-    for (const product of sampleProducts) {
-      await pool.query(
-        `INSERT INTO products (name, description, price, original_price, category, subcategory, image_url, featured, in_stock, materials, dimensions)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
-        [
-          product.name, product.description, product.price, product.original_price || null,
-          product.category, product.subcategory, product.image_url, product.featured,
-          product.in_stock, product.materials, product.dimensions,
-        ]
-      );
-    }
-    console.log(`${sampleProducts.length} produtos de exemplo criados.`);
+  if (parseInt(productCount.rows[0].count, 10) === 0) {
+    await seedBtcProducts({ clearExisting: false });
   } else {
-    console.log('Produtos já existem, sincronizando imagens...');
-    await syncProductImages(pool);
+    console.log('Produtos já existem. Para recarregar o catálogo BTC, rode: npm run db:seed-btc');
   }
 
   console.log('Seed concluído!');
