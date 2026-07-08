@@ -44,6 +44,7 @@ export default function ProductVariantsEditor({ variants, onChange }) {
   const colors = variants?.colors || [];
   const sizes = variants?.sizes || [];
   const stock = variants?.stock || [];
+  const sizeSpecifications = variants?.size_specifications || {};
 
   const uploadMutation = useMutation({
     mutationFn: (payload) => api.images.uploadProduct(payload),
@@ -118,14 +119,22 @@ export default function ProductVariantsEditor({ variants, onChange }) {
     updateVariants({
       sizes: [...sizes, value],
       stock: nextStock,
+      size_specifications: {
+        ...sizeSpecifications,
+        [value]: sizeSpecifications[value] || '',
+      },
     });
     setSizeInput('');
   };
 
   const removeSize = (size) => {
+    const nextSpecs = { ...sizeSpecifications };
+    delete nextSpecs[size];
+
     updateVariants({
       sizes: sizes.filter((item) => item !== size),
       stock: stock.filter((item) => item.size !== size),
+      size_specifications: nextSpecs,
     });
   };
 
@@ -275,6 +284,38 @@ export default function ProductVariantsEditor({ variants, onChange }) {
           </button>
         </div>
       </div>
+
+      {sizes.length > 0 && (
+        <div className="space-y-3">
+          <div>
+            <label className={labelClass}>Especificações por tamanho</label>
+            <p className="font-body text-xs text-muted-foreground mt-1">
+              Medidas, composição ou detalhes exibidos na loja quando o cliente selecionar o tamanho.
+            </p>
+          </div>
+          <div className="space-y-3">
+            {sizes.map((size) => (
+              <div key={size} className="p-3 border border-border rounded-sm bg-background space-y-2">
+                <label className="font-body text-xs font-medium text-foreground tracking-wider uppercase">
+                  Tamanho {size}
+                </label>
+                <textarea
+                  rows={3}
+                  className={inputClass}
+                  value={sizeSpecifications[size] || ''}
+                  onChange={(e) => updateVariants({
+                    size_specifications: {
+                      ...sizeSpecifications,
+                      [size]: e.target.value,
+                    },
+                  })}
+                  placeholder="Ex: Cintura 68–72 cm, quadril 92–96 cm, comprimento 102 cm..."
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {stockRows.length > 0 && (
         <div className="space-y-3">

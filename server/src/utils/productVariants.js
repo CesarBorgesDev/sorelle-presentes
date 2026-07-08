@@ -1,6 +1,6 @@
 import { normalizeProductQuantity, syncProductInStock } from './productStock.js';
 
-const EMPTY_VARIANTS = { colors: [], sizes: [], stock: [] };
+const EMPTY_VARIANTS = { colors: [], sizes: [], stock: [], size_specifications: {} };
 
 function slugify(value) {
   return String(value || '')
@@ -51,7 +51,26 @@ export function normalizeProductVariants(rawVariants) {
     }))
     : [];
 
-  return { colors, sizes, stock };
+  const sizeSpecifications = normalizeSizeSpecifications(rawVariants.size_specifications, sizes);
+
+  return { colors, sizes, stock, size_specifications: sizeSpecifications };
+}
+
+function normalizeSizeSpecifications(raw, sizes = []) {
+  const specs = raw && typeof raw === 'object' ? raw : {};
+  const result = {};
+
+  for (const size of sizes) {
+    result[size] = String(specs[size] ?? '');
+  }
+
+  return result;
+}
+
+export function getSizeSpecification(variants, size) {
+  const normalized = normalizeProductVariants(variants);
+  if (!size) return '';
+  return String(normalized.size_specifications?.[size] || '').trim();
 }
 
 export function usesSizeStock(variants) {

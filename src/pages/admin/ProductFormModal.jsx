@@ -45,7 +45,13 @@ export default function ProductFormModal({ product, onClose }) {
   });
 
   const [productImages, setProductImages] = useState(() => buildInitialProductImages(product));
-  const [variants, setVariants] = useState(() => product?.variants || { colors: [], sizes: [], stock: [] });
+  const [variants, setVariants] = useState(() => ({
+    colors: [],
+    sizes: [],
+    stock: [],
+    size_specifications: {},
+    ...(product?.variants || {}),
+  }));
   const [internalCodeError, setInternalCodeError] = useState('');
   const [checkingInternalCode, setCheckingInternalCode] = useState(false);
   const [submitError, setSubmitError] = useState('');

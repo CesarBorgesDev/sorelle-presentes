@@ -110,7 +110,7 @@ router.post('/', requireAuth, requireAdmin, async (req, res) => {
         JSON.stringify(images.images), data.featured ?? false, data.in_stock ?? false,
         data.quantity ?? 0, data.internal_code || null, data.sku || null, data.materials || null, data.dimensions || null,
         data.weight_kg ?? null, data.length_cm ?? null, data.width_cm ?? null, data.height_cm ?? null,
-        JSON.stringify(data.variants || { colors: [], sizes: [], stock: [] }),
+        JSON.stringify(data.variants || { colors: [], sizes: [], stock: [], size_specifications: {} }),
       ]
     );
     res.status(201).json(rowToEntity(result.rows[0]));

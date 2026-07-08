@@ -16,6 +16,7 @@ import {
   ensureVariantStockMatrix,
   getColorImages,
   getVariantStock,
+  getSizeSpecification,
   hasProductVariants,
   resolveVariantAvailability,
   usesSizeStock,
@@ -84,6 +85,9 @@ export default function ProductDetail() {
   const hasVariants = hasProductVariants(variants);
   const hasSizeGrid = usesSizeStock(variants);
   const selectedColor = variants.colors.find((color) => color.id === selectedColorId) || null;
+  const selectedSizeSpecification = selectedSize
+    ? getSizeSpecification(variants, selectedSize)
+    : '';
 
   const availability = resolveVariantAvailability(product, selectedColorId, selectedSize);
   const available = availability.available;
@@ -357,6 +361,17 @@ export default function ProductDetail() {
                     );
                   })}
                 </div>
+              </div>
+            )}
+
+            {selectedSize && selectedSizeSpecification && (
+              <div className="mb-6 p-4 border border-primary/20 rounded-sm bg-primary/5">
+                <p className="font-body text-xs tracking-wider uppercase text-muted-foreground mb-2">
+                  Especificações — tamanho {selectedSize}
+                </p>
+                <p className="font-body text-sm text-foreground leading-relaxed whitespace-pre-line">
+                  {selectedSizeSpecification}
+                </p>
               </div>
             )}
 
