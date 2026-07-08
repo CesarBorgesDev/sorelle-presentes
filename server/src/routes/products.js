@@ -10,7 +10,8 @@ import { applyVariantsToProductPayload } from '../utils/productVariants.js';
 const router = Router();
 
 const ALLOWED_FIELDS = [
-  'name', 'description', 'price', 'original_price', 'category', 'subcategory',
+  'name', 'description', 'product_specifications', 'technology', 'care_instructions',
+  'price', 'original_price', 'category', 'subcategory',
   'image_url', 'images', 'featured', 'in_stock', 'quantity', 'internal_code', 'sku', 'materials', 'dimensions',
   'weight_kg', 'length_cm', 'width_cm', 'height_cm', 'variants',
 ];
@@ -99,10 +100,12 @@ router.post('/', requireAuth, requireAdmin, async (req, res) => {
     await assertInternalCodeAvailable(pool, data.internal_code);
     const images = normalizeProductImages(data);
     const result = await pool.query(
-      `INSERT INTO products (name, description, price, original_price, category, subcategory, image_url, images, featured, in_stock, quantity, internal_code, sku, materials, dimensions, weight_kg, length_cm, width_cm, height_cm, variants)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20) RETURNING *`,
+      `INSERT INTO products (name, description, product_specifications, technology, care_instructions, price, original_price, category, subcategory, image_url, images, featured, in_stock, quantity, internal_code, sku, materials, dimensions, weight_kg, length_cm, width_cm, height_cm, variants)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23) RETURNING *`,
       [
-        data.name, data.description || null, data.price, data.original_price || null,
+        data.name, data.description || null, data.product_specifications || null,
+        data.technology || null, data.care_instructions || null,
+        data.price, data.original_price || null,
         data.category, data.subcategory || null, images.image_url,
         JSON.stringify(images.images), data.featured ?? false, data.in_stock ?? false,
         data.quantity ?? 0, data.internal_code || null, data.sku || null, data.materials || null, data.dimensions || null,

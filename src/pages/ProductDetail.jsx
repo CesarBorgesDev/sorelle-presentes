@@ -389,6 +389,30 @@ export default function ProductDetail() {
                 </ProductAccordionSection>
               )}
 
+              {product.product_specifications && (
+                <ProductAccordionSection title="Especificações do produto">
+                  <p className="font-body text-sm text-muted-foreground leading-relaxed whitespace-pre-line">
+                    {product.product_specifications}
+                  </p>
+                </ProductAccordionSection>
+              )}
+
+              {product.technology && (
+                <ProductAccordionSection title="Tecnologia">
+                  <p className="font-body text-sm text-muted-foreground leading-relaxed whitespace-pre-line">
+                    {product.technology}
+                  </p>
+                </ProductAccordionSection>
+              )}
+
+              {product.care_instructions && (
+                <ProductAccordionSection title="Cuidados">
+                  <p className="font-body text-sm text-muted-foreground leading-relaxed whitespace-pre-line">
+                    {product.care_instructions}
+                  </p>
+                </ProductAccordionSection>
+              )}
+
               {technicalSpecs.length > 0 && (
                 <ProductAccordionSection title="Especificações técnicas">
                   <div className="space-y-3">

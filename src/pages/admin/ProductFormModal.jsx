@@ -26,6 +26,9 @@ export default function ProductFormModal({ product, onClose }) {
   const [form, setForm] = useState({
     name: product?.name || '',
     description: product?.description || '',
+    product_specifications: product?.product_specifications || '',
+    technology: product?.technology || '',
+    care_instructions: product?.care_instructions || '',
     price: product?.price || '',
     original_price: product?.original_price || '',
     category: product?.category || 'casa',
@@ -243,6 +246,21 @@ export default function ProductFormModal({ product, onClose }) {
             <div className="md:col-span-2">
               <label className={labelClass}>Descrição</label>
               <textarea rows={3} className={inputClass} value={form.description} onChange={(e) => set('description', e.target.value)} placeholder="Descrição detalhada do produto..." />
+            </div>
+
+            <div className="md:col-span-2">
+              <label className={labelClass}>Especificações do produto</label>
+              <textarea rows={3} className={inputClass} value={form.product_specifications} onChange={(e) => set('product_specifications', e.target.value)} placeholder="Detalhes, composição, acabamento..." />
+            </div>
+
+            <div className="md:col-span-2">
+              <label className={labelClass}>Tecnologia</label>
+              <textarea rows={3} className={inputClass} value={form.technology} onChange={(e) => set('technology', e.target.value)} placeholder="Tecnologias, diferenciais e inovações do produto..." />
+            </div>
+
+            <div className="md:col-span-2">
+              <label className={labelClass}>Cuidados</label>
+              <textarea rows={3} className={inputClass} value={form.care_instructions} onChange={(e) => set('care_instructions', e.target.value)} placeholder="Instruções de lavagem, conservação e uso..." />
             </div>
 
             <div>

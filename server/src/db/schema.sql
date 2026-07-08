@@ -18,6 +18,9 @@ CREATE TABLE IF NOT EXISTS products (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name VARCHAR(255) NOT NULL,
   description TEXT,
+  product_specifications TEXT,
+  technology TEXT,
+  care_instructions TEXT,
   price NUMERIC(10, 2) NOT NULL,
   original_price NUMERIC(10, 2),
   category VARCHAR(50) NOT NULL CHECK (category IN ('casa', 'decoracao', 'fragancias', 'cama_mesa_banho')),
@@ -214,3 +217,7 @@ ALTER TABLE product_kits ADD COLUMN IF NOT EXISTS original_price NUMERIC(10, 2);
 ALTER TABLE products ADD COLUMN IF NOT EXISTS variants JSONB NOT NULL DEFAULT '{"colors":[],"sizes":[],"stock":[]}'::jsonb;
 ALTER TABLE cart_items ADD COLUMN IF NOT EXISTS variant_color VARCHAR(100);
 ALTER TABLE cart_items ADD COLUMN IF NOT EXISTS variant_size VARCHAR(50);
+
+ALTER TABLE products ADD COLUMN IF NOT EXISTS product_specifications TEXT;
+ALTER TABLE products ADD COLUMN IF NOT EXISTS technology TEXT;
+ALTER TABLE products ADD COLUMN IF NOT EXISTS care_instructions TEXT;
