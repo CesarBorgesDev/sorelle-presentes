@@ -284,18 +284,7 @@ export default function ProductDetail() {
               {product.name}
             </h1>
 
-            <div className="flex items-center gap-3 mb-8">
-              <span className="font-body text-xl font-medium text-foreground">
-                R$ {product.price?.toFixed(2).replace('.', ',')}
-              </span>
-              {product.original_price && (
-                <span className="font-body text-sm text-muted-foreground line-through">
-                  R$ {product.original_price?.toFixed(2).replace('.', ',')}
-                </span>
-              )}
-            </div>
-
-            <ProductPaymentConditions price={product.price} />
+            <ProductPaymentConditions price={product.price} originalPrice={product.original_price} />
 
             {variants.colors.length > 0 && (
               <div className="mb-6">
