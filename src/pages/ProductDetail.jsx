@@ -51,34 +51,6 @@ function ProductAccordionSection({ title, children, defaultOpen = false }) {
   );
 }
 
-function buildTechnicalSpecs(product) {
-  const specs = [];
-
-  if (product.materials) {
-    specs.push({ label: 'Material', value: product.materials });
-  }
-  if (product.dimensions) {
-    specs.push({ label: 'Dimensões', value: product.dimensions });
-  }
-  if (product.weight_kg) {
-    specs.push({ label: 'Peso', value: `${product.weight_kg} kg` });
-  }
-  if (product.length_cm || product.width_cm || product.height_cm) {
-    const parts = [product.length_cm, product.width_cm, product.height_cm].filter(Boolean);
-    if (parts.length > 0) {
-      specs.push({ label: 'Medidas (C x L x A)', value: `${parts.join(' x ')} cm` });
-    }
-  }
-  if (product.internal_code) {
-    specs.push({ label: 'Código interno', value: product.internal_code });
-  }
-  if (product.sku) {
-    specs.push({ label: 'SKU', value: product.sku });
-  }
-
-  return specs;
-}
-
 export default function ProductDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -212,7 +184,6 @@ export default function ProductDetail() {
   }
 
   const allImages = getColorImages(product, selectedColorId).map(resolveMediaUrl);
-  const technicalSpecs = buildTechnicalSpecs(product);
 
   const thumbnailButtonClass = (isActive) => (
     `rounded-sm overflow-hidden border-2 transition-all ${
@@ -410,19 +381,6 @@ export default function ProductDetail() {
                   <p className="font-body text-sm text-muted-foreground leading-relaxed whitespace-pre-line">
                     {product.care_instructions}
                   </p>
-                </ProductAccordionSection>
-              )}
-
-              {technicalSpecs.length > 0 && (
-                <ProductAccordionSection title="Especificações técnicas">
-                  <div className="space-y-3">
-                    {technicalSpecs.map((spec) => (
-                      <div key={spec.label} className="flex justify-between gap-4 font-body text-sm">
-                        <span className="text-muted-foreground shrink-0">{spec.label}</span>
-                        <span className="text-foreground text-right">{spec.value}</span>
-                      </div>
-                    ))}
-                  </div>
                 </ProductAccordionSection>
               )}
             </div>
