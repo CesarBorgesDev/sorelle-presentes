@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/api/apiClient';import { buildInitialProductImages, buildProductImagePayload } from '@/lib/productImages';
 import ProductImagesEditor from './ProductImagesEditor';
 import ProductVariantsEditor from './ProductVariantsEditor';
+import { ensureVariantStockMatrix, getTotalSizeStock, usesSizeStock } from '@/lib/productVariants';
 import { X } from 'lucide-react';
 
 const CATEGORIES = [
@@ -144,6 +145,8 @@ export default function ProductFormModal({ product, onClose }) {
   const inputClass = 'w-full px-3 py-2.5 bg-background border border-border rounded-sm font-body text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring';
   const labelClass = 'block font-body text-xs text-muted-foreground tracking-wider uppercase mb-1.5';
   const selectedCategory = CATEGORIES.find((c) => c.value === form.category);
+  const hasSizeGrid = usesSizeStock(variants);
+  const computedStockTotal = getTotalSizeStock(ensureVariantStockMatrix(variants));
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -208,19 +211,22 @@ export default function ProductFormModal({ product, onClose }) {
             </div>
 
             <div>
-              <label className={labelClass}>Quantidade em estoque *</label>
+              <label className={labelClass}>Quantidade em estoque{hasSizeGrid ? ' (total)' : ' *'}</label>
               <input
-                required
+                required={!hasSizeGrid}
+                readOnly={hasSizeGrid}
                 type="number"
                 min="0"
                 step="1"
-                className={inputClass}
-                value={form.quantity}
+                className={`${inputClass} ${hasSizeGrid ? 'bg-secondary/50 cursor-not-allowed' : ''}`}
+                value={hasSizeGrid ? (computedStockTotal ?? 0) : form.quantity}
                 onChange={(e) => set('quantity', e.target.value)}
                 placeholder="0"
               />
               <p className="font-body text-xs text-muted-foreground mt-1">
-                Com quantidade zero, o produto fica indisponível para venda.
+                {hasSizeGrid
+                  ? 'Com grade de tamanhos, o estoque é controlado por tamanho na seção abaixo.'
+                  : 'Com quantidade zero, o produto fica indisponível para venda.'}
               </p>
             </div>
 

@@ -66,11 +66,26 @@ export default function ProductVariantsEditor({ variants, onChange }) {
 
   const addColor = () => {
     const index = colors.length + 1;
+    const newColor = {
+      id: `cor-${index}`,
+      name: `Cor ${index}`,
+      hex: '#cccccc',
+      image_url: null,
+      images: [],
+    };
+
+    let nextStock = [...stock];
+    if (sizes.length) {
+      sizes.forEach((size) => {
+        nextStock.push({ color_id: newColor.id, size, quantity: 0 });
+      });
+    } else {
+      nextStock.push({ color_id: newColor.id, size: null, quantity: 0 });
+    }
+
     updateVariants({
-      colors: [
-        ...colors,
-        { id: `cor-${index}`, name: `Cor ${index}`, hex: '#cccccc', image_url: null, images: [] },
-      ],
+      colors: [...colors, newColor],
+      stock: nextStock,
     });
   };
 
@@ -90,7 +105,20 @@ export default function ProductVariantsEditor({ variants, onChange }) {
   const addSize = () => {
     const value = sizeInput.trim().toUpperCase();
     if (!value || sizes.includes(value)) return;
-    updateVariants({ sizes: [...sizes, value] });
+
+    let nextStock = [...stock];
+    if (colors.length) {
+      colors.forEach((color) => {
+        nextStock.push({ color_id: color.id, size: value, quantity: 0 });
+      });
+    } else {
+      nextStock.push({ color_id: null, size: value, quantity: 0 });
+    }
+
+    updateVariants({
+      sizes: [...sizes, value],
+      stock: nextStock,
+    });
     setSizeInput('');
   };
 
@@ -250,7 +278,9 @@ export default function ProductVariantsEditor({ variants, onChange }) {
 
       {stockRows.length > 0 && (
         <div className="space-y-3">
-          <label className={labelClass}>Grade de estoque</label>
+          <label className={labelClass}>
+            {sizes.length > 0 && colors.length === 0 ? 'Estoque por tamanho' : 'Grade de estoque'}
+          </label>
           <div className="overflow-x-auto border border-border rounded-sm">
             <table className="w-full min-w-[320px]">
               <thead className="bg-secondary/50">

@@ -24,6 +24,7 @@ import {
 } from '../utils/cieloWebhook.js';
 import { trackCorreiosPackage } from '../services/correiosTracking.js';
 import { normalizeProductQuantity } from '../utils/productStock.js';
+import { resolveVariantAvailability, decrementProductVariantStock } from '../utils/productVariants.js';
 import { streamOrderInvoice, withInvoiceFlags, withInvoiceFlagsList } from '../services/invoiceAccess.js';
 
 const router = Router();
@@ -91,7 +92,8 @@ async function loadCart(userId) {
 
 async function validateCartStock(userId) {
   const result = await pool.query(
-    `SELECT ci.product_name, ci.quantity AS cart_quantity, p.quantity AS stock_quantity
+    `SELECT ci.product_name, ci.quantity AS cart_quantity, ci.variant_color, ci.variant_size,
+            p.quantity AS stock_quantity, p.variants
      FROM cart_items ci
      JOIN products p ON p.id = ci.product_id
      WHERE ci.user_id = $1`,
@@ -99,16 +101,39 @@ async function validateCartStock(userId) {
   );
 
   for (const item of result.rows) {
-    const stockQuantity = normalizeProductQuantity(item.stock_quantity);
     const cartQuantity = normalizeProductQuantity(item.cart_quantity);
+    const availability = resolveVariantAvailability(
+      { quantity: item.stock_quantity, variants: item.variants },
+      item.variant_color,
+      item.variant_size
+    );
 
-    if (stockQuantity <= 0) {
-      throw new Error(`"${item.product_name}" está indisponível (estoque zerado).`);
+    if (!availability.available) {
+      throw new Error(`"${item.product_name}" está indisponível para a combinação selecionada.`);
     }
 
-    if (cartQuantity > stockQuantity) {
-      throw new Error(`Estoque insuficiente para "${item.product_name}". Disponível: ${stockQuantity}.`);
+    if (cartQuantity > availability.quantity) {
+      throw new Error(`Estoque insuficiente para "${item.product_name}". Disponível: ${availability.quantity}.`);
     }
+  }
+}
+
+async function consumeCartStock(userId) {
+  const result = await pool.query(
+    `SELECT ci.product_id, ci.quantity, ci.variant_color, ci.variant_size
+     FROM cart_items ci
+     WHERE ci.user_id = $1`,
+    [userId]
+  );
+
+  for (const item of result.rows) {
+    await decrementProductVariantStock(
+      pool,
+      item.product_id,
+      item.variant_color,
+      item.variant_size,
+      item.quantity
+    );
   }
 }
 
@@ -159,6 +184,8 @@ async function createOrderFromCart({ userId, customer, paymentMethod, shipping }
       customer.customer_zip_code ? `CEP: ${customer.customer_zip_code}` : null,
     ]
   );
+
+  await consumeCartStock(userId);
 
   return rowToEntity(orderResult.rows[0]);
 }

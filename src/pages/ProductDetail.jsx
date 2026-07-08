@@ -11,10 +11,12 @@ import RelatedKitsCarousel from '@/components/RelatedKitsCarousel';
 import ProductShippingCalculator from '@/components/ProductShippingCalculator';
 import {
   buildVariantLabel,
+  ensureVariantStockMatrix,
   getColorImages,
+  getVariantStock,
   hasProductVariants,
-  normalizeProductVariants,
   resolveVariantAvailability,
+  usesSizeStock,
 } from '@/lib/productVariants';
 import {
   Collapsible,
@@ -104,8 +106,9 @@ export default function ProductDetail() {
   });
 
   const relatedKits = relatedKitsData?.kits || [];
-  const variants = normalizeProductVariants(product?.variants);
+  const variants = ensureVariantStockMatrix(product?.variants);
   const hasVariants = hasProductVariants(variants);
+  const hasSizeGrid = usesSizeStock(variants);
   const selectedColor = variants.colors.find((color) => color.id === selectedColorId) || null;
 
   const availability = resolveVariantAvailability(product, selectedColorId, selectedSize);
@@ -115,7 +118,7 @@ export default function ProductDetail() {
 
   useEffect(() => {
     if (!product) return;
-    const nextVariants = normalizeProductVariants(product.variants);
+    const nextVariants = ensureVariantStockMatrix(product.variants);
     setSelectedColorId(nextVariants.colors[0]?.id || '');
     setSelectedSize('');
     setActiveImage(0);
@@ -348,7 +351,9 @@ export default function ProductDetail() {
                   {variants.sizes.map((size) => {
                     const isSelected = selectedSize === size;
                     const sizeAvailability = resolveVariantAvailability(product, selectedColorId, size);
-                    const disabled = hasVariants && variants.colors.length > 0 && !selectedColorId;
+                    const sizeStock = getVariantStock(variants, selectedColorId, size);
+                    const disabled = (variants.colors.length > 0 && !selectedColorId)
+                      || sizeAvailability.quantity <= 0;
 
                     return (
                       <button
@@ -356,13 +361,18 @@ export default function ProductDetail() {
                         type="button"
                         disabled={disabled}
                         onClick={() => setSelectedSize(size)}
-                        className={`min-w-[44px] h-10 px-3 border rounded-sm font-body text-sm transition-colors disabled:opacity-40 ${
+                        className={`min-w-[52px] h-auto min-h-[40px] px-3 py-2 border rounded-sm font-body text-sm transition-colors flex flex-col items-center justify-center ${
                           isSelected
                             ? 'border-foreground bg-secondary text-foreground'
                             : 'border-border text-foreground hover:bg-secondary/60'
-                        } ${!sizeAvailability.available && !disabled ? 'opacity-50 line-through' : ''}`}
+                        } ${disabled ? 'opacity-40 cursor-not-allowed line-through' : ''}`}
                       >
-                        {size}
+                        <span>{size}</span>
+                        {hasSizeGrid && !disabled && (
+                          <span className="text-[10px] text-muted-foreground mt-0.5">
+                            {sizeStock} un.
+                          </span>
+                        )}
                       </button>
                     );
                   })}
@@ -415,7 +425,9 @@ export default function ProductDetail() {
                   </button>
                 </div>
                 <span className="font-body text-xs text-muted-foreground">
-                  {stockQuantity} em estoque
+                  {hasSizeGrid && selectedSize
+                    ? `${stockQuantity} em estoque no tamanho ${selectedSize}`
+                    : `${stockQuantity} em estoque`}
                 </span>
               </div>
             )}

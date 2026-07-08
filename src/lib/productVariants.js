@@ -2,6 +2,10 @@ import { normalizeProductQuantity } from '@/lib/productStock';
 
 const EMPTY_VARIANTS = { colors: [], sizes: [], stock: [] };
 
+function stockKey(colorId, size) {
+  return `${colorId || ''}|${size || ''}`;
+}
+
 export function normalizeProductVariants(rawVariants) {
   if (!rawVariants || typeof rawVariants !== 'object') {
     return { ...EMPTY_VARIANTS };
@@ -16,14 +20,63 @@ export function normalizeProductVariants(rawVariants) {
   return { colors, sizes, stock };
 }
 
+export function usesSizeStock(variants) {
+  return normalizeProductVariants(variants).sizes.length > 0;
+}
+
+export function ensureVariantStockMatrix(variants) {
+  const normalized = normalizeProductVariants(variants);
+  const { colors, sizes } = normalized;
+
+  if (!colors.length && !sizes.length) {
+    return normalized;
+  }
+
+  const stockMap = new Map(
+    normalized.stock.map((entry) => [stockKey(entry.color_id, entry.size), normalizeProductQuantity(entry.quantity)])
+  );
+
+  const stock = [];
+
+  if (colors.length && sizes.length) {
+    for (const color of colors) {
+      for (const size of sizes) {
+        stock.push({
+          color_id: color.id,
+          size,
+          quantity: stockMap.get(stockKey(color.id, size)) ?? 0,
+        });
+      }
+    }
+  } else if (sizes.length) {
+    for (const size of sizes) {
+      stock.push({
+        color_id: null,
+        size,
+        quantity: stockMap.get(stockKey(null, size)) ?? 0,
+      });
+    }
+  } else {
+    for (const color of colors) {
+      stock.push({
+        color_id: color.id,
+        size: null,
+        quantity: stockMap.get(stockKey(color.id, null)) ?? 0,
+      });
+    }
+  }
+
+  return { ...normalized, stock };
+}
+
 export function hasProductVariants(variants) {
   const normalized = normalizeProductVariants(variants);
   return normalized.colors.length > 0 || normalized.sizes.length > 0;
 }
 
 export function getVariantStock(variants, colorId, size) {
-  const normalized = normalizeProductVariants(variants);
-  if (!normalized.stock.length) return null;
+  const normalized = ensureVariantStockMatrix(variants);
+  if (!hasProductVariants(normalized)) return null;
 
   const color = colorId ? String(colorId).trim() : null;
   const selectedSize = size ? String(size).trim() : null;
@@ -32,7 +85,12 @@ export function getVariantStock(variants, colorId, size) {
     (entry.color_id || null) === color
     && (entry.size || null) === selectedSize
   ));
+
   if (exact) return normalizeProductQuantity(exact.quantity);
+
+  if (normalized.sizes.length > 0) {
+    return 0;
+  }
 
   return 0;
 }
@@ -56,7 +114,7 @@ export function getColorImages(product, colorId) {
 }
 
 export function resolveVariantAvailability(product, colorId, size) {
-  const variants = normalizeProductVariants(product?.variants);
+  const variants = ensureVariantStockMatrix(product?.variants);
   const hasVariants = hasProductVariants(variants);
 
   if (!hasVariants) {
@@ -72,15 +130,22 @@ export function resolveVariantAvailability(product, colorId, size) {
     return { available: false, quantity: 0, requiresSelection: true, missing: 'size' };
   }
 
-  const variantQuantity = getVariantStock(variants, colorId, size);
-  const quantity = variantQuantity != null
-    ? variantQuantity
-    : normalizeProductQuantity(product?.quantity);
+  const quantity = getVariantStock(variants, colorId, size);
 
-  return { available: quantity > 0, quantity, requiresSelection: false };
+  return {
+    available: quantity > 0,
+    quantity,
+    requiresSelection: false,
+  };
 }
 
 export function buildVariantLabel(colorName, size) {
   const parts = [colorName, size].filter(Boolean);
   return parts.join(' / ');
+}
+
+export function getTotalSizeStock(variants) {
+  const normalized = ensureVariantStockMatrix(variants);
+  if (!normalized.sizes.length) return null;
+  return normalized.stock.reduce((sum, entry) => sum + normalizeProductQuantity(entry.quantity), 0);
 }
