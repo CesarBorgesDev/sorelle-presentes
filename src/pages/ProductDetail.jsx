@@ -5,11 +5,17 @@ import { api } from '@/api/apiClient';
 import { useAuth } from '@/lib/AuthContext';
 import { motion } from 'framer-motion';
 import { ArrowLeft, Minus, Plus, ShoppingBag, Check, Heart, ChevronDown } from 'lucide-react';
-import { getProductImages } from '@/lib/productImages';
-import { isProductAvailable, normalizeProductQuantity } from '@/lib/productStock';
 import { resolveMediaUrl } from '@/lib/resolveMediaUrl';
 import { Button } from '@/components/ui/button';
 import RelatedKitsCarousel from '@/components/RelatedKitsCarousel';
+import ProductShippingCalculator from '@/components/ProductShippingCalculator';
+import {
+  buildVariantLabel,
+  getColorImages,
+  hasProductVariants,
+  normalizeProductVariants,
+  resolveVariantAvailability,
+} from '@/lib/productVariants';
 import {
   Collapsible,
   CollapsibleContent,
@@ -79,6 +85,8 @@ export default function ProductDetail() {
   const [added, setAdded] = useState(false);
   const [wishlisted, setWishlisted] = useState(false);
   const [activeImage, setActiveImage] = useState(0);
+  const [selectedColorId, setSelectedColorId] = useState('');
+  const [selectedSize, setSelectedSize] = useState('');
   const queryClient = useQueryClient();
 
   const { data: product, isLoading } = useQuery({
@@ -96,10 +104,27 @@ export default function ProductDetail() {
   });
 
   const relatedKits = relatedKitsData?.kits || [];
+  const variants = normalizeProductVariants(product?.variants);
+  const hasVariants = hasProductVariants(variants);
+  const selectedColor = variants.colors.find((color) => color.id === selectedColorId) || null;
 
-  const available = isProductAvailable(product);
-  const stockQuantity = normalizeProductQuantity(product?.quantity);
+  const availability = resolveVariantAvailability(product, selectedColorId, selectedSize);
+  const available = availability.available;
+  const stockQuantity = availability.quantity;
   const maxQuantity = available ? stockQuantity : 0;
+
+  useEffect(() => {
+    if (!product) return;
+    const nextVariants = normalizeProductVariants(product.variants);
+    setSelectedColorId(nextVariants.colors[0]?.id || '');
+    setSelectedSize('');
+    setActiveImage(0);
+    setQuantity(1);
+  }, [product?.id]);
+
+  useEffect(() => {
+    setActiveImage(0);
+  }, [selectedColorId]);
 
   useEffect(() => {
     if (maxQuantity > 0 && quantity > maxQuantity) {
@@ -140,13 +165,23 @@ export default function ProductDetail() {
       navigate('/login');
       return;
     }
+    if (availability.requiresSelection) {
+      return;
+    }
+
+    const variantLabel = buildVariantLabel(selectedColor?.name, selectedSize);
+    const displayName = variantLabel ? `${product.name} - ${variantLabel}` : product.name;
+    const displayImage = getColorImages(product, selectedColorId)[0] || product.image_url;
+
     addToCartMutation.mutate({
       product_id: product.id,
-      product_name: product.name,
-      product_image: product.image_url,
+      product_name: displayName,
+      product_image: displayImage,
       price: product.price,
       quantity,
       wrapping: 'none',
+      variant_color: selectedColorId || null,
+      variant_size: selectedSize || null,
     });
   };
 
@@ -173,7 +208,7 @@ export default function ProductDetail() {
     );
   }
 
-  const allImages = getProductImages(product).map(resolveMediaUrl);
+  const allImages = getColorImages(product, selectedColorId).map(resolveMediaUrl);
   const technicalSpecs = buildTechnicalSpecs(product);
 
   const thumbnailButtonClass = (isActive) => (
@@ -267,6 +302,74 @@ export default function ProductDetail() {
               )}
             </div>
 
+            {variants.colors.length > 0 && (
+              <div className="mb-6">
+                <p className="font-body text-xs tracking-wider uppercase text-muted-foreground mb-3">
+                  Cor{selectedColor?.name ? `: ${selectedColor.name}` : ''}
+                </p>
+                <div className="flex flex-wrap gap-3">
+                  {variants.colors.map((color) => {
+                    const isSelected = selectedColorId === color.id;
+                    return (
+                      <button
+                        key={color.id}
+                        type="button"
+                        onClick={() => setSelectedColorId(color.id)}
+                        title={color.name}
+                        className={`w-11 h-11 rounded-full overflow-hidden border-2 transition-all ${
+                          isSelected ? 'border-primary ring-2 ring-primary/20' : 'border-border hover:border-foreground/40'
+                        }`}
+                      >
+                        {color.image_url ? (
+                          <img
+                            src={resolveMediaUrl(color.image_url)}
+                            alt={color.name}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <span
+                            className="block w-full h-full"
+                            style={{ backgroundColor: color.hex || '#cccccc' }}
+                          />
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {variants.sizes.length > 0 && (
+              <div className="mb-6">
+                <p className="font-body text-xs tracking-wider uppercase text-muted-foreground mb-3">
+                  Tamanho{selectedSize ? `: ${selectedSize}` : ''}
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {variants.sizes.map((size) => {
+                    const isSelected = selectedSize === size;
+                    const sizeAvailability = resolveVariantAvailability(product, selectedColorId, size);
+                    const disabled = hasVariants && variants.colors.length > 0 && !selectedColorId;
+
+                    return (
+                      <button
+                        key={size}
+                        type="button"
+                        disabled={disabled}
+                        onClick={() => setSelectedSize(size)}
+                        className={`min-w-[44px] h-10 px-3 border rounded-sm font-body text-sm transition-colors disabled:opacity-40 ${
+                          isSelected
+                            ? 'border-foreground bg-secondary text-foreground'
+                            : 'border-border text-foreground hover:bg-secondary/60'
+                        } ${!sizeAvailability.available && !disabled ? 'opacity-50 line-through' : ''}`}
+                      >
+                        {size}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             <div className="mb-8">
               {product.description && (
                 <ProductAccordionSection title="Descrição">
@@ -317,9 +420,21 @@ export default function ProductDetail() {
               </div>
             )}
 
+            {hasVariants && availability.requiresSelection && (
+              <p className="font-body text-sm text-muted-foreground mb-4">
+                {availability.missing === 'color'
+                  ? 'Selecione uma cor para continuar.'
+                  : 'Selecione um tamanho para continuar.'}
+              </p>
+            )}
+
+            <div className="mb-6">
+              <ProductShippingCalculator productId={product.id} quantity={quantity} />
+            </div>
+
             <Button
               onClick={handleAddToCart}
-              disabled={addToCartMutation.isPending || !available}
+              disabled={addToCartMutation.isPending || !available || availability.requiresSelection}
               className="w-full bg-foreground text-background hover:bg-foreground/90 font-body tracking-wider uppercase text-sm py-6 rounded-sm"
             >
               {added ? (

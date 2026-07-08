@@ -1,12 +1,13 @@
 import { Router } from 'express';
 import pool from '../config/db.js';
-import { requireAuth } from '../middleware/auth.js';
+import { requireAuth, optionalAuth } from '../middleware/auth.js';
 import {
   getCorreiosConfig,
   buildPackageFromProducts,
   quoteCorreiosShipping,
   fetchAddressByCep,
 } from '../services/correios.js';
+import { normalizeProductQuantity } from '../utils/productStock.js';
 
 const router = Router();
 
@@ -45,7 +46,45 @@ router.post('/cotacao', requireAuth, async (req, res) => {
   }
 });
 
-router.get('/cep/:cep', requireAuth, async (req, res) => {
+router.post('/cotacao-produto', optionalAuth, async (req, res) => {
+  try {
+    const { product_id, quantity = 1, destination_zip } = req.body;
+    const config = await getCorreiosConfig();
+
+    if (!product_id) {
+      return res.status(400).json({ message: 'Produto não informado' });
+    }
+
+    const result = await pool.query(
+      `SELECT id, weight_kg, length_cm, width_cm, height_cm
+       FROM products WHERE id = $1`,
+      [product_id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: 'Produto não encontrado' });
+    }
+
+    const product = result.rows[0];
+    const packageInfo = buildPackageFromProducts([{
+      ...product,
+      quantity: normalizeProductQuantity(quantity) || 1,
+    }], config);
+
+    const quote = await quoteCorreiosShipping({
+      destinationZip: destination_zip,
+      packageInfo,
+      config,
+    });
+
+    res.json(quote);
+  } catch (err) {
+    console.error('Erro ao cotar frete do produto:', err);
+    res.status(400).json({ message: err.message || 'Erro ao calcular frete' });
+  }
+});
+
+router.get('/cep/:cep', optionalAuth, async (req, res) => {
   try {
     const address = await fetchAddressByCep(req.params.cep);
     res.json(address);

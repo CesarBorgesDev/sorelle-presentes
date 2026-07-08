@@ -2,7 +2,8 @@ import { Router } from 'express';
 import pool from '../config/db.js';
 import { requireAuth } from '../middleware/auth.js';
 import { rowToEntity, rowsToEntities } from '../utils/helpers.js';
-import { isProductAvailable, normalizeProductQuantity } from '../utils/productStock.js';
+import { normalizeProductQuantity } from '../utils/productStock.js';
+import { resolveVariantAvailability } from '../utils/productVariants.js';
 
 const router = Router();
 
@@ -10,13 +11,13 @@ router.use(requireAuth);
 
 async function loadProductStock(productId) {
   const result = await pool.query(
-    'SELECT id, name, quantity, in_stock, image_url, price FROM products WHERE id = $1',
+    'SELECT id, name, quantity, in_stock, image_url, price, variants FROM products WHERE id = $1',
     [productId]
   );
   return result.rows[0] || null;
 }
 
-async function validateCartQuantity(productId, requestedQuantity) {
+async function validateCartQuantity(productId, requestedQuantity, variantColor, variantSize) {
   const product = await loadProductStock(productId);
   if (!product) {
     const err = new Error('Produto não encontrado');
@@ -25,14 +26,26 @@ async function validateCartQuantity(productId, requestedQuantity) {
   }
 
   const quantity = normalizeProductQuantity(requestedQuantity);
-  if (!isProductAvailable(product)) {
-    const err = new Error(`"${product.name}" está indisponível (estoque zerado)`);
+  const availability = resolveVariantAvailability(product, variantColor, variantSize);
+
+  if (availability.requiresSelection) {
+    const err = new Error(
+      availability.missing === 'color'
+        ? 'Selecione uma cor antes de adicionar ao carrinho'
+        : 'Selecione um tamanho antes de adicionar ao carrinho'
+    );
     err.status = 400;
     throw err;
   }
 
-  if (quantity > normalizeProductQuantity(product.quantity)) {
-    const err = new Error(`Estoque insuficiente para "${product.name}". Disponível: ${product.quantity}`);
+  if (!availability.available) {
+    const err = new Error(`"${product.name}" está indisponível para a combinação selecionada`);
+    err.status = 400;
+    throw err;
+  }
+
+  if (quantity > availability.quantity) {
+    const err = new Error(`Estoque insuficiente para "${product.name}". Disponível: ${availability.quantity}`);
     err.status = 400;
     throw err;
   }
@@ -56,11 +69,18 @@ router.post('/', async (req, res) => {
   try {
     const data = req.body;
     const requestedQuantity = normalizeProductQuantity(data.quantity || 1);
-    const product = await validateCartQuantity(data.product_id, requestedQuantity);
+    const variantColor = data.variant_color?.trim() || null;
+    const variantSize = data.variant_size?.trim() || null;
+    const product = await validateCartQuantity(
+      data.product_id,
+      requestedQuantity,
+      variantColor,
+      variantSize
+    );
 
     const result = await pool.query(
-      `INSERT INTO cart_items (user_id, product_id, product_name, product_image, price, quantity, wrapping)
-       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
+      `INSERT INTO cart_items (user_id, product_id, product_name, product_image, price, quantity, wrapping, variant_color, variant_size)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
       [
         req.user.id,
         data.product_id,
@@ -69,6 +89,8 @@ router.post('/', async (req, res) => {
         data.price ?? product.price,
         requestedQuantity,
         data.wrapping || 'none',
+        variantColor,
+        variantSize,
       ]
     );
     res.status(201).json(rowToEntity(result.rows[0]));
@@ -79,45 +101,35 @@ router.post('/', async (req, res) => {
 
 router.patch('/:id', async (req, res) => {
   try {
-    const data = req.body;
-    const allowed = ['quantity', 'wrapping'];
-    const sets = [];
-    const values = [];
-    let idx = 1;
-
-    if (data.quantity !== undefined) {
-      const current = await pool.query(
-        'SELECT product_id FROM cart_items WHERE id = $1 AND user_id = $2',
-        [req.params.id, req.user.id]
-      );
-      if (current.rows.length === 0) {
-        return res.status(404).json({ message: 'Item não encontrado' });
-      }
-      await validateCartQuantity(current.rows[0].product_id, data.quantity);
-    }
-
-    for (const field of allowed) {
-      if (data[field] !== undefined) {
-        sets.push(`${field} = $${idx++}`);
-        values.push(field === 'quantity' ? normalizeProductQuantity(data[field]) : data[field]);
-      }
-    }
-
-    if (sets.length === 0) {
-      return res.status(400).json({ message: 'Nenhum campo para atualizar' });
-    }
-
-    sets.push('updated_date = NOW()');
-    values.push(req.params.id, req.user.id);
-
-    const result = await pool.query(
-      `UPDATE cart_items SET ${sets.join(', ')} WHERE id = $${idx} AND user_id = $${idx + 1} RETURNING *`,
-      values
+    const existing = await pool.query(
+      'SELECT * FROM cart_items WHERE id = $1 AND user_id = $2',
+      [req.params.id, req.user.id]
     );
 
-    if (result.rows.length === 0) {
+    if (existing.rows.length === 0) {
       return res.status(404).json({ message: 'Item não encontrado' });
     }
+
+    const item = existing.rows[0];
+    const nextQuantity = req.body.quantity !== undefined
+      ? normalizeProductQuantity(req.body.quantity)
+      : item.quantity;
+
+    await validateCartQuantity(
+      item.product_id,
+      nextQuantity,
+      item.variant_color,
+      item.variant_size
+    );
+
+    const result = await pool.query(
+      `UPDATE cart_items
+       SET quantity = $1, updated_date = NOW()
+       WHERE id = $2 AND user_id = $3
+       RETURNING *`,
+      [nextQuantity, req.params.id, req.user.id]
+    );
+
     res.json(rowToEntity(result.rows[0]));
   } catch (err) {
     res.status(err.status || 500).json({ message: err.message || 'Erro ao atualizar item' });

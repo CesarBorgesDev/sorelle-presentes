@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/api/apiClient';import { buildInitialProductImages, buildProductImagePayload } from '@/lib/productImages';
 import ProductImagesEditor from './ProductImagesEditor';
+import ProductVariantsEditor from './ProductVariantsEditor';
 import { X } from 'lucide-react';
 
 const CATEGORIES = [
@@ -40,6 +41,7 @@ export default function ProductFormModal({ product, onClose }) {
   });
 
   const [productImages, setProductImages] = useState(() => buildInitialProductImages(product));
+  const [variants, setVariants] = useState(() => product?.variants || { colors: [], sizes: [], stock: [] });
   const [internalCodeError, setInternalCodeError] = useState('');
   const [checkingInternalCode, setCheckingInternalCode] = useState(false);
   const [submitError, setSubmitError] = useState('');
@@ -134,6 +136,7 @@ export default function ProductFormModal({ product, onClose }) {
       height_cm: parseOptionalNumber(form.height_cm),
       quantity: Math.max(0, parseInt(form.quantity, 10) || 0),
       internal_code: trimmedCode || null,
+      variants,
       ...imagePayload,
     });
   };
@@ -228,6 +231,8 @@ export default function ProductFormModal({ product, onClose }) {
               productCategory={selectedCategory?.label || form.category}
               productMaterials={form.materials}
             />
+
+            <ProductVariantsEditor variants={variants} onChange={setVariants} />
 
             <div className="md:col-span-2">
               <label className={labelClass}>Descrição</label>

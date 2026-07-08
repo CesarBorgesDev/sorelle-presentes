@@ -35,6 +35,7 @@ CREATE TABLE IF NOT EXISTS products (
   length_cm NUMERIC(8, 2),
   width_cm NUMERIC(8, 2),
   height_cm NUMERIC(8, 2),
+  variants JSONB NOT NULL DEFAULT '{"colors":[],"sizes":[],"stock":[]}',
   created_date TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_date TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -209,3 +210,7 @@ CREATE INDEX IF NOT EXISTS idx_product_kit_items_product_id ON product_kit_items
 
 ALTER TABLE product_kits ADD COLUMN IF NOT EXISTS price NUMERIC(10, 2);
 ALTER TABLE product_kits ADD COLUMN IF NOT EXISTS original_price NUMERIC(10, 2);
+
+ALTER TABLE products ADD COLUMN IF NOT EXISTS variants JSONB NOT NULL DEFAULT '{"colors":[],"sizes":[],"stock":[]}'::jsonb;
+ALTER TABLE cart_items ADD COLUMN IF NOT EXISTS variant_color VARCHAR(100);
+ALTER TABLE cart_items ADD COLUMN IF NOT EXISTS variant_size VARCHAR(50);

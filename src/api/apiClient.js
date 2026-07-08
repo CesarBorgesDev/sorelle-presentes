@@ -428,6 +428,17 @@ const shipping = {
     });
   },
 
+  async quoteProduct(product_id, quantity, destination_zip) {
+    return apiFetch('/shipping/cotacao-produto', {
+      method: 'POST',
+      body: JSON.stringify({
+        product_id,
+        quantity,
+        destination_zip,
+      }),
+    });
+  },
+
   async lookupCep(cep) {
     return apiFetch(`/shipping/cep/${cep.replace(/\D/g, '')}`);
   },
