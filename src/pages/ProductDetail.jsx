@@ -92,11 +92,29 @@ export default function ProductDetail() {
   useEffect(() => {
     if (!product) return;
     const nextVariants = ensureVariantStockMatrix(product.variants);
-    setSelectedColorId(nextVariants.colors[0]?.id || '');
+    const firstAvailableColor = nextVariants.colors.find(
+      (color) => getVariantStock(nextVariants, color.id, null) > 0
+    ) || nextVariants.colors[0];
+    setSelectedColorId(firstAvailableColor?.id || '');
     setSelectedSize('');
     setActiveImage(0);
     setQuantity(1);
   }, [product?.id]);
+
+  useEffect(() => {
+    if (!product || !hasSizeGrid) return;
+    const nextVariants = ensureVariantStockMatrix(product.variants);
+
+    if (selectedSize) {
+      const currentStock = getVariantStock(nextVariants, selectedColorId, selectedSize);
+      if (currentStock > 0) return;
+    }
+
+    const firstAvailableSize = nextVariants.sizes.find(
+      (size) => getVariantStock(nextVariants, selectedColorId, size) > 0
+    );
+    setSelectedSize(firstAvailableSize || '');
+  }, [product?.id, product?.variants, selectedColorId, hasSizeGrid, selectedSize]);
 
   useEffect(() => {
     setActiveImage(0);
@@ -455,7 +473,7 @@ export default function ProductDetail() {
               )}
             </Button>
 
-            {!available && (
+            {!available && !availability.requiresSelection && (
               <p className="font-body text-sm text-destructive mt-3 text-center">Produto indisponível</p>
             )}
           </motion.div>

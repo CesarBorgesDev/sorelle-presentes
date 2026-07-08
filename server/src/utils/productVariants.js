@@ -146,24 +146,59 @@ export function getVariantStock(variants, colorId, size) {
   return 0;
 }
 
+function usesLegacyProductStock(product, variants) {
+  const rawStock = normalizeProductVariants(product?.variants).stock;
+  const productQty = normalizeProductQuantity(product?.quantity);
+  return rawStock.length === 0 && productQty > 0;
+}
+
+function getProductLevelStock(product, variants) {
+  const variantTotal = getTotalVariantStock(variants);
+  const productQty = normalizeProductQuantity(product?.quantity);
+
+  if (!usesVariantStock(variants)) {
+    return productQty;
+  }
+
+  if (usesLegacyProductStock(product, variants)) {
+    return productQty;
+  }
+
+  return variantTotal ?? 0;
+}
+
 export function resolveVariantAvailability(product, colorId, size) {
   const variants = ensureVariantStockMatrix(product?.variants);
-  const hasVariants = hasProductVariants(variants);
+  const hasVariants = usesVariantStock(variants);
+  const productLevelStock = getProductLevelStock(product, variants);
 
   if (!hasVariants) {
-    const quantity = normalizeProductQuantity(product?.quantity);
-    return { available: quantity > 0, quantity, requiresSelection: false };
+    return { available: productLevelStock > 0, quantity: productLevelStock, requiresSelection: false };
+  }
+
+  if (usesLegacyProductStock(product, variants)) {
+    return { available: productLevelStock > 0, quantity: productLevelStock, requiresSelection: false };
   }
 
   const requiresColor = variants.colors.length > 0;
   const requiresSize = variants.sizes.length > 0;
 
   if (requiresColor && !colorId) {
-    return { available: false, quantity: 0, requiresSelection: true, missing: 'color' };
+    return {
+      available: productLevelStock > 0,
+      quantity: 0,
+      requiresSelection: true,
+      missing: 'color',
+    };
   }
 
   if (requiresSize && !size) {
-    return { available: false, quantity: 0, requiresSelection: true, missing: 'size' };
+    return {
+      available: productLevelStock > 0,
+      quantity: 0,
+      requiresSelection: true,
+      missing: 'size',
+    };
   }
 
   const quantity = getVariantStock(variants, colorId, size);

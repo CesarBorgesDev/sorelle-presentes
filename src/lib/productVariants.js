@@ -92,6 +92,12 @@ export function getVariantStock(variants, colorId, size) {
     return 0;
   }
 
+  if (color && !normalized.sizes.length) {
+    return normalized.stock
+      .filter((entry) => (entry.color_id || null) === color)
+      .reduce((sum, entry) => sum + normalizeProductQuantity(entry.quantity), 0);
+  }
+
   return 0;
 }
 
@@ -113,21 +119,68 @@ export function getColorImages(product, colorId) {
   ].filter(Boolean);
 }
 
+export function getTotalSizeStock(variants) {
+  const normalized = ensureVariantStockMatrix(variants);
+  if (!normalized.sizes.length) return null;
+  return normalized.stock.reduce((sum, entry) => sum + normalizeProductQuantity(entry.quantity), 0);
+}
+
+export function getTotalVariantStock(variants) {
+  const normalized = ensureVariantStockMatrix(variants);
+  if (!hasProductVariants(normalized)) return null;
+  return normalized.stock.reduce((sum, entry) => sum + normalizeProductQuantity(entry.quantity), 0);
+}
+
+function usesLegacyProductStock(product, variants) {
+  const rawStock = normalizeProductVariants(product?.variants).stock;
+  const productQty = normalizeProductQuantity(product?.quantity);
+  return rawStock.length === 0 && productQty > 0;
+}
+
+function getProductLevelStock(product, variants) {
+  const variantTotal = getTotalVariantStock(variants);
+  const productQty = normalizeProductQuantity(product?.quantity);
+
+  if (!hasProductVariants(variants)) {
+    return productQty;
+  }
+
+  if (usesLegacyProductStock(product, variants)) {
+    return productQty;
+  }
+
+  return variantTotal ?? 0;
+}
+
 export function resolveVariantAvailability(product, colorId, size) {
   const variants = ensureVariantStockMatrix(product?.variants);
   const hasVariants = hasProductVariants(variants);
+  const productLevelStock = getProductLevelStock(product, variants);
 
   if (!hasVariants) {
-    const quantity = normalizeProductQuantity(product?.quantity);
-    return { available: quantity > 0, quantity, requiresSelection: false };
+    return { available: productLevelStock > 0, quantity: productLevelStock, requiresSelection: false };
+  }
+
+  if (usesLegacyProductStock(product, variants)) {
+    return { available: productLevelStock > 0, quantity: productLevelStock, requiresSelection: false };
   }
 
   if (variants.colors.length > 0 && !colorId) {
-    return { available: false, quantity: 0, requiresSelection: true, missing: 'color' };
+    return {
+      available: productLevelStock > 0,
+      quantity: 0,
+      requiresSelection: true,
+      missing: 'color',
+    };
   }
 
   if (variants.sizes.length > 0 && !size) {
-    return { available: false, quantity: 0, requiresSelection: true, missing: 'size' };
+    return {
+      available: productLevelStock > 0,
+      quantity: 0,
+      requiresSelection: true,
+      missing: 'size',
+    };
   }
 
   const quantity = getVariantStock(variants, colorId, size);
@@ -142,10 +195,4 @@ export function resolveVariantAvailability(product, colorId, size) {
 export function buildVariantLabel(colorName, size) {
   const parts = [colorName, size].filter(Boolean);
   return parts.join(' / ');
-}
-
-export function getTotalSizeStock(variants) {
-  const normalized = ensureVariantStockMatrix(variants);
-  if (!normalized.sizes.length) return null;
-  return normalized.stock.reduce((sum, entry) => sum + normalizeProductQuantity(entry.quantity), 0);
 }
