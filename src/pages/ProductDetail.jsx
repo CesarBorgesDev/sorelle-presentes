@@ -9,6 +9,7 @@ import { resolveMediaUrl } from '@/lib/resolveMediaUrl';
 import { Button } from '@/components/ui/button';
 import RelatedKitsCarousel from '@/components/RelatedKitsCarousel';
 import ProductShippingCalculator from '@/components/ProductShippingCalculator';
+import ProductPaymentConditions from '@/components/ProductPaymentConditions';
 import {
   buildVariantLabel,
   ensureVariantStockMatrix,
@@ -275,6 +276,8 @@ export default function ProductDetail() {
                 </span>
               )}
             </div>
+
+            <ProductPaymentConditions price={product.price} />
 
             {variants.colors.length > 0 && (
               <div className="mb-6">

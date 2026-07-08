@@ -2,7 +2,13 @@ import { Router } from 'express';
 import pool from '../config/db.js';
 import { requireAuth } from '../middleware/auth.js';
 import { getCieloConfig } from '../services/cieloConfig.js';
-import { getAvailablePaymentMethods, resolvePaymentProvider, getCheckoutPaymentMethod } from '../services/paymentMethods.js';
+import {
+  getAvailablePaymentMethods,
+  resolvePaymentProvider,
+  getCheckoutPaymentMethod,
+  getPixDiscountPercent,
+  getPublicPaymentConditions,
+} from '../services/paymentMethods.js';
 import { rowToEntity, rowsToEntities } from '../utils/helpers.js';
 import {
   buildCieloPayload,
@@ -31,7 +37,7 @@ const router = Router();
 
 const VALID_PAYMENT_METHODS = ['pix', 'cartao_credito', 'boleto', 'test'];
 
-function calcTotals(cartItems, shippingCost = 0) {
+function calcTotals(cartItems, shippingCost = 0, { pixDiscountPercent = 0, applyPixDiscount = false } = {}) {
   const subtotal = cartItems.reduce(
     (sum, item) => sum + Number(item.price) * Number(item.quantity || 1),
     0
@@ -41,11 +47,17 @@ function calcTotals(cartItems, shippingCost = 0) {
     0
   );
   const shipping = Number(shippingCost) || 0;
+  const merchandiseTotal = subtotal + wrappingCost;
+  let pixDiscount = 0;
+  if (applyPixDiscount && pixDiscountPercent > 0) {
+    pixDiscount = merchandiseTotal * (pixDiscountPercent / 100);
+  }
   return {
     subtotal,
     wrappingCost,
     shippingCost: shipping,
-    total: subtotal + wrappingCost + shipping,
+    pixDiscount,
+    total: merchandiseTotal + shipping - pixDiscount,
   };
 }
 
@@ -148,7 +160,12 @@ async function createOrderFromCart({ userId, customer, paymentMethod, shipping }
 
   await validateCartStock(userId);
 
-  const { subtotal, wrappingCost, shippingCost, total } = calcTotals(cartItems, shipping.price);
+  const pixDiscountPercent = paymentMethod === 'pix' ? await getPixDiscountPercent() : 0;
+  const { subtotal, wrappingCost, shippingCost, pixDiscount, total } = calcTotals(
+    cartItems,
+    shipping.price,
+    { pixDiscountPercent, applyPixDiscount: paymentMethod === 'pix' }
+  );
   const orderItems = cartItems.map((item) => ({
     product_id: item.product_id,
     product_name: item.product_name,
@@ -181,7 +198,10 @@ async function createOrderFromCart({ userId, customer, paymentMethod, shipping }
       'pendente',
       paymentMethod,
       'aguardando_pagamento',
-      customer.customer_zip_code ? `CEP: ${customer.customer_zip_code}` : null,
+      [
+        customer.customer_zip_code ? `CEP: ${customer.customer_zip_code}` : null,
+        pixDiscount > 0 ? `Desconto PIX: R$ ${pixDiscount.toFixed(2)}` : null,
+      ].filter(Boolean).join(' | ') || null,
     ]
   );
 
@@ -315,6 +335,15 @@ async function startCheckout(req, res) {
     payment_method: paymentMethod,
   });
 }
+
+router.get('/condicoes-pagamento', async (_req, res) => {
+  try {
+    res.json(await getPublicPaymentConditions());
+  } catch (err) {
+    console.error('Erro ao carregar condições de pagamento:', err);
+    res.status(500).json({ message: 'Erro ao carregar condições de pagamento' });
+  }
+});
 
 router.get('/metodos', requireAuth, async (_req, res) => {
   try {

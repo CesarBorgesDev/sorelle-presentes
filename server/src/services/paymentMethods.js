@@ -90,6 +90,27 @@ export async function getAvailablePaymentMethods() {
   }];
 }
 
+export async function getPixDiscountPercent() {
+  const raw = (await getSetting('pix_discount_percent')) || process.env.PIX_DISCOUNT_PERCENT || '0';
+  return Math.min(100, Math.max(0, Number(raw) || 0));
+}
+
+/** Condições de pagamento exibidas na loja (público). */
+export async function getPublicPaymentConditions() {
+  const cieloConfig = await getCieloConfig();
+  const checkoutMethod = await getCheckoutPaymentMethod();
+  const pixDiscountPercent = await getPixDiscountPercent();
+  const maxInstallments = cieloConfig.maxInstallments;
+
+  return {
+    max_installments: maxInstallments,
+    pix_discount_percent: pixDiscountPercent,
+    checkout_method: checkoutMethod,
+    shows_installments: maxInstallments >= 2,
+    shows_pix_discount: pixDiscountPercent > 0,
+  };
+}
+
 export async function resolvePaymentProvider(paymentMethod) {
   const configured = await getCheckoutPaymentMethod();
   if (paymentMethod !== configured) {

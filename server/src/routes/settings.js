@@ -3,7 +3,12 @@ import { requireAuth, requireAdmin } from '../middleware/auth.js';
 import { getSetting, setSetting, maskToken } from '../services/settings.js';
 import { DEFAULT_IMAGE_MODEL } from '../services/imageGeneration.js';
 import { getCieloConfig, getCieloRequirements } from '../services/cieloConfig.js';
-import { CHECKOUT_OPTIONS, getCheckoutPaymentMethod, getCheckoutConfig } from '../services/paymentMethods.js';
+import {
+  CHECKOUT_OPTIONS,
+  getCheckoutPaymentMethod,
+  getCheckoutConfig,
+  getPixDiscountPercent,
+} from '../services/paymentMethods.js';
 import { getCorreiosConfig } from '../services/correios.js';
 
 const router = Router();
@@ -41,6 +46,8 @@ async function buildSettingsResponse(message) {
       pix_key_masked: maskToken(pixKey),
       has_pix_key: Boolean(pixKey || process.env.PIX_KEY),
       pix_holder_name: pixHolderName || process.env.PIX_HOLDER_NAME || '',
+      max_installments: cieloConfig.maxInstallments,
+      pix_discount_percent: await getPixDiscountPercent(),
     },
     correios: {
       origin_zip: correiosConfig.originZip,
@@ -105,6 +112,7 @@ router.put('/', requireAuth, requireAdmin, async (req, res) => {
       checkout_payment_method,
       pix_key,
       pix_holder_name,
+      pix_discount_percent,
       correios_origin_zip,
       correios_company_code,
       correios_password,
@@ -182,6 +190,11 @@ router.put('/', requireAuth, requireAdmin, async (req, res) => {
 
     if (pix_holder_name !== undefined) {
       await setSetting('pix_holder_name', pix_holder_name.trim());
+    }
+
+    if (pix_discount_percent !== undefined && pix_discount_percent !== '') {
+      const discount = Math.min(100, Math.max(0, Number(pix_discount_percent) || 0));
+      await setSetting('pix_discount_percent', String(discount));
     }
 
     if (correios_origin_zip !== undefined) {

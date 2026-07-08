@@ -350,6 +350,10 @@ const images = {
 };
 
 const checkout = {
+  async getPaymentConditions() {
+    return apiFetch('/checkout/condicoes-pagamento');
+  },
+
   async getMethods() {
     return apiFetch('/checkout/metodos');
   },

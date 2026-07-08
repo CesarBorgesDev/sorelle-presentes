@@ -53,6 +53,7 @@ export default function AdminSettings() {
   const [checkoutMethod, setCheckoutMethod] = useState('pix');
   const [pixKey, setPixKey] = useState('');
   const [pixHolderName, setPixHolderName] = useState('');
+  const [pixDiscountPercent, setPixDiscountPercent] = useState('0');
   const [correiosOriginZip, setCorreiosOriginZip] = useState('');
   const [correiosCompanyCode, setCorreiosCompanyCode] = useState('');
   const [correiosPassword, setCorreiosPassword] = useState('');
@@ -94,6 +95,10 @@ export default function AdminSettings() {
     if (data?.payment) {
       setCheckoutMethod(data.payment.checkout_method || 'pix');
       setPixHolderName(data.payment.pix_holder_name || '');
+      setPixDiscountPercent(String(data.payment.pix_discount_percent ?? 0));
+      if (data.payment.max_installments) {
+        setCieloMaxInstallments(String(data.payment.max_installments));
+      }
     }
     if (data?.correios) {
       setCorreiosOriginZip(data.correios.origin_zip || '');
@@ -143,6 +148,7 @@ export default function AdminSettings() {
       cielo_max_installments: cieloMaxInstallments,
       checkout_payment_method: checkoutMethod,
       pix_holder_name: pixHolderName.trim(),
+      pix_discount_percent: pixDiscountPercent,
       correios_origin_zip: correiosOriginZip.replace(/\D/g, ''),
       correios_sender_name: correiosSenderName.trim(),
       correios_sender_street: correiosSenderStreet.trim(),
@@ -313,6 +319,48 @@ export default function AdminSettings() {
                 </div>
               </>
             )}
+
+            <div className="pt-4 border-t border-border space-y-4">
+              <div>
+                <h3 className="font-display text-base tracking-wide text-foreground">Condições na loja</h3>
+                <p className="font-body text-xs text-muted-foreground mt-1">
+                  Exibidas na página do produto e usadas no checkout (desconto PIX).
+                </p>
+              </div>
+
+              <div className="grid sm:grid-cols-2 gap-4">
+                <div>
+                  <label className={labelClass}>Parcelas no cartão (máximo)</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={12}
+                    className={inputClass}
+                    value={cieloMaxInstallments}
+                    onChange={(e) => setCieloMaxInstallments(e.target.value)}
+                  />
+                  <p className="font-body text-xs text-muted-foreground mt-1">
+                    Até 12x. Também enviado ao checkout Cielo.
+                  </p>
+                </div>
+
+                <div>
+                  <label className={labelClass}>Desconto no PIX (%)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    step={0.5}
+                    className={inputClass}
+                    value={pixDiscountPercent}
+                    onChange={(e) => setPixDiscountPercent(e.target.value)}
+                  />
+                  <p className="font-body text-xs text-muted-foreground mt-1">
+                    0 = sem desconto. Aplicado sobre produtos e embalagem no checkout PIX.
+                  </p>
+                </div>
+              </div>
+            </div>
             </TabsContent>
 
             <TabsContent value="frete" className="space-y-6 mt-0 focus-visible:outline-none">
