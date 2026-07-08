@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { isProductAvailable } from '@/lib/productStock';
+import ProductImage from '@/components/ProductImage';
 
 export default function ProductListRow({ product, className = '' }) {
   const discount = product.original_price
@@ -14,10 +15,10 @@ export default function ProductListRow({ product, className = '' }) {
     >
       <div className="relative w-24 sm:w-32 shrink-0 aspect-[4/5] rounded-sm overflow-hidden bg-secondary">
         {product.image_url ? (
-          <img
+          <ProductImage
             src={product.image_url}
             alt={product.name}
-            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+            className="w-full h-full"
           />
         ) : (
           <div className="w-full h-full bg-secondary" />

@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import RelatedKitsCarousel from '@/components/RelatedKitsCarousel';
 import ProductShippingCalculator from '@/components/ProductShippingCalculator';
 import ProductPaymentConditions from '@/components/ProductPaymentConditions';
+import ProductImage from '@/components/ProductImage';
 import {
   buildVariantLabel,
   ensureVariantStockMatrix,
@@ -237,20 +238,18 @@ export default function ProductDetail() {
                       onClick={() => setActiveImage(i)}
                       className={`w-[72px] h-[88px] ${thumbnailButtonClass(activeImage === i)}`}
                     >
-                      <img src={img} alt="" className="w-full h-full object-cover" />
+                      <ProductImage src={img} alt="" className="w-full h-full" />
                     </button>
                   ))}
                 </div>
               )}
 
               <div className="flex-1 min-w-0">
-                <div className="aspect-[4/5] rounded-sm overflow-hidden bg-secondary">
-                  <img
-                    src={allImages[activeImage]}
-                    alt={product.name}
-                    className="w-full h-full object-cover"
-                  />
-                </div>
+                <ProductImage
+                  src={allImages[activeImage]}
+                  alt={product.name}
+                  className="aspect-[4/5] rounded-sm w-full"
+                />
               </div>
             </div>
 
@@ -263,7 +262,7 @@ export default function ProductDetail() {
                     onClick={() => setActiveImage(i)}
                     className={`w-16 h-20 shrink-0 ${thumbnailButtonClass(activeImage === i)}`}
                   >
-                    <img src={img} alt="" className="w-full h-full object-cover" />
+                    <ProductImage src={img} alt="" className="w-full h-full" />
                   </button>
                 ))}
               </div>

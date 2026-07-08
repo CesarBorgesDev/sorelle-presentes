@@ -4,6 +4,7 @@ import { api } from '@/api/apiClient';
 import { Plus, Pencil, Trash2, Search } from 'lucide-react';
 import ProductViewToggle, { useProductViewMode } from '@/components/ProductViewToggle';
 import ProductFormModal from './ProductFormModal';
+import ProductImage from '@/components/ProductImage';
 
 export default function AdminProducts() {
   const queryClient = useQueryClient();
@@ -104,12 +105,12 @@ export default function AdminProducts() {
           ) : (
             filtered.map((product) => (
               <div key={product.id} className="w-[200px] shrink-0">
-                <div className="w-[200px] h-[200px] bg-secondary border border-border rounded-sm overflow-hidden">
+                <div className="w-[200px] h-[200px] border border-border rounded-sm overflow-hidden">
                   {product.image_url ? (
-                    <img
+                    <ProductImage
                       src={product.image_url}
                       alt={product.name}
-                      className="w-full h-full object-cover"
+                      className="w-full h-full"
                     />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-muted-foreground font-body text-xs">

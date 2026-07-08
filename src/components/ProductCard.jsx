@@ -2,6 +2,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { ShoppingBag } from 'lucide-react';
+import ProductImage from '@/components/ProductImage';
 
 export default function ProductCard({ product, className = '' }) {
   const discount = product.original_price
@@ -19,10 +20,10 @@ export default function ProductCard({ product, className = '' }) {
       <Link to={`/produto/${product.id}`} className="block">
         {/* Image */}
         <div className="relative overflow-hidden rounded-sm aspect-[4/5] bg-secondary">
-          <img
+          <ProductImage
             src={product.image_url}
             alt={product.name}
-            className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+            className="w-full h-full"
           />
           {/* Overlay on hover */}
           <div className="absolute inset-0 bg-foreground/0 group-hover:bg-foreground/10 transition-all duration-500" />
