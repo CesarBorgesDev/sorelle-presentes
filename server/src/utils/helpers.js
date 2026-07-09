@@ -2,7 +2,7 @@ export function parseSort(sortParam) {
   if (!sortParam) return { column: 'created_date', direction: 'DESC' };
   const desc = sortParam.startsWith('-');
   const column = desc ? sortParam.slice(1) : sortParam;
-  const allowed = ['created_date', 'updated_date', 'name', 'price', 'total', 'status'];
+  const allowed = ['created_date', 'updated_date', 'name', 'price', 'total', 'status', 'sort_order'];
   const safeColumn = allowed.includes(column) ? column : 'created_date';
   return { column: safeColumn, direction: desc ? 'DESC' : 'ASC' };
 }
@@ -10,7 +10,7 @@ export function parseSort(sortParam) {
 const NUMERIC_FIELDS = [
   'price', 'original_price', 'subtotal', 'wrapping_cost', 'total',
   'commission_rate', 'commission_value', 'order_total', 'total_sales',
-  'total_commission', 'quantity',
+  'total_commission', 'quantity', 'sort_order',
 ];
 
 export function rowToEntity(row) {

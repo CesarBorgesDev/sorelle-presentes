@@ -44,6 +44,8 @@ import AdminProducts from '@/pages/admin/AdminProducts';
 
 import AdminKits from '@/pages/admin/AdminKits';
 
+import AdminBrands from '@/pages/admin/AdminBrands';
+
 import AdminOrders from '@/pages/admin/AdminOrders';
 
 import AdminAffiliates from '@/pages/admin/AdminAffiliates';
@@ -122,6 +124,8 @@ function AppRoutes() {
             <Route path="/admin/produtos" element={<AdminProducts />} />
 
             <Route path="/admin/kits" element={<AdminKits />} />
+
+            <Route path="/admin/marcas" element={<AdminBrands />} />
 
             <Route path="/admin/pedidos" element={<AdminOrders />} />
 

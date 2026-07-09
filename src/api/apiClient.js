@@ -525,6 +525,32 @@ const productKitsApi = {
   },
 };
 
+const brandsApi = {
+  list(includeInactive = false) {
+    const params = new URLSearchParams({ sort: 'sort_order', limit: '100' });
+    if (includeInactive) params.set('include_inactive', 'true');
+    return apiFetch(`/brands?${params}`);
+  },
+
+  create(data) {
+    return apiFetch('/brands', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  update(id, data) {
+    return apiFetch(`/brands/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  },
+
+  delete(id) {
+    return apiFetch(`/brands/${id}`, { method: 'DELETE' });
+  },
+};
+
 export const api = {
   auth,
   settings,
@@ -537,6 +563,7 @@ export const api = {
   account,
   products: productsApi,
   productKits: productKitsApi,
+  brands: brandsApi,
   entities: {
     Product: createEntityClient('products'),
     ProductKit: createEntityClient('product-kits'),

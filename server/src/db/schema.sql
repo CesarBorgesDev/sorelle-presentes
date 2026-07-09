@@ -221,3 +221,17 @@ ALTER TABLE cart_items ADD COLUMN IF NOT EXISTS variant_size VARCHAR(50);
 ALTER TABLE products ADD COLUMN IF NOT EXISTS product_specifications TEXT;
 ALTER TABLE products ADD COLUMN IF NOT EXISTS technology TEXT;
 ALTER TABLE products ADD COLUMN IF NOT EXISTS care_instructions TEXT;
+
+CREATE TABLE IF NOT EXISTS brands (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name VARCHAR(255) NOT NULL,
+  slug VARCHAR(255) UNIQUE NOT NULL,
+  logo_url TEXT,
+  website_url TEXT,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  active BOOLEAN NOT NULL DEFAULT TRUE,
+  created_date TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_date TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_brands_active_sort ON brands(active, sort_order);

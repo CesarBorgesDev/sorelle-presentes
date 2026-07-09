@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { Link, useLocation, Outlet } from 'react-router-dom';
-import { LayoutDashboard, Package, ShoppingBag, Menu, X, LogOut, Users, Settings, FileText, Boxes } from 'lucide-react';
+import { LayoutDashboard, Package, ShoppingBag, Menu, X, LogOut, Users, Settings, FileText, Boxes, Tag } from 'lucide-react';
 import { api } from '@/api/apiClient';
 
 const navItems = [
   { label: 'Dashboard', icon: LayoutDashboard, path: '/admin' },
   { label: 'Produtos', icon: Package, path: '/admin/produtos' },
   { label: 'Kits', icon: Boxes, path: '/admin/kits' },
+  { label: 'Marcas', icon: Tag, path: '/admin/marcas' },
   { label: 'Pedidos', icon: ShoppingBag, path: '/admin/pedidos' },
   { label: 'Afiliados', icon: Users, path: '/admin/afiliados' },
   { label: 'Conteúdo', icon: FileText, path: '/admin/conteudo' },

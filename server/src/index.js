@@ -18,6 +18,7 @@ import shippingRoutes from './routes/shipping.js';
 import accountRoutes from './routes/account.js';
 import pagesRoutes from './routes/pages.js';
 import homeBannersRoutes from './routes/homeBanners.js';
+import brandRoutes from './routes/brands.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -69,6 +70,7 @@ app.use('/api/shipping', shippingRoutes);
 app.use('/api/account', accountRoutes);
 app.use('/api/pages', pagesRoutes);
 app.use('/api/home-banners', homeBannersRoutes);
+app.use('/api/brands', brandRoutes);
 
 app.use((_req, res) => {
   res.status(404).json({ message: 'Rota não encontrada' });
