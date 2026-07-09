@@ -9,6 +9,8 @@ import HomeBannersEditor from './HomeBannersEditor';
 const PAGE_TABS = [
   { slug: 'sobre-nos', label: 'Sobre Nós', path: '/sobre-nos' },
   { slug: 'politica-de-privacidade', label: 'Privacidade', path: '/politica-de-privacidade' },
+  { slug: 'termos-de-uso', label: 'Termos de Uso', path: '/termos-de-uso' },
+  { slug: 'trocas-e-devolucoes', label: 'Trocas e Devoluções', path: '/trocas-e-devolucoes' },
 ];
 
 function PageEditor({ page, onSave, saving, saved }) {

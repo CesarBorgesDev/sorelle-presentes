@@ -102,6 +102,10 @@ function AppRoutes() {
 
         <Route path="/politica-de-privacidade" element={<InstitutionalPage pageSlug="politica-de-privacidade" />} />
 
+        <Route path="/termos-de-uso" element={<InstitutionalPage pageSlug="termos-de-uso" />} />
+
+        <Route path="/trocas-e-devolucoes" element={<InstitutionalPage pageSlug="trocas-e-devolucoes" />} />
+
         <Route element={<ProtectedRoute unauthenticatedElement={<Navigate to="/login" replace />} />}>
           <Route path="/checkout" element={<Checkout />} />
           <Route path="/conta" element={<Account />} />

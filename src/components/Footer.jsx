@@ -66,13 +66,16 @@ export default function Footer() {
                   Política de Privacidade
                 </Link>
               </li>
-              {['Termos de Uso', 'Trocas e Devoluções'].map((item) => (
-                <li key={item}>
-                  <span className="font-body text-sm text-background/40 cursor-default">
-                    {item}
-                  </span>
-                </li>
-              ))}
+              <li>
+                <Link to="/termos-de-uso" className="font-body text-sm text-background/60 hover:text-background transition-colors">
+                  Termos de Uso
+                </Link>
+              </li>
+              <li>
+                <Link to="/trocas-e-devolucoes" className="font-body text-sm text-background/60 hover:text-background transition-colors">
+                  Trocas e Devoluções
+                </Link>
+              </li>
             </ul>
           </div>
 
