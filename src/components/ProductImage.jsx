@@ -1,9 +1,6 @@
 import React from 'react';
 
-/**
- * Exibe a imagem do produto inteira dentro do quadro (aspect ratio fixo),
- * centralizada, sem recorte e preservando a proporção original.
- */
+/** Preenche o quadro da imagem do produto sem bordas (object-cover). */
 export default function ProductImage({
   src,
   alt = '',
@@ -14,11 +11,11 @@ export default function ProductImage({
   if (!src) return null;
 
   return (
-    <div className={`flex items-center justify-center overflow-hidden bg-secondary ${className}`}>
+    <div className={`overflow-hidden ${className}`}>
       <img
         src={src}
         alt={alt}
-        className={`max-w-full max-h-full w-auto h-auto object-contain ${imgClassName}`}
+        className={`w-full h-full object-cover ${imgClassName}`}
         loading="lazy"
         decoding="async"
         {...props}

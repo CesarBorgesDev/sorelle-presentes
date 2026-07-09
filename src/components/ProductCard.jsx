@@ -24,6 +24,7 @@ export default function ProductCard({ product, className = '' }) {
             src={product.image_url}
             alt={product.name}
             className="w-full h-full"
+            imgClassName="transition-transform duration-700 group-hover:scale-105"
           />
           {/* Overlay on hover */}
           <div className="absolute inset-0 bg-foreground/0 group-hover:bg-foreground/10 transition-all duration-500" />

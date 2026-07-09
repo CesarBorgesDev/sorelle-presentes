@@ -19,6 +19,7 @@ export default function ProductListRow({ product, className = '' }) {
             src={product.image_url}
             alt={product.name}
             className="w-full h-full"
+            imgClassName="transition-transform duration-500 group-hover:scale-105"
           />
         ) : (
           <div className="w-full h-full bg-secondary" />

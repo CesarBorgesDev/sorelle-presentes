@@ -17,10 +17,22 @@ export default function Footer() {
               Curadoria de presentes e decoração para quem valoriza a arte de viver bem. Cada peça é selecionada com cuidado para transformar momentos em memórias.
             </p>
             <div className="flex gap-4">
-              <a href="#" className="text-background/60 hover:text-background transition-colors">
+              <a
+                href="https://www.instagram.com/sorellepresentes?igsh=MXltcHMzZ2F4MmQw&utm_source=qr"
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="Instagram da Sorelle Presentes"
+                className="text-background/60 hover:text-background transition-colors"
+              >
                 <Instagram className="w-5 h-5" />
               </a>
-              <a href="#" className="text-background/60 hover:text-background transition-colors">
+              <a
+                href="https://www.facebook.com/share/1ERxDH7Ucd/?mibextid=wwXIfr"
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="Facebook da Sorelle Presentes"
+                className="text-background/60 hover:text-background transition-colors"
+              >
                 <Facebook className="w-5 h-5" />
               </a>
             </div>
