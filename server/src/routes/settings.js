@@ -10,6 +10,7 @@ import {
   getPixDiscountPercent,
 } from '../services/paymentMethods.js';
 import { getCorreiosConfig } from '../services/correios.js';
+import { getRodonavesConfig } from '../services/rodonaves.js';
 
 const router = Router();
 
@@ -23,6 +24,7 @@ async function buildSettingsResponse(message) {
   const pixKey = await getSetting('pix_key');
   const pixHolderName = await getSetting('pix_holder_name');
   const correiosConfig = await getCorreiosConfig();
+  const rodonavesConfig = await getRodonavesConfig();
 
   return {
     ...(message ? { message } : {}),
@@ -79,6 +81,15 @@ async function buildSettingsResponse(message) {
       sender_complement: (await getSetting('correios_sender_complement')) || '',
       sender_cnpj: (await getSetting('correios_sender_cnpj')) || '',
     },
+    rodonaves: {
+      enabled: rodonavesConfig.enabled,
+      is_ready: rodonavesConfig.isReady,
+      label: rodonavesConfig.label,
+      username: rodonavesConfig.username,
+      has_password: Boolean(rodonavesConfig.password),
+      password_masked: maskToken(rodonavesConfig.password),
+      cnpj: rodonavesConfig.cnpj,
+    },
     cielo: {
       ...cieloConfig,
       merchant_id_masked: maskToken(cieloConfig.merchantId),
@@ -134,6 +145,11 @@ router.put('/', requireAuth, requireAdmin, async (req, res) => {
       shipping_carrier_name,
       shipping_carrier_price,
       shipping_carrier_deadline_days,
+      rodonaves_enabled,
+      rodonaves_username,
+      rodonaves_password,
+      rodonaves_cnpj,
+      rodonaves_label,
       image_model,
     } = req.body;
 
@@ -279,6 +295,26 @@ router.put('/', requireAuth, requireAdmin, async (req, res) => {
 
     if (shipping_carrier_deadline_days !== undefined && shipping_carrier_deadline_days !== '') {
       await setSetting('shipping_carrier_deadline_days', String(shipping_carrier_deadline_days));
+    }
+
+    if (rodonaves_enabled !== undefined) {
+      await setSetting('rodonaves_enabled', rodonaves_enabled ? 'true' : 'false');
+    }
+
+    if (rodonaves_username !== undefined) {
+      await setSetting('rodonaves_username', rodonaves_username.trim());
+    }
+
+    if (rodonaves_password !== undefined && rodonaves_password !== '') {
+      await setSetting('rodonaves_password', rodonaves_password.trim());
+    }
+
+    if (rodonaves_cnpj !== undefined) {
+      await setSetting('rodonaves_cnpj', rodonaves_cnpj.replace(/\D/g, '').slice(0, 14));
+    }
+
+    if (rodonaves_label !== undefined) {
+      await setSetting('rodonaves_label', String(rodonaves_label).trim());
     }
 
     if (image_model !== undefined && image_model !== '') {

@@ -13,13 +13,20 @@ const router = Router();
 
 async function loadCartProducts(userId) {
   const result = await pool.query(
-    `SELECT ci.quantity, p.weight_kg, p.length_cm, p.width_cm, p.height_cm
+    `SELECT ci.quantity, ci.price, p.weight_kg, p.length_cm, p.width_cm, p.height_cm
      FROM cart_items ci
      JOIN products p ON p.id = ci.product_id
      WHERE ci.user_id = $1`,
     [userId]
   );
   return result.rows;
+}
+
+function calcInvoiceValue(items) {
+  return items.reduce(
+    (sum, item) => sum + (Number(item.price) || 0) * (Number(item.quantity) || 1),
+    0
+  );
 }
 
 router.post('/cotacao', requireAuth, async (req, res) => {
@@ -37,6 +44,7 @@ router.post('/cotacao', requireAuth, async (req, res) => {
       destinationZip: destination_zip,
       packageInfo,
       config,
+      invoiceValue: calcInvoiceValue(cartProducts),
     });
 
     res.json(quote);
@@ -56,7 +64,7 @@ router.post('/cotacao-produto', optionalAuth, async (req, res) => {
     }
 
     const result = await pool.query(
-      `SELECT id, weight_kg, length_cm, width_cm, height_cm
+      `SELECT id, price, weight_kg, length_cm, width_cm, height_cm
        FROM products WHERE id = $1`,
       [product_id]
     );
@@ -66,15 +74,17 @@ router.post('/cotacao-produto', optionalAuth, async (req, res) => {
     }
 
     const product = result.rows[0];
+    const qty = normalizeProductQuantity(quantity) || 1;
     const packageInfo = buildPackageFromProducts([{
       ...product,
-      quantity: normalizeProductQuantity(quantity) || 1,
+      quantity: qty,
     }], config);
 
     const quote = await quoteCorreiosShipping({
       destinationZip: destination_zip,
       packageInfo,
       config,
+      invoiceValue: (Number(product.price) || 0) * qty,
     });
 
     res.json(quote);

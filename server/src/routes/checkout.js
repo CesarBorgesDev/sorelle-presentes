@@ -63,7 +63,7 @@ function calcTotals(cartItems, shippingCost = 0, { pixDiscountPercent = 0, apply
 
 async function loadCartProducts(userId) {
   const result = await pool.query(
-    `SELECT ci.quantity, p.weight_kg, p.length_cm, p.width_cm, p.height_cm
+    `SELECT ci.quantity, ci.price, p.weight_kg, p.length_cm, p.width_cm, p.height_cm
      FROM cart_items ci
      JOIN products p ON p.id = ci.product_id
      WHERE ci.user_id = $1`,
@@ -87,10 +87,15 @@ async function resolveShippingForCheckout(userId, customerZip, shippingServiceId
   }
 
   const packageInfo = buildPackageFromProducts(cartProducts, config);
+  const invoiceValue = cartProducts.reduce(
+    (sum, item) => sum + (Number(item.price) || 0) * (Number(item.quantity) || 1),
+    0
+  );
   return resolveShippingQuote({
     destinationZip: customerZip,
     serviceId: shippingServiceId,
     packageInfo,
+    invoiceValue,
   });
 }
 

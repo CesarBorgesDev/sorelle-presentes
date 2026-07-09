@@ -1,4 +1,5 @@
 import { getSetting } from './settings.js';
+import { getRodonavesConfig, quoteRodonavesShipping } from './rodonaves.js';
 
 const DEFAULT_ORIGIN_ZIP = '01310100';
 const DEFAULT_WEIGHT_KG = 0.3;
@@ -345,34 +346,59 @@ async function fetchCorreiosApiQuote({ destinationZip, packageInfo, config }) {
   };
 }
 
-export async function quoteCorreiosShipping({ destinationZip, packageInfo, config = null }) {
+async function tryAppendRodonavesOption(quote, { packageInfo, invoiceValue }) {
+  try {
+    const rodonavesConfig = await getRodonavesConfig();
+    if (!rodonavesConfig.enabled) return quote;
+
+    const option = await quoteRodonavesShipping({
+      originZip: quote.origin_zip,
+      destinationZip: quote.destination_zip,
+      packageInfo,
+      invoiceValue,
+      config: rodonavesConfig,
+    });
+
+    if (option) {
+      quote.options = [...quote.options, option];
+    }
+  } catch (err) {
+    console.warn('[Rodonaves] Cotação indisponível:', err.message);
+  }
+  return quote;
+}
+
+export async function quoteCorreiosShipping({ destinationZip, packageInfo, config = null, invoiceValue = 0 }) {
   const cfg = config || await getCorreiosConfig();
 
+  let quote;
   if (shouldUseEstimateOnly()) {
-    return buildEstimatedShippingQuote({
+    quote = buildEstimatedShippingQuote({
       cfg,
       destinationZip,
       packageInfo,
       fallbackReason: 'Modo estimado ativo (CORREIOS_FALLBACK=estimate)',
     });
+  } else {
+    try {
+      quote = await fetchCorreiosApiQuote({ destinationZip, packageInfo, config: cfg });
+    } catch (err) {
+      if (!shouldAutoFallback()) throw err;
+      console.warn('[Correios] API indisponível, usando frete estimado:', err.message);
+      quote = buildEstimatedShippingQuote({
+        cfg,
+        destinationZip,
+        packageInfo,
+        fallbackReason: err.message,
+      });
+    }
   }
 
-  try {
-    return await fetchCorreiosApiQuote({ destinationZip, packageInfo, config: cfg });
-  } catch (err) {
-    if (!shouldAutoFallback()) throw err;
-    console.warn('[Correios] API indisponível, usando frete estimado:', err.message);
-    return buildEstimatedShippingQuote({
-      cfg,
-      destinationZip,
-      packageInfo,
-      fallbackReason: err.message,
-    });
-  }
+  return tryAppendRodonavesOption(quote, { packageInfo, invoiceValue });
 }
 
-export async function resolveShippingQuote({ destinationZip, serviceId, packageInfo }) {
-  const quote = await quoteCorreiosShipping({ destinationZip, packageInfo });
+export async function resolveShippingQuote({ destinationZip, serviceId, packageInfo, invoiceValue = 0 }) {
+  const quote = await quoteCorreiosShipping({ destinationZip, packageInfo, invoiceValue });
   const selected = quote.options.find((o) => o.id === serviceId && o.available);
 
   if (!selected) {

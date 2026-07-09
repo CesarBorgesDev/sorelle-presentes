@@ -75,6 +75,11 @@ export default function AdminSettings() {
   const [carrierName, setCarrierName] = useState('Transportadora');
   const [carrierPrice, setCarrierPrice] = useState('');
   const [carrierDeadlineDays, setCarrierDeadlineDays] = useState('10');
+  const [rodonavesEnabled, setRodonavesEnabled] = useState(false);
+  const [rodonavesUsername, setRodonavesUsername] = useState('');
+  const [rodonavesPassword, setRodonavesPassword] = useState('');
+  const [rodonavesCnpj, setRodonavesCnpj] = useState('');
+  const [rodonavesLabel, setRodonavesLabel] = useState('Rodonaves');
   const [model, setModel] = useState('flux');
   const [saved, setSaved] = useState(false);
 
@@ -119,7 +124,13 @@ export default function AdminSettings() {
         setCarrierDeadlineDays(String(data.correios.carrier.deadlineDays || 10));
       }
     }
-  }, [data?.image_model, data?.cielo, data?.payment, data?.correios]);
+    if (data?.rodonaves) {
+      setRodonavesEnabled(Boolean(data.rodonaves.enabled));
+      setRodonavesUsername(data.rodonaves.username || '');
+      setRodonavesCnpj(data.rodonaves.cnpj || '');
+      setRodonavesLabel(data.rodonaves.label || 'Rodonaves');
+    }
+  }, [data?.image_model, data?.cielo, data?.payment, data?.correios, data?.rodonaves]);
 
   const mutation = useMutation({
     mutationFn: (payload) => api.settings.update(payload),
@@ -132,6 +143,7 @@ export default function AdminSettings() {
       setPixKey('');
       setCorreiosPassword('');
       setCorreiosApiPassword('');
+      setRodonavesPassword('');
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     },
@@ -162,6 +174,10 @@ export default function AdminSettings() {
       shipping_carrier_enabled: carrierEnabled,
       shipping_carrier_name: carrierName.trim(),
       shipping_carrier_deadline_days: carrierDeadlineDays,
+      rodonaves_enabled: rodonavesEnabled,
+      rodonaves_username: rodonavesUsername.trim(),
+      rodonaves_cnpj: rodonavesCnpj.replace(/\D/g, ''),
+      rodonaves_label: rodonavesLabel.trim() || 'Rodonaves',
     };
     if (pollinationsKey.trim()) payload.pollinations_api_key = pollinationsKey.trim();
     if (hfToken.trim()) payload.huggingface_api_token = hfToken.trim();
@@ -176,11 +192,13 @@ export default function AdminSettings() {
     if (correiosContractNumber.trim()) payload.correios_contract_number = correiosContractNumber.trim();
     if (correiosContractDr.trim()) payload.correios_contract_dr = correiosContractDr.trim();
     if (carrierPrice.trim()) payload.shipping_carrier_price = carrierPrice.trim().replace(',', '.');
+    if (rodonavesPassword.trim()) payload.rodonaves_password = rodonavesPassword.trim();
     mutation.mutate(payload);
   };
 
   const payment = data?.payment;
   const correios = data?.correios;
+  const rodonaves = data?.rodonaves;
   const checkoutOptions = payment?.checkout_options || [
     { id: 'pix', label: 'PIX', hint: 'Cielo ou chave manual' },
     { id: 'cartao_credito', label: 'Cartão de crédito', hint: 'Checkout Cielo' },
@@ -367,7 +385,7 @@ export default function AdminSettings() {
               <div>
                 <h2 className="font-display text-lg tracking-wide text-foreground">Frete</h2>
                 <p className="font-body text-sm text-muted-foreground mt-1">
-                  Correios (PAC/SEDEX) e transportadora própria. Informe o CEP de origem da loja.
+                  Correios (PAC/SEDEX), transportadora própria e Rodonaves. Informe o CEP de origem da loja.
                 </p>
               </div>
 
@@ -621,6 +639,92 @@ export default function AdminSettings() {
                       className={inputClass}
                       value={carrierDeadlineDays}
                       onChange={(e) => setCarrierDeadlineDays(e.target.value)}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="pt-4 border-t border-border space-y-4">
+              <div>
+                <h3 className="font-display text-base tracking-wide text-foreground">Rodonaves (integração API)</h3>
+                <p className="font-body text-sm text-muted-foreground mt-1">
+                  Cotação de frete em tempo real pela API da Rodonaves (RTE). É preciso ter cadastro
+                  como cliente Rodonaves e credenciais de API fornecidas pela transportadora.
+                </p>
+              </div>
+
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={rodonavesEnabled}
+                  onChange={(e) => setRodonavesEnabled(e.target.checked)}
+                  className="rounded border-border"
+                />
+                <span className="font-body text-sm text-foreground">Oferecer Rodonaves no checkout</span>
+              </label>
+
+              {rodonavesEnabled && !rodonaves?.is_ready && (
+                <div className="flex items-start gap-2 p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 rounded-sm">
+                  <AlertCircle className="w-4 h-4 mt-0.5 shrink-0 text-amber-600 dark:text-amber-400" />
+                  <p className="font-body text-xs text-amber-800 dark:text-amber-300">
+                    Preencha usuário, senha e CNPJ para a cotação funcionar. Enquanto isso, a opção
+                    Rodonaves não aparecerá no checkout.
+                  </p>
+                </div>
+              )}
+
+              {rodonavesEnabled && (
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <label className={labelClass}>Usuário da API *</label>
+                    <input
+                      type="text"
+                      className={inputClass}
+                      value={rodonavesUsername}
+                      onChange={(e) => setRodonavesUsername(e.target.value)}
+                      placeholder="Usuário fornecido pela Rodonaves"
+                      autoComplete="off"
+                    />
+                  </div>
+                  <div>
+                    <label className={labelClass}>Senha da API *</label>
+                    <input
+                      type="password"
+                      className={inputClass}
+                      value={rodonavesPassword}
+                      onChange={(e) => setRodonavesPassword(e.target.value)}
+                      placeholder={rodonaves?.has_password ? rodonaves.password_masked || 'Senha salva' : 'Senha de acesso'}
+                      autoComplete="new-password"
+                    />
+                    {rodonaves?.has_password && (
+                      <p className="font-body text-xs text-muted-foreground mt-1">
+                        Já configurada. Preencha apenas para trocar.
+                      </p>
+                    )}
+                  </div>
+                  <div>
+                    <label className={labelClass}>CNPJ do cliente Rodonaves *</label>
+                    <input
+                      type="text"
+                      className={inputClass}
+                      value={rodonavesCnpj}
+                      onChange={(e) => setRodonavesCnpj(e.target.value.replace(/\D/g, '').slice(0, 14))}
+                      placeholder="Somente números"
+                      autoComplete="off"
+                    />
+                    <p className="font-body text-xs text-muted-foreground mt-1">
+                      CNPJ vinculado ao contrato/tabela negociada com a Rodonaves.
+                    </p>
+                  </div>
+                  <div>
+                    <label className={labelClass}>Nome exibido ao cliente</label>
+                    <input
+                      type="text"
+                      className={inputClass}
+                      value={rodonavesLabel}
+                      onChange={(e) => setRodonavesLabel(e.target.value)}
+                      placeholder="Rodonaves"
                     />
                   </div>
                 </div>
