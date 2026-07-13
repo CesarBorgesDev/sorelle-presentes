@@ -60,6 +60,7 @@ export const CHECKOUT_OPTIONS = [
 ];
 
 const DEFAULT_CHECKOUT_METHOD = 'pix';
+const DEFAULT_ENABLED_METHODS = ['pix', 'cartao_credito'];
 const CIELO_METHODS = ['cartao_credito', 'cartao_debito', 'boleto'];
 
 async function getPixCredentials() {
@@ -85,7 +86,12 @@ export async function getEnabledPaymentMethodIds() {
   const single = (await getSetting('checkout_payment_method'))
     || process.env.CHECKOUT_PAYMENT_METHOD
     || DEFAULT_CHECKOUT_METHOD;
-  return PAYMENT_METHOD_DEFS[single] ? [single] : [DEFAULT_CHECKOUT_METHOD];
+
+  if (PAYMENT_METHOD_DEFS[single] && single !== DEFAULT_CHECKOUT_METHOD) {
+    return [single];
+  }
+
+  return DEFAULT_ENABLED_METHODS;
 }
 
 export async function getCheckoutPaymentMethod() {

@@ -19,6 +19,7 @@ export async function getCieloConfig() {
     maxInstallments: Math.min(12, Math.max(1, maxInstallments || 12)),
     returnUrlExample: `${frontendUrl}/pagamento/retorno?pedido=ID_DO_PEDIDO`,
     notificationUrl: `${backendPublicUrl}/api/checkout/cielo/notificacao`,
+    statusChangeUrl: `${backendPublicUrl}/api/checkout/cielo/mudanca-status`,
     isReady: Boolean(merchantId),
   };
 }
@@ -52,6 +53,14 @@ export function getCieloRequirements(config) {
       required: true,
       done: false,
       hint: `Cadastre no painel Cielo: ${config.notificationUrl}`,
+      manual: true,
+    },
+    {
+      id: 'status_change',
+      label: 'URL de mudança de status cadastrada no painel Cielo',
+      required: true,
+      done: false,
+      hint: `Cadastre no painel Cielo: ${config.statusChangeUrl}`,
       manual: true,
     },
     {

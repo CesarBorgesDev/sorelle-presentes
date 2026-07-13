@@ -259,5 +259,14 @@ INSERT INTO categories (name, slug, description, sort_order) VALUES
   ('Cama, Mesa & Banho', 'cama_mesa_banho', 'Tecidos nobres e texturas que acariciam os sentidos.', 4)
 ON CONFLICT (slug) DO NOTHING;
 
+-- PIX e cartão de crédito habilitados por padrão no checkout
+INSERT INTO app_settings (key, value) VALUES
+  ('payment_methods_enabled', '["pix","cartao_credito"]')
+ON CONFLICT (key) DO NOTHING;
+
+UPDATE app_settings
+SET value = '["pix","cartao_credito"]', updated_date = NOW()
+WHERE key = 'payment_methods_enabled' AND value = '["pix"]';
+
 -- Categoria de produto agora é validada pela tabela categories (constraint antiga removida)
 ALTER TABLE products DROP CONSTRAINT IF EXISTS products_category_check;

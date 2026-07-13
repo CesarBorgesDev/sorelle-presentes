@@ -52,7 +52,7 @@ export default function AdminSettings() {
   const [cieloCheckoutApiUrl, setCieloCheckoutApiUrl] = useState('');
   const [cieloMaxInstallments, setCieloMaxInstallments] = useState('12');
   const [checkoutMethod, setCheckoutMethod] = useState('pix');
-  const [enabledPaymentMethods, setEnabledPaymentMethods] = useState(['pix']);
+  const [enabledPaymentMethods, setEnabledPaymentMethods] = useState(['pix', 'cartao_credito']);
   const [pixKey, setPixKey] = useState('');
   const [pixHolderName, setPixHolderName] = useState('');
   const [pixDiscountPercent, setPixDiscountPercent] = useState('0');
@@ -955,8 +955,11 @@ export default function AdminSettings() {
                   placeholder="http://localhost:3000"
                 />
                 <p className="font-body text-xs text-muted-foreground mt-1">
-                  Retorno após pagamento:{' '}
+                  <strong>URL de Retorno</strong> (cadastre no painel Cielo):{' '}
                   <span className="font-mono break-all">{cielo?.returnUrlExample || '—'}</span>
+                </p>
+                <p className="font-body text-xs text-muted-foreground mt-1">
+                  O comprador é redirecionado para esta página após o pagamento. Nenhum dado é enviado pela Cielo.
                 </p>
               </div>
 
@@ -970,8 +973,16 @@ export default function AdminSettings() {
                   placeholder="http://localhost:3001"
                 />
                 <p className="font-body text-xs text-muted-foreground mt-1">
-                  URL de notificação (cadastre no painel Cielo):{' '}
+                  <strong>URL de Notificação</strong> (transação finalizada):{' '}
                   <span className="font-mono break-all">{cielo?.notificationUrl || '—'}</span>
+                </p>
+                <p className="font-body text-xs text-muted-foreground mt-1">
+                  <strong>URL de Mudança de Status</strong>:{' '}
+                  <span className="font-mono break-all">{cielo?.statusChangeUrl || '—'}</span>
+                </p>
+                <p className="font-body text-xs text-muted-foreground mt-1">
+                  Cadastre as duas URLs do backend no painel Cielo (Configurações → Notificação de Pagamentos).
+                  Pedidos com status <strong>Autorizado (7)</strong> ou <strong>Pago (2)</strong> são marcados como pagos automaticamente.
                 </p>
               </div>
 

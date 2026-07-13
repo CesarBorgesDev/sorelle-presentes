@@ -242,6 +242,13 @@ export default function Checkout() {
   const labelClass = 'block font-body text-xs text-muted-foreground tracking-wider uppercase mb-1.5';
   const isLoading = cartLoading || methodsLoading;
   const checkoutUnavailable = !isLoading && paymentMethods.length === 0;
+  const checkoutButtonLabel = isTestMode
+    ? 'Finalizar pedido de teste'
+    : paymentMethod === 'pix'
+      ? 'Pagar com PIX'
+      : paymentMethod === 'cartao_credito'
+        ? 'Pagar com cartão de crédito'
+        : 'Finalizar compra';
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-10">
@@ -469,6 +476,11 @@ export default function Checkout() {
 
               <div>
                 <label className={labelClass}>Forma de pagamento *</label>
+                {paymentMethods.some((m) => m.id === 'pix') && paymentMethods.some((m) => m.id === 'cartao_credito') && (
+                  <p className="font-body text-xs text-muted-foreground mb-3">
+                    Escolha entre PIX ou cartão de crédito para concluir seu pedido.
+                  </p>
+                )}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {paymentMethods.map((method) => {
                     const Icon = PAYMENT_ICONS[method.id] || CreditCard;
@@ -542,7 +554,7 @@ export default function Checkout() {
                 </>
               ) : (
                 <>
-                  {isTestMode ? 'Finalizar pedido de teste' : 'Finalizar compra'} — R$ {total.toFixed(2).replace('.', ',')}
+                  {checkoutButtonLabel} — R$ {total.toFixed(2).replace('.', ',')}
                 </>
               )}
             </Button>

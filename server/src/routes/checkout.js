@@ -21,12 +21,7 @@ import {
   resolveShippingQuote,
 } from '../services/correios.js';
 import { normalizeAddressInput, validateAddressFields } from '../utils/address.js';
-import {
-  extractCieloAuthorizationCode,
-  extractCieloMerchantOrderNumber,
-  extractCieloPaymentId,
-  mapCieloPaymentStatus,
-} from '../utils/cieloWebhook.js';
+import { applyCieloPaymentUpdate } from '../services/cieloNotifications.js';
 import { trackCorreiosPackage } from '../services/correiosTracking.js';
 import { normalizeProductQuantity } from '../utils/productStock.js';
 import { resolveVariantAvailability, decrementProductVariantStock } from '../utils/productVariants.js';
@@ -536,47 +531,20 @@ router.get('/pedido/:id/pix', requireAuth, async (req, res) => {
   }
 });
 
-router.post('/cielo/notificacao', async (req, res) => {
+async function handleCieloWebhook(req, res, label) {
   try {
-    const merchantOrderNumber = extractCieloMerchantOrderNumber(req.body);
-
-    if (!merchantOrderNumber) {
-      return res.status(400).json({ message: 'Notificação inválida' });
-    }
-
-    const paymentStatus = mapCieloPaymentStatus(req.body);
-    const isPaid = paymentStatus === 'pago';
-    const authorizationCode = extractCieloAuthorizationCode(req.body);
-    const paymentId = extractCieloPaymentId(req.body);
-
-    const result = await pool.query(
-      `UPDATE orders SET
-        payment_status = $1,
-        status = CASE
-          WHEN $2 THEN 'confirmado'
-          WHEN $1 = 'recusado' OR $1 = 'cancelado' THEN 'cancelado'
-          ELSE status
-        END,
-        cielo_authorization_code = COALESCE($3, cielo_authorization_code),
-        cielo_payment_id = COALESCE($4, cielo_payment_id),
-        updated_date = NOW()
-      WHERE gateway_order_number = $5
-      RETURNING id, customer_email`,
-      [paymentStatus, isPaid, authorizationCode, paymentId, merchantOrderNumber]
-    );
-
-    if (isPaid && result.rows[0]) {
-      await pool.query(
-        'DELETE FROM cart_items WHERE user_id = (SELECT id FROM users WHERE email = $1 LIMIT 1)',
-        [result.rows[0].customer_email]
-      );
-    }
-
-    res.json({ received: true });
+    const result = await applyCieloPaymentUpdate(pool, req.body);
+    res.status(200).json(result);
   } catch (err) {
-    console.error('Erro na notificação Cielo:', err);
-    res.status(500).json({ message: 'Erro ao processar notificação' });
+    console.error(`[Cielo] Erro na ${label}:`, err);
+    res.status(err.status || 500).json({ message: err.message || 'Erro ao processar notificação' });
   }
-});
+}
+
+/** URL de notificação — transação finalizada (POST ou JSON com consulta GET). */
+router.post('/cielo/notificacao', (req, res) => handleCieloWebhook(req, res, 'notificação'));
+
+/** URL de mudança de status — atualização de status do pedido. */
+router.post('/cielo/mudanca-status', (req, res) => handleCieloWebhook(req, res, 'mudança de status'));
 
 export default router;
