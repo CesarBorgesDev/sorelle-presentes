@@ -14,7 +14,6 @@ import {
   buildCieloPayload,
   createCieloCheckout,
   buildOrderNumber,
-  WRAPPING_PRICES,
 } from '../services/cielo.js';
 import {
   getCorreiosConfig,
@@ -42,22 +41,16 @@ function calcTotals(cartItems, shippingCost = 0, { pixDiscountPercent = 0, apply
     (sum, item) => sum + Number(item.price) * Number(item.quantity || 1),
     0
   );
-  const wrappingCost = cartItems.reduce(
-    (sum, item) => sum + (WRAPPING_PRICES[item.wrapping] || 0),
-    0
-  );
   const shipping = Number(shippingCost) || 0;
-  const merchandiseTotal = subtotal + wrappingCost;
   let pixDiscount = 0;
   if (applyPixDiscount && pixDiscountPercent > 0) {
-    pixDiscount = merchandiseTotal * (pixDiscountPercent / 100);
+    pixDiscount = subtotal * (pixDiscountPercent / 100);
   }
   return {
     subtotal,
-    wrappingCost,
     shippingCost: shipping,
     pixDiscount,
-    total: merchandiseTotal + shipping - pixDiscount,
+    total: subtotal + shipping - pixDiscount,
   };
 }
 
@@ -166,7 +159,7 @@ async function createOrderFromCart({ userId, customer, paymentMethod, shipping }
   await validateCartStock(userId);
 
   const pixDiscountPercent = paymentMethod === 'pix' ? await getPixDiscountPercent() : 0;
-  const { subtotal, wrappingCost, shippingCost, pixDiscount, total } = calcTotals(
+  const { subtotal, shippingCost, pixDiscount, total } = calcTotals(
     cartItems,
     shipping.price,
     { pixDiscountPercent, applyPixDiscount: paymentMethod === 'pix' }
@@ -177,7 +170,6 @@ async function createOrderFromCart({ userId, customer, paymentMethod, shipping }
     quantity: item.quantity || 1,
     unit_price: Number(item.price),
     total: Number(item.price) * Number(item.quantity || 1),
-    wrapping: item.wrapping || 'none',
   }));
 
   const orderResult = await pool.query(
@@ -194,7 +186,7 @@ async function createOrderFromCart({ userId, customer, paymentMethod, shipping }
       customer.customer_address || null,
       JSON.stringify(orderItems),
       subtotal,
-      wrappingCost,
+      0,
       shippingCost,
       shipping.service_code,
       shipping.label,

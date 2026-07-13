@@ -14,6 +14,13 @@ import { getRodonavesConfig } from '../services/rodonaves.js';
 
 const router = Router();
 
+const PRODUCT_SORT_OPTIONS = ['name', 'code', 'price'];
+
+async function getProductSortOrder() {
+  const value = await getSetting('product_sort_order');
+  return PRODUCT_SORT_OPTIONS.includes(value) ? value : 'name';
+}
+
 async function buildSettingsResponse(message) {
   const pollinationsKey = await getSetting('pollinations_api_key');
   const hfToken = await getSetting('huggingface_api_token');
@@ -36,6 +43,7 @@ async function buildSettingsResponse(message) {
     stable_horde_api_key_masked: maskToken(stableHordeKey),
     has_stable_horde_key: Boolean(stableHordeKey),
     image_model: (await getSetting('image_model')) || DEFAULT_IMAGE_MODEL,
+    product_sort_order: await getProductSortOrder(),
     payment: {
       checkout_method: enabledPaymentMethods,
       checkout_options: CHECKOUT_OPTIONS,
@@ -98,6 +106,16 @@ async function buildSettingsResponse(message) {
   };
 }
 
+// Preferências públicas usadas pela loja (sem autenticação)
+router.get('/public', async (_req, res) => {
+  try {
+    res.json({ product_sort_order: await getProductSortOrder() });
+  } catch (err) {
+    console.error('Erro ao buscar configurações públicas:', err);
+    res.status(500).json({ message: 'Erro ao carregar configurações' });
+  }
+});
+
 router.get('/', requireAuth, requireAdmin, async (_req, res) => {
   try {
     res.json(await buildSettingsResponse());
@@ -151,6 +169,7 @@ router.put('/', requireAuth, requireAdmin, async (req, res) => {
       rodonaves_cnpj,
       rodonaves_label,
       image_model,
+      product_sort_order,
     } = req.body;
 
     if (pollinations_api_key !== undefined && pollinations_api_key !== '') {
@@ -319,6 +338,10 @@ router.put('/', requireAuth, requireAdmin, async (req, res) => {
 
     if (image_model !== undefined && image_model !== '') {
       await setSetting('image_model', image_model.trim());
+    }
+
+    if (product_sort_order !== undefined && PRODUCT_SORT_OPTIONS.includes(product_sort_order)) {
+      await setSetting('product_sort_order', product_sort_order);
     }
 
     res.json(await buildSettingsResponse('Configurações salvas com sucesso'));

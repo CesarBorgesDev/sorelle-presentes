@@ -5,6 +5,7 @@ import { Plus, Pencil, Trash2, Search } from 'lucide-react';
 import ProductViewToggle, { useProductViewMode } from '@/components/ProductViewToggle';
 import ProductFormModal from './ProductFormModal';
 import ProductImage from '@/components/ProductImage';
+import { useCategoryLabels } from '@/hooks/useCategories';
 
 export default function AdminProducts() {
   const queryClient = useQueryClient();
@@ -39,12 +40,7 @@ export default function AdminProducts() {
     return qty > 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700';
   };
 
-  const categoryLabels = {
-    casa: 'Casa',
-    decoracao: 'Decoração',
-    fragancias: 'Fragrâncias',
-    cama_mesa_banho: 'Cama, Mesa & Banho',
-  };
+  const categoryLabels = useCategoryLabels();
 
   const handleEdit = (product) => {
     setEditingProduct(product);

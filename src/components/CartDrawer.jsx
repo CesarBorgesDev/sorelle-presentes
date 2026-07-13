@@ -2,16 +2,10 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
-import { Minus, Plus, X, Gift, Package } from 'lucide-react';
+import { Minus, Plus, X, Package } from 'lucide-react';
 import { api } from '@/api/apiClient';
 import { useAuth } from '@/lib/AuthContext';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-
-const wrappingOptions = [
-  { value: 'none', label: 'Sem embalagem', icon: Package, price: 0 },
-  { value: 'kraft', label: 'Kraft Minimalista', icon: Gift, price: 12.90 },
-  { value: 'signature', label: 'Sorelle Signature', icon: Gift, price: 29.90 },
-];
 
 export default function CartDrawer({ open, onClose }) {
   const queryClient = useQueryClient();
@@ -34,11 +28,7 @@ export default function CartDrawer({ open, onClose }) {
   });
 
   const subtotal = items.reduce((sum, item) => sum + item.price * (item.quantity || 1), 0);
-  const wrappingTotal = items.reduce((sum, item) => {
-    const wrap = wrappingOptions.find(w => w.value === item.wrapping);
-    return sum + (wrap?.price || 0);
-  }, 0);
-  const total = subtotal + wrappingTotal;
+  const total = subtotal;
 
   return (
     <Sheet open={open} onOpenChange={onClose}>
@@ -92,18 +82,6 @@ export default function CartDrawer({ open, onClose }) {
                         <Plus className="w-3 h-3" />
                       </button>
                     </div>
-                    {/* Wrapping */}
-                    <select
-                      value={item.wrapping || 'none'}
-                      onChange={(e) => updateMutation.mutate({ id: item.id, data: { wrapping: e.target.value } })}
-                      className="mt-2 text-xs font-body bg-secondary border-0 rounded-sm px-2 py-1 text-muted-foreground"
-                    >
-                      {wrappingOptions.map(w => (
-                        <option key={w.value} value={w.value}>
-                          {w.label} {w.price > 0 ? `(+R$ ${w.price.toFixed(2).replace('.', ',')})` : ''}
-                        </option>
-                      ))}
-                    </select>
                   </div>
                 </div>
               ))}
@@ -115,12 +93,6 @@ export default function CartDrawer({ open, onClose }) {
                   <span className="text-muted-foreground">Subtotal</span>
                   <span>R$ {subtotal.toFixed(2).replace('.', ',')}</span>
                 </div>
-                {wrappingTotal > 0 && (
-                  <div className="flex justify-between font-body text-sm">
-                    <span className="text-muted-foreground">Embalagem</span>
-                    <span>R$ {wrappingTotal.toFixed(2).replace('.', ',')}</span>
-                  </div>
-                )}
                 <div className="flex justify-between font-display text-base pt-2 border-t border-border">
                   <span>Total</span>
                   <span>R$ {total.toFixed(2).replace('.', ',')}</span>

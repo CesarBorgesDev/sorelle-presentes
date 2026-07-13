@@ -4,13 +4,14 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/api/apiClient';
 import { useAuth } from '@/lib/AuthContext';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Minus, Plus, ShoppingBag, Check, Heart, ChevronDown } from 'lucide-react';
+import { ArrowLeft, Minus, Plus, ShoppingBag, Check, Heart, ChevronDown, ChevronLeft, ChevronRight, Expand } from 'lucide-react';
 import { resolveMediaUrl } from '@/lib/resolveMediaUrl';
 import { Button } from '@/components/ui/button';
 import RelatedKitsCarousel from '@/components/RelatedKitsCarousel';
 import ProductShippingCalculator from '@/components/ProductShippingCalculator';
 import ProductPaymentConditions from '@/components/ProductPaymentConditions';
 import ProductImage from '@/components/ProductImage';
+import ImageLightbox from '@/components/ImageLightbox';
 import {
   buildVariantLabel,
   ensureVariantStockMatrix,
@@ -26,13 +27,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/ui/collapsible';
-
-const categoryLabels = {
-  casa: 'Casa',
-  decoracao: 'Decoração',
-  fragancias: 'Fragrâncias',
-  cama_mesa_banho: 'Cama, Mesa & Banho',
-};
+import { useCategoryLabels, formatCategoryLabel } from '@/hooks/useCategories';
 
 function ProductAccordionSection({ title, children, defaultOpen = false }) {
   const [open, setOpen] = useState(defaultOpen);
@@ -62,9 +57,11 @@ export default function ProductDetail() {
   const [added, setAdded] = useState(false);
   const [wishlisted, setWishlisted] = useState(false);
   const [activeImage, setActiveImage] = useState(0);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
   const [selectedColorId, setSelectedColorId] = useState('');
   const [selectedSize, setSelectedSize] = useState('');
   const queryClient = useQueryClient();
+  const categoryLabels = useCategoryLabels();
 
   const { data: product, isLoading } = useQuery({
     queryKey: ['product', id],
@@ -178,7 +175,6 @@ export default function ProductDetail() {
       product_image: displayImage,
       price: product.price,
       quantity,
-      wrapping: 'none',
       variant_color: selectedColorId || null,
       variant_size: selectedSize || null,
     });
@@ -223,7 +219,7 @@ export default function ProductDetail() {
           className="inline-flex items-center gap-2 font-body text-sm text-muted-foreground hover:text-foreground transition-colors mb-8"
         >
           <ArrowLeft className="w-4 h-4" />
-          {categoryLabels[product.category] || product.category}
+          {formatCategoryLabel(categoryLabels, product.category)}
         </Link>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-16">
@@ -249,11 +245,53 @@ export default function ProductDetail() {
               )}
 
               <div className="flex-1 min-w-0">
-                <ProductImage
-                  src={allImages[activeImage]}
-                  alt={product.name}
-                  className="aspect-[4/5] rounded-sm w-full"
-                />
+                <div
+                  className="relative group cursor-zoom-in"
+                  onClick={() => setLightboxOpen(true)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') setLightboxOpen(true);
+                  }}
+                  aria-label="Ampliar foto do produto"
+                >
+                  <ProductImage
+                    src={allImages[activeImage]}
+                    alt={product.name}
+                    className="aspect-[4/5] rounded-sm w-full"
+                  />
+
+                  <span className="absolute top-3 right-3 bg-background/80 backdrop-blur-sm p-2 rounded-full text-foreground opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none">
+                    <Expand className="w-4 h-4" />
+                  </span>
+
+                  {allImages.length > 1 && (
+                    <>
+                      <button
+                        type="button"
+                        aria-label="Foto anterior"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setActiveImage((activeImage - 1 + allImages.length) % allImages.length);
+                        }}
+                        className="absolute left-3 top-1/2 -translate-y-1/2 bg-background/80 backdrop-blur-sm p-2 rounded-full text-foreground hover:bg-background transition-all duration-300 lg:opacity-0 lg:group-hover:opacity-100"
+                      >
+                        <ChevronLeft className="w-5 h-5" />
+                      </button>
+                      <button
+                        type="button"
+                        aria-label="Próxima foto"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setActiveImage((activeImage + 1) % allImages.length);
+                        }}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 bg-background/80 backdrop-blur-sm p-2 rounded-full text-foreground hover:bg-background transition-all duration-300 lg:opacity-0 lg:group-hover:opacity-100"
+                      >
+                        <ChevronRight className="w-5 h-5" />
+                      </button>
+                    </>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -271,6 +309,15 @@ export default function ProductDetail() {
                 ))}
               </div>
             )}
+
+            {lightboxOpen && (
+              <ImageLightbox
+                images={allImages}
+                startIndex={activeImage}
+                alt={product.name}
+                onClose={() => setLightboxOpen(false)}
+              />
+            )}
           </motion.div>
 
           <motion.div
@@ -280,7 +327,7 @@ export default function ProductDetail() {
             className="lg:sticky lg:top-28 lg:self-start"
           >
             <p className="text-xs tracking-[0.3em] uppercase text-muted-foreground font-body mb-3">
-              {product.subcategory || categoryLabels[product.category]}
+              {product.subcategory || formatCategoryLabel(categoryLabels, product.category)}
             </p>
 
             <h1 className="font-display text-2xl lg:text-3xl tracking-wider text-foreground mb-4">

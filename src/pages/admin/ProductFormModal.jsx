@@ -1,17 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/api/apiClient';import { buildInitialProductImages, buildProductImagePayload } from '@/lib/productImages';
 import ProductImagesEditor from './ProductImagesEditor';
 import ProductVariantsEditor from './ProductVariantsEditor';
 import { ensureVariantStockMatrix, getTotalSizeStock, usesSizeStock } from '@/lib/productVariants';
 import { X } from 'lucide-react';
-
-const CATEGORIES = [
-  { value: 'casa', label: 'Casa' },
-  { value: 'decoracao', label: 'Decoração' },
-  { value: 'fragancias', label: 'Fragrâncias' },
-  { value: 'cama_mesa_banho', label: 'Cama, Mesa & Banho' },
-];
 
 function parseOptionalNumber(value) {
   if (value === '' || value === null || value === undefined) return null;
@@ -23,6 +16,19 @@ export default function ProductFormModal({ product, onClose }) {
   const queryClient = useQueryClient();
   const isEditing = !!product;
 
+  const { data: categoriesData = [] } = useQuery({
+    queryKey: ['categories-admin'],
+    queryFn: () => api.categories.list(true),
+  });
+  const categoryOptions = categoriesData.map((category) => ({
+    value: category.slug,
+    label: category.active ? category.name : `${category.name} (inativa)`,
+  }));
+  // Mantém a categoria do produto visível mesmo se ela não estiver cadastrada
+  if (product?.category && !categoryOptions.some((option) => option.value === product.category)) {
+    categoryOptions.push({ value: product.category, label: product.category.replace(/_/g, ' ') });
+  }
+
   const [form, setForm] = useState({
     name: product?.name || '',
     description: product?.description || '',
@@ -31,7 +37,7 @@ export default function ProductFormModal({ product, onClose }) {
     care_instructions: product?.care_instructions || '',
     price: product?.price || '',
     original_price: product?.original_price || '',
-    category: product?.category || 'casa',
+    category: product?.category || '',
     subcategory: product?.subcategory || '',
     materials: product?.materials || '',
     dimensions: product?.dimensions || '',
@@ -180,7 +186,8 @@ export default function ProductFormModal({ product, onClose }) {
             <div>
               <label className={labelClass}>Categoria *</label>
               <select required className={inputClass} value={form.category} onChange={(e) => set('category', e.target.value)}>
-                {CATEGORIES.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
+                <option value="" disabled>Selecione...</option>
+                {categoryOptions.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
               </select>
             </div>
 

@@ -2,19 +2,19 @@ import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { ShoppingBag, Menu, X, Search, User } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-
-const navLinks = [
-  { label: 'Casa', path: '/categoria/casa' },
-  { label: 'Decoração', path: '/categoria/decoracao' },
-  { label: 'Fragrâncias', path: '/categoria/fragancias' },
-  { label: 'Cama, Mesa & Banho', path: '/categoria/cama_mesa_banho' },
-];
+import { useCategories } from '@/hooks/useCategories';
 
 export default function Navbar({ cartCount = 0, onCartClick }) {
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const location = useLocation();
   const isHome = location.pathname === '/';
+
+  const { data: categories = [] } = useCategories();
+  const navLinks = categories.map((category) => ({
+    label: category.name,
+    path: `/categoria/${category.slug}`,
+  }));
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 80);

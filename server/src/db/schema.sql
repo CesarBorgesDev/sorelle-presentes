@@ -23,7 +23,7 @@ CREATE TABLE IF NOT EXISTS products (
   care_instructions TEXT,
   price NUMERIC(10, 2) NOT NULL,
   original_price NUMERIC(10, 2),
-  category VARCHAR(50) NOT NULL CHECK (category IN ('casa', 'decoracao', 'fragancias', 'cama_mesa_banho')),
+  category VARCHAR(50) NOT NULL,
   subcategory VARCHAR(100),
   image_url TEXT,
   images JSONB DEFAULT '[]',
@@ -235,3 +235,27 @@ CREATE TABLE IF NOT EXISTS brands (
 );
 
 CREATE INDEX IF NOT EXISTS idx_brands_active_sort ON brands(active, sort_order);
+
+CREATE TABLE IF NOT EXISTS categories (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name VARCHAR(255) NOT NULL,
+  slug VARCHAR(255) UNIQUE NOT NULL,
+  description TEXT,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  active BOOLEAN NOT NULL DEFAULT TRUE,
+  created_date TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_date TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_categories_active_sort ON categories(active, sort_order);
+
+-- Seed das categorias originais (idempotente)
+INSERT INTO categories (name, slug, description, sort_order) VALUES
+  ('Casa', 'casa', 'Objetos que transformam seu lar em um refúgio de estilo e conforto.', 1),
+  ('Decoração', 'decoracao', 'Peças artesanais e escultóricas que contam histórias únicas.', 2),
+  ('Fragrâncias', 'fragancias', 'Aromas que envolvem cada ambiente em uma experiência sensorial.', 3),
+  ('Cama, Mesa & Banho', 'cama_mesa_banho', 'Tecidos nobres e texturas que acariciam os sentidos.', 4)
+ON CONFLICT (slug) DO NOTHING;
+
+-- Categoria de produto agora é validada pela tabela categories (constraint antiga removida)
+ALTER TABLE products DROP CONSTRAINT IF EXISTS products_category_check;

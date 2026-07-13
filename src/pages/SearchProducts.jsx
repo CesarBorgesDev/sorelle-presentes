@@ -8,6 +8,7 @@ import ProductCard from '@/components/ProductCard';
 import ProductListRow from '@/components/ProductListRow';
 import ProductViewToggle, { useProductViewMode } from '@/components/ProductViewToggle';
 import { isProductAvailable } from '@/lib/productStock';
+import { useProductSortOrder, sortProducts } from '@/hooks/useProductSort';
 
 function normalizeSearchTerm(value) {
   return String(value || '').trim().toLowerCase();
@@ -53,11 +54,13 @@ export default function SearchProducts() {
   }, []);
 
   const normalizedQuery = normalizeSearchTerm(query);
+  const sortOrder = useProductSortOrder();
 
   const results = useMemo(() => {
     if (!normalizedQuery) return [];
-    return products.filter((product) => productMatchesQuery(product, normalizedQuery));
-  }, [products, normalizedQuery]);
+    const matches = products.filter((product) => productMatchesQuery(product, normalizedQuery));
+    return sortProducts(matches, sortOrder);
+  }, [products, normalizedQuery, sortOrder]);
 
   function handleSubmit(event) {
     event.preventDefault();

@@ -2,17 +2,6 @@ import { toCieloAddress } from '../utils/address.js';
 
 const DEFAULT_CHECKOUT_URL = 'https://cieloecommerce.cielo.com.br/api/public/v1/orders/';
 
-const WRAPPING_LABELS = {  none: 'Sem embalagem',
-  kraft: 'Embalagem Kraft Minimalista',
-  signature: 'Embalagem Sorelle Signature',
-};
-
-const WRAPPING_PRICES = {
-  none: 0,
-  kraft: 12.9,
-  signature: 29.9,
-};
-
 function onlyDigits(value) {
   return String(value || '').replace(/\D/g, '');
 }
@@ -39,19 +28,6 @@ export function buildCieloPayload({ order, customer, returnUrl, config = {}, shi
     Type: 'Asset',
     Sku: item.product_id ? String(item.product_id).slice(0, 32) : undefined,
   }));
-
-  for (const item of order.items || []) {
-    const wrapPrice = WRAPPING_PRICES[item.wrapping] || 0;
-    if (wrapPrice > 0) {
-      cartItems.push({
-        Name: WRAPPING_LABELS[item.wrapping] || 'Embalagem',
-        Description: `Embalagem para ${item.product_name}`,
-        UnitPrice: toCents(wrapPrice),
-        Quantity: 1,
-        Type: 'Service',
-      });
-    }
-  }
 
   if (shippingCost > 0) {
     cartItems.push({
@@ -132,4 +108,4 @@ export async function createCieloCheckout(payload, { merchantId, checkoutApiUrl 
   return { checkoutUrl, raw: data };
 }
 
-export { buildOrderNumber, WRAPPING_PRICES };
+export { buildOrderNumber };

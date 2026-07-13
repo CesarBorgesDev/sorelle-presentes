@@ -6,8 +6,6 @@ import { useAuth } from '@/lib/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Loader2, ArrowLeft, Truck, FlaskConical } from 'lucide-react';
 
-const WRAPPING_PRICES = { none: 0, kraft: 12.9, signature: 29.9 };
-
 const BRAZILIAN_STATES = [
   'AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG',
   'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO',
@@ -125,10 +123,9 @@ export default function Checkout() {
   }, [applyAddressFromCep]);
 
   const subtotal = items.reduce((sum, item) => sum + item.price * (item.quantity || 1), 0);
-  const wrappingTotal = items.reduce((sum, item) => sum + (WRAPPING_PRICES[item.wrapping] || 0), 0);
   const selectedShipping = shippingQuote?.options?.find((o) => o.id === shippingServiceId && o.available);
   const shippingCost = selectedShipping?.price || 0;
-  const total = subtotal + wrappingTotal + shippingCost;
+  const total = subtotal + shippingCost;
 
   const checkoutMutation = useMutation({
     mutationFn: (data) => api.checkout.start(data),
@@ -437,9 +434,6 @@ export default function Checkout() {
             </div>
             <div className="border-t border-border pt-3 space-y-2 font-body text-sm">
               <div className="flex justify-between"><span className="text-muted-foreground">Subtotal</span><span>R$ {subtotal.toFixed(2).replace('.', ',')}</span></div>
-              {wrappingTotal > 0 && (
-                <div className="flex justify-between"><span className="text-muted-foreground">Embalagem</span><span>R$ {wrappingTotal.toFixed(2).replace('.', ',')}</span></div>
-              )}
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Frete</span>
                 <span>

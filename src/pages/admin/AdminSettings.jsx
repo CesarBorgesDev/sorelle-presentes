@@ -3,9 +3,10 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/api/apiClient';
 import {
   Settings, Key, Sparkles, Loader2, CheckCircle2,
-  CreditCard, Circle, ExternalLink, AlertCircle, Truck, ShoppingBag,
+  CreditCard, Circle, ExternalLink, AlertCircle, Truck, ShoppingBag, Store,
 } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { PRODUCT_SORT_OPTIONS } from '@/hooks/useProductSort';
 
 const MODELS = [
   { value: 'flux', label: 'Flux (fallback texto — gratuito)' },
@@ -81,6 +82,7 @@ export default function AdminSettings() {
   const [rodonavesCnpj, setRodonavesCnpj] = useState('');
   const [rodonavesLabel, setRodonavesLabel] = useState('Rodonaves');
   const [model, setModel] = useState('flux');
+  const [productSortOrder, setProductSortOrder] = useState('name');
   const [saved, setSaved] = useState(false);
 
   const { data, isLoading } = useQuery({
@@ -90,6 +92,7 @@ export default function AdminSettings() {
 
   React.useEffect(() => {
     if (data?.image_model) setModel(data.image_model);
+    if (data?.product_sort_order) setProductSortOrder(data.product_sort_order);
     if (data?.cielo) {
       setCieloSoftDescriptor(data.cielo.softDescriptor || 'SORELLE');
       setCieloFrontendUrl(data.cielo.frontendUrl || '');
@@ -130,7 +133,7 @@ export default function AdminSettings() {
       setRodonavesCnpj(data.rodonaves.cnpj || '');
       setRodonavesLabel(data.rodonaves.label || 'Rodonaves');
     }
-  }, [data?.image_model, data?.cielo, data?.payment, data?.correios, data?.rodonaves]);
+  }, [data?.image_model, data?.product_sort_order, data?.cielo, data?.payment, data?.correios, data?.rodonaves]);
 
   const mutation = useMutation({
     mutationFn: (payload) => api.settings.update(payload),
@@ -153,6 +156,7 @@ export default function AdminSettings() {
     e.preventDefault();
     const payload = {
       image_model: model,
+      product_sort_order: productSortOrder,
       cielo_soft_descriptor: cieloSoftDescriptor.trim(),
       cielo_frontend_url: cieloFrontendUrl.trim(),
       cielo_backend_public_url: cieloBackendUrl.trim(),
@@ -250,7 +254,33 @@ export default function AdminSettings() {
                 <Sparkles className="w-3.5 h-3.5" />
                 Imagens
               </TabsTrigger>
+              <TabsTrigger value="loja" className="gap-1.5 font-body text-xs sm:text-sm px-3 py-2">
+                <Store className="w-3.5 h-3.5" />
+                Loja
+              </TabsTrigger>
             </TabsList>
+
+            <TabsContent value="loja" className="space-y-6 mt-0 focus-visible:outline-none">
+              <div>
+                <h2 className="font-display text-lg tracking-wide text-foreground">Exibição de produtos</h2>
+                <p className="font-body text-sm text-muted-foreground mt-1">
+                  Define a ordem dos produtos na pesquisa e nas páginas de categoria da loja.
+                </p>
+              </div>
+
+              <div>
+                <label className={labelClass}>Ordenação dos produtos</label>
+                <select
+                  className={inputClass}
+                  value={productSortOrder}
+                  onChange={(e) => setProductSortOrder(e.target.value)}
+                >
+                  {PRODUCT_SORT_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
+              </div>
+            </TabsContent>
 
             <TabsContent value="checkout" className="space-y-6 mt-0 focus-visible:outline-none">
               <div>
@@ -374,7 +404,7 @@ export default function AdminSettings() {
                     onChange={(e) => setPixDiscountPercent(e.target.value)}
                   />
                   <p className="font-body text-xs text-muted-foreground mt-1">
-                    0 = sem desconto. Aplicado sobre produtos e embalagem no checkout PIX.
+                    0 = sem desconto. Aplicado sobre os produtos no checkout PIX.
                   </p>
                 </div>
               </div>

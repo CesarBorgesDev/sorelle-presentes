@@ -2,7 +2,7 @@ export function parseSort(sortParam) {
   if (!sortParam) return { column: 'created_date', direction: 'DESC' };
   const desc = sortParam.startsWith('-');
   const column = desc ? sortParam.slice(1) : sortParam;
-  const allowed = ['created_date', 'updated_date', 'name', 'price', 'total', 'status', 'sort_order'];
+  const allowed = ['created_date', 'updated_date', 'name', 'price', 'total', 'status', 'sort_order', 'internal_code'];
   const safeColumn = allowed.includes(column) ? column : 'created_date';
   return { column: safeColumn, direction: desc ? 'DESC' : 'ASC' };
 }

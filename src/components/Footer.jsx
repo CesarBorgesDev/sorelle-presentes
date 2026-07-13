@@ -1,8 +1,10 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { Instagram, Facebook, Mail, MapPin, Phone } from 'lucide-react';
+import { useCategories } from '@/hooks/useCategories';
 
 export default function Footer() {
+  const { data: categories = [] } = useCategories();
   return (
     <footer className="bg-foreground text-background">
       {/* Main Footer */}
@@ -42,10 +44,10 @@ export default function Footer() {
           <div>
             <h4 className="font-display text-sm tracking-widest uppercase mb-6">Navegação</h4>
             <ul className="space-y-3">
-              {['Casa', 'Decoração', 'Fragrâncias', 'Cama, Mesa & Banho'].map((item) => (
-                <li key={item}>
-                  <Link to={`/categoria/${item.toLowerCase().replace(/[^a-z]/g, '_').replace(/__+/g, '_')}`} className="font-body text-sm text-background/60 hover:text-background transition-colors">
-                    {item}
+              {categories.map((category) => (
+                <li key={category.slug}>
+                  <Link to={`/categoria/${category.slug}`} className="font-body text-sm text-background/60 hover:text-background transition-colors">
+                    {category.name}
                   </Link>
                 </li>
               ))}

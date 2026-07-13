@@ -3,11 +3,16 @@ import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { ShoppingBag } from 'lucide-react';
 import ProductImage from '@/components/ProductImage';
+import { getProductImages } from '@/lib/productImages';
+import { resolveMediaUrl } from '@/lib/resolveMediaUrl';
 
 export default function ProductCard({ product, className = '' }) {
   const discount = product.original_price
     ? Math.round((1 - product.price / product.original_price) * 100)
     : 0;
+
+  const images = getProductImages(product).map(resolveMediaUrl);
+  const hoverImage = images.length > 1 ? images[1] : null;
 
   return (
     <motion.div
@@ -21,11 +26,19 @@ export default function ProductCard({ product, className = '' }) {
         {/* Image */}
         <div className="relative overflow-hidden rounded-sm aspect-[4/5] bg-secondary">
           <ProductImage
-            src={product.image_url}
+            src={images[0] || product.image_url}
             alt={product.name}
             className="w-full h-full"
             imgClassName="transition-transform duration-700 group-hover:scale-105"
           />
+          {hoverImage && (
+            <ProductImage
+              src={hoverImage}
+              alt={product.name}
+              className="absolute inset-0 w-full h-full opacity-0 group-hover:opacity-100 transition-opacity duration-500"
+              imgClassName="transition-transform duration-700 group-hover:scale-105"
+            />
+          )}
           {/* Overlay on hover */}
           <div className="absolute inset-0 bg-foreground/0 group-hover:bg-foreground/10 transition-all duration-500" />
 
@@ -50,9 +63,6 @@ export default function ProductCard({ product, className = '' }) {
 
         {/* Info */}
         <div className="mt-4 space-y-1.5">
-          <p className="text-xs text-muted-foreground tracking-wider uppercase font-body">
-            {product.subcategory || product.category?.replace(/_/g, ' ')}
-          </p>
           <h3 className="font-display text-sm lg:text-base text-foreground leading-snug tracking-wide">
             {product.name}
           </h3>

@@ -5,7 +5,6 @@ import { DEFAULT_HOME_BANNERS } from '@/lib/homeBannersDefaults';
 import HeroSection from '../components/HeroSection';
 import FeaturedProducts from '../components/FeaturedProducts';
 import CategoryBanner from '../components/CategoryBanner';
-import GiftBanner from '../components/GiftBanner';
 import BrandsCarousel from '../components/BrandsCarousel';
 import WhatsAppGroupBanner from '../components/WhatsAppGroupBanner';
 
@@ -31,9 +30,6 @@ export default function Home() {
 
   const casaFeatured = banners.casaFeatured || DEFAULT_HOME_BANNERS.casaFeatured;
   const sections = banners.sections?.length ? banners.sections : DEFAULT_HOME_BANNERS.sections;
-  const giftAfterSectionIndex = Number.isInteger(banners.giftAfterSectionIndex)
-    ? banners.giftAfterSectionIndex
-    : DEFAULT_HOME_BANNERS.giftAfterSectionIndex;
 
   return (
     <div>
@@ -46,7 +42,7 @@ export default function Home() {
         link={casaFeatured.link}
       />
 
-      {sections.map((section, index) => (
+      {sections.map((section) => (
         <React.Fragment key={section.id}>
           <CategoryBanner
             categoryKey={section.categoryKey}
@@ -58,7 +54,6 @@ export default function Home() {
             subtitle={section.featured.subtitle}
             link={section.featured.link}
           />
-          {index === giftAfterSectionIndex && <GiftBanner />}
         </React.Fragment>
       ))}
 

@@ -41,7 +41,6 @@ export default function KitDetail() {
           product_image: product.image_url,
           price: cartPrice,
           quantity: 1,
-          wrapping: 'none',
         });
       }
     },

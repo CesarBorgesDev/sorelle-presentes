@@ -6,22 +6,24 @@ import { motion } from 'framer-motion';
 import ProductCard from '../components/ProductCard';
 import ProductListRow from '../components/ProductListRow';
 import ProductViewToggle, { useProductViewMode } from '../components/ProductViewToggle';
-
-const categoryMeta = {
-  casa: { title: 'Casa', description: 'Objetos que transformam seu lar em um refúgio de estilo e conforto.' },
-  decoracao: { title: 'Decoração', description: 'Peças artesanais e escultóricas que contam histórias únicas.' },
-  fragancias: { title: 'Fragrâncias', description: 'Aromas que envolvem cada ambiente em uma experiência sensorial.' },
-  cama_mesa_banho: { title: 'Cama, Mesa & Banho', description: 'Tecidos nobres e texturas que acariciam os sentidos.' },
-};
+import { useCategories } from '@/hooks/useCategories';
+import { useProductSortOrder, sortOrderToApiSort } from '@/hooks/useProductSort';
 
 export default function Category() {
   const { slug } = useParams();
-  const meta = categoryMeta[slug] || { title: slug, description: '' };
+  const { data: categories = [] } = useCategories();
+  const categoryInfo = categories.find((category) => category.slug === slug);
+  const meta = {
+    title: categoryInfo?.name || String(slug || '').replace(/_/g, ' '),
+    description: categoryInfo?.description || '',
+  };
   const [viewMode, setViewMode] = useProductViewMode('sorelle-category-view');
+  const sortOrder = useProductSortOrder();
+  const apiSort = sortOrderToApiSort(sortOrder);
 
   const { data: products = [], isLoading } = useQuery({
-    queryKey: ['products', slug],
-    queryFn: () => api.entities.Product.filter({ category: slug }, '-created_date', 50),
+    queryKey: ['products', slug, apiSort],
+    queryFn: () => api.entities.Product.filter({ category: slug }, apiSort, 50),
   });
 
   return (

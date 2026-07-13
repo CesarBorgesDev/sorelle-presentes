@@ -295,6 +295,10 @@ const settings = {
     return apiFetch('/settings');
   },
 
+  async getPublic() {
+    return apiFetch('/settings/public');
+  },
+
   async update(data) {
     return apiFetch('/settings', {
       method: 'PUT',
@@ -551,6 +555,32 @@ const brandsApi = {
   },
 };
 
+const categoriesApi = {
+  list(includeInactive = false) {
+    const params = new URLSearchParams({ sort: 'sort_order', limit: '100' });
+    if (includeInactive) params.set('include_inactive', 'true');
+    return apiFetch(`/categories?${params}`);
+  },
+
+  create(data) {
+    return apiFetch('/categories', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  update(id, data) {
+    return apiFetch(`/categories/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  },
+
+  delete(id) {
+    return apiFetch(`/categories/${id}`, { method: 'DELETE' });
+  },
+};
+
 export const api = {
   auth,
   settings,
@@ -564,6 +594,7 @@ export const api = {
   products: productsApi,
   productKits: productKitsApi,
   brands: brandsApi,
+  categories: categoriesApi,
   entities: {
     Product: createEntityClient('products'),
     ProductKit: createEntityClient('product-kits'),
