@@ -132,7 +132,9 @@ ALTER TABLE orders ADD COLUMN IF NOT EXISTS gateway_order_number VARCHAR(64);
 
 ALTER TABLE orders DROP CONSTRAINT IF EXISTS orders_payment_method_check;
 ALTER TABLE orders ADD CONSTRAINT orders_payment_method_check
-  CHECK (payment_method IS NULL OR payment_method IN ('pix', 'cartao_credito', 'boleto', 'cielo', 'test'));
+  CHECK (payment_method IS NULL OR payment_method IN (
+    'pix', 'cartao_credito', 'cartao_debito', 'boleto', 'dinheiro', 'pagar_na_loja', 'cielo', 'test'
+  ));
 
 ALTER TABLE orders DROP CONSTRAINT IF EXISTS orders_payment_status_check;
 ALTER TABLE orders ADD CONSTRAINT orders_payment_status_check

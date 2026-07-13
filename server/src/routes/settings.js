@@ -3,6 +3,7 @@ import { requireAuth, requireAdmin } from '../middleware/auth.js';
 import { getSetting, setSetting, maskToken } from '../services/settings.js';
 import { DEFAULT_IMAGE_MODEL } from '../services/imageGeneration.js';
 import { getCieloConfig, getCieloRequirements } from '../services/cieloConfig.js';
+import { getStorePickupConfig } from '../services/storePickup.js';
 import {
   CHECKOUT_OPTIONS,
   getCheckoutPaymentMethod,
@@ -100,6 +101,7 @@ async function buildSettingsResponse(message) {
       password_masked: maskToken(rodonavesConfig.password),
       cnpj: rodonavesConfig.cnpj,
     },
+    store_pickup: await getStorePickupConfig(),
     cielo: {
       ...cieloConfig,
       merchant_id_masked: maskToken(cieloConfig.merchantId),
@@ -172,6 +174,11 @@ router.put('/', requireAuth, requireAdmin, async (req, res) => {
       rodonaves_label,
       image_model,
       product_sort_order,
+      store_pickup_enabled,
+      store_pickup_label,
+      store_pickup_address,
+      store_pickup_instructions,
+      store_pickup_deadline_days,
     } = req.body;
 
     if (pollinations_api_key !== undefined && pollinations_api_key !== '') {
@@ -344,6 +351,22 @@ router.put('/', requireAuth, requireAdmin, async (req, res) => {
 
     if (product_sort_order !== undefined && PRODUCT_SORT_OPTIONS.includes(product_sort_order)) {
       await setSetting('product_sort_order', product_sort_order);
+    }
+
+    if (store_pickup_enabled !== undefined) {
+      await setSetting('store_pickup_enabled', store_pickup_enabled ? 'true' : 'false');
+    }
+    if (store_pickup_label !== undefined) {
+      await setSetting('store_pickup_label', String(store_pickup_label).trim());
+    }
+    if (store_pickup_address !== undefined) {
+      await setSetting('store_pickup_address', String(store_pickup_address).trim());
+    }
+    if (store_pickup_instructions !== undefined) {
+      await setSetting('store_pickup_instructions', String(store_pickup_instructions).trim());
+    }
+    if (store_pickup_deadline_days !== undefined && store_pickup_deadline_days !== '') {
+      await setSetting('store_pickup_deadline_days', String(store_pickup_deadline_days));
     }
 
     res.json(await buildSettingsResponse('Configurações salvas com sucesso'));

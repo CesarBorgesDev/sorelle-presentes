@@ -358,8 +358,9 @@ const checkout = {
     return apiFetch('/checkout/condicoes-pagamento');
   },
 
-  async getMethods() {
-    return apiFetch('/checkout/metodos');
+  async getMethods(pickup = false) {
+    const params = pickup ? '?pickup=true' : '';
+    return apiFetch(`/checkout/metodos${params}`);
   },
 
   async start(data) {

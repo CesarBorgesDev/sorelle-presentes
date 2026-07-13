@@ -15,11 +15,29 @@ export const PAYMENT_METHOD_DEFS = {
     description: 'Parcelamento via Cielo',
     gateway: true,
   },
+  cartao_debito: {
+    id: 'cartao_debito',
+    label: 'Cartão de débito',
+    description: 'Débito online via Cielo',
+    gateway: true,
+  },
   boleto: {
     id: 'boleto',
     label: 'Boleto bancário',
     description: 'Compensação em até 3 dias úteis',
     gateway: true,
+  },
+  dinheiro: {
+    id: 'dinheiro',
+    label: 'Dinheiro',
+    description: 'Pague em dinheiro na retirada',
+    pickupOnly: true,
+  },
+  pagar_na_loja: {
+    id: 'pagar_na_loja',
+    label: 'Pagar na loja',
+    description: 'PIX, cartão ou dinheiro ao retirar o pedido',
+    pickupOnly: true,
   },
   test: {
     id: 'test',
@@ -34,11 +52,15 @@ export const PAYMENT_METHOD_DEFS = {
 export const CHECKOUT_OPTIONS = [
   { id: 'pix', label: 'PIX', hint: 'Cielo (se configurada) ou chave PIX manual' },
   { id: 'cartao_credito', label: 'Cartão de crédito', hint: 'Redireciona ao checkout Cielo' },
+  { id: 'cartao_debito', label: 'Cartão de débito', hint: 'Débito online via Cielo' },
   { id: 'boleto', label: 'Boleto bancário', hint: 'Redireciona ao checkout Cielo' },
+  { id: 'dinheiro', label: 'Dinheiro na retirada', hint: 'Disponível apenas com retirada na loja' },
+  { id: 'pagar_na_loja', label: 'Pagar na loja', hint: 'Cliente paga ao retirar o pedido' },
   { id: 'test', label: 'Modo teste', hint: 'Aprova o pedido automaticamente, sem cobrança real' },
 ];
 
 const DEFAULT_CHECKOUT_METHOD = 'pix';
+const CIELO_METHODS = ['cartao_credito', 'cartao_debito', 'boleto'];
 
 async function getPixCredentials() {
   const pixKey = ((await getSetting('pix_key')) || process.env.PIX_KEY || '').trim();
@@ -76,6 +98,7 @@ async function isMethodAvailable(methodId) {
   if (!def) return false;
 
   if (methodId === 'test') return true;
+  if (methodId === 'dinheiro' || methodId === 'pagar_na_loja') return true;
 
   const cieloConfig = await getCieloConfig();
   const { pixKey } = await getPixCredentials();
@@ -84,7 +107,7 @@ async function isMethodAvailable(methodId) {
     return (def.gateway && cieloConfig.isReady) || (def.manualFallback && Boolean(pixKey));
   }
 
-  if (methodId === 'cartao_credito' || methodId === 'boleto') {
+  if (CIELO_METHODS.includes(methodId)) {
     return def.gateway && cieloConfig.isReady;
   }
 
@@ -102,6 +125,10 @@ async function resolveMethodProvider(methodId) {
     return { provider: 'test', isTestMode: true };
   }
 
+  if (methodId === 'dinheiro' || methodId === 'pagar_na_loja') {
+    return { provider: 'pay_at_pickup', isTestMode: false, paymentMethod: methodId };
+  }
+
   if (methodId === 'pix') {
     if (cieloConfig.isReady) {
       return { provider: 'cielo', isTestMode: false, cieloConfig };
@@ -112,7 +139,7 @@ async function resolveMethodProvider(methodId) {
     return null;
   }
 
-  if ((methodId === 'cartao_credito' || methodId === 'boleto') && cieloConfig.isReady) {
+  if (CIELO_METHODS.includes(methodId) && cieloConfig.isReady) {
     return { provider: 'cielo', isTestMode: false, cieloConfig };
   }
 
@@ -136,16 +163,19 @@ export async function getCheckoutConfig() {
   };
 }
 
-/** Retorna todas as formas de pagamento habilitadas e disponíveis para o cliente escolher. */
-export async function getAvailablePaymentMethods() {
+/** Retorna formas de pagamento habilitadas e disponíveis para o cliente escolher. */
+export async function getAvailablePaymentMethods({ pickup = false } = {}) {
   const enabled = await getEnabledPaymentMethodIds();
   const pixDiscountPercent = await getPixDiscountPercent();
   const methods = [];
 
   for (const methodId of enabled) {
+    const def = PAYMENT_METHOD_DEFS[methodId];
+    if (!def) continue;
+    if (def.pickupOnly && !pickup) continue;
+
     if (!(await isMethodAvailable(methodId))) continue;
 
-    const def = PAYMENT_METHOD_DEFS[methodId];
     const providerInfo = await resolveMethodProvider(methodId);
     if (!providerInfo) continue;
 
@@ -155,6 +185,7 @@ export async function getAvailablePaymentMethods() {
       description: def.description,
       provider: providerInfo.provider,
       isTestMode: providerInfo.isTestMode || false,
+      pickup_only: Boolean(def.pickupOnly),
       pix_discount_percent: methodId === 'pix' ? pixDiscountPercent : 0,
     });
   }

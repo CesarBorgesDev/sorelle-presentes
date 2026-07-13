@@ -82,6 +82,11 @@ export default function AdminSettings() {
   const [rodonavesPassword, setRodonavesPassword] = useState('');
   const [rodonavesCnpj, setRodonavesCnpj] = useState('');
   const [rodonavesLabel, setRodonavesLabel] = useState('Rodonaves');
+  const [storePickupEnabled, setStorePickupEnabled] = useState(true);
+  const [storePickupLabel, setStorePickupLabel] = useState('Retirar na loja');
+  const [storePickupAddress, setStorePickupAddress] = useState('Sacramento - MG');
+  const [storePickupInstructions, setStorePickupInstructions] = useState('');
+  const [storePickupDeadlineDays, setStorePickupDeadlineDays] = useState('3');
   const [model, setModel] = useState('flux');
   const [productSortOrder, setProductSortOrder] = useState('name');
   const [saved, setSaved] = useState(false);
@@ -138,7 +143,14 @@ export default function AdminSettings() {
       setRodonavesCnpj(data.rodonaves.cnpj || '');
       setRodonavesLabel(data.rodonaves.label || 'Rodonaves');
     }
-  }, [data?.image_model, data?.product_sort_order, data?.cielo, data?.payment, data?.correios, data?.rodonaves]);
+    if (data?.store_pickup) {
+      setStorePickupEnabled(Boolean(data.store_pickup.enabled));
+      setStorePickupLabel(data.store_pickup.label || 'Retirar na loja');
+      setStorePickupAddress(data.store_pickup.address || '');
+      setStorePickupInstructions(data.store_pickup.instructions || '');
+      setStorePickupDeadlineDays(String(data.store_pickup.deadline_days || 3));
+    }
+  }, [data?.image_model, data?.product_sort_order, data?.cielo, data?.payment, data?.correios, data?.rodonaves, data?.store_pickup]);
 
   const mutation = useMutation({
     mutationFn: (payload) => api.settings.update(payload),
@@ -188,6 +200,11 @@ export default function AdminSettings() {
       rodonaves_username: rodonavesUsername.trim(),
       rodonaves_cnpj: rodonavesCnpj.replace(/\D/g, ''),
       rodonaves_label: rodonavesLabel.trim() || 'Rodonaves',
+      store_pickup_enabled: storePickupEnabled,
+      store_pickup_label: storePickupLabel.trim(),
+      store_pickup_address: storePickupAddress.trim(),
+      store_pickup_instructions: storePickupInstructions.trim(),
+      store_pickup_deadline_days: storePickupDeadlineDays,
     };
     if (pollinationsKey.trim()) payload.pollinations_api_key = pollinationsKey.trim();
     if (hfToken.trim()) payload.huggingface_api_token = hfToken.trim();
@@ -430,11 +447,41 @@ export default function AdminSettings() {
 
             <TabsContent value="frete" className="space-y-6 mt-0 focus-visible:outline-none">
               <div>
-                <h2 className="font-display text-lg tracking-wide text-foreground">Frete</h2>
+                <h2 className="font-display text-lg tracking-wide text-foreground">Frete e retirada</h2>
                 <p className="font-body text-sm text-muted-foreground mt-1">
-                  Correios (PAC/SEDEX), transportadora própria e Rodonaves. Informe o CEP de origem da loja.
+                  Correios (PAC/SEDEX), transportadora própria, Rodonaves e retirada na loja.
                 </p>
               </div>
+
+            <div className="p-4 border border-border rounded-sm space-y-4 bg-secondary/20">
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={storePickupEnabled}
+                  onChange={(e) => setStorePickupEnabled(e.target.checked)}
+                  className="w-4 h-4 rounded"
+                />
+                <span className="font-body text-sm text-foreground">Oferecer retirada na loja no checkout</span>
+              </label>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label className={labelClass}>Nome da opção</label>
+                  <input className={inputClass} value={storePickupLabel} onChange={(e) => setStorePickupLabel(e.target.value)} />
+                </div>
+                <div>
+                  <label className={labelClass}>Prazo (dias úteis)</label>
+                  <input type="number" min="1" className={inputClass} value={storePickupDeadlineDays} onChange={(e) => setStorePickupDeadlineDays(e.target.value)} />
+                </div>
+              </div>
+              <div>
+                <label className={labelClass}>Endereço da loja</label>
+                <input className={inputClass} value={storePickupAddress} onChange={(e) => setStorePickupAddress(e.target.value)} placeholder="Rua, número, cidade - UF" />
+              </div>
+              <div>
+                <label className={labelClass}>Instruções para o cliente</label>
+                <textarea rows={2} className={inputClass} value={storePickupInstructions} onChange={(e) => setStorePickupInstructions(e.target.value)} placeholder="Ex: Aguarde confirmação por e-mail antes de retirar." />
+              </div>
+            </div>
 
             <div>
               <label className={labelClass}>CEP de origem *</label>

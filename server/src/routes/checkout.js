@@ -31,10 +31,11 @@ import { trackCorreiosPackage } from '../services/correiosTracking.js';
 import { normalizeProductQuantity } from '../utils/productStock.js';
 import { resolveVariantAvailability, decrementProductVariantStock } from '../utils/productVariants.js';
 import { streamOrderInvoice, withInvoiceFlags, withInvoiceFlagsList } from '../services/invoiceAccess.js';
+import { STORE_PICKUP_ID, getStorePickupConfig, resolveStorePickupShipping, buildStorePickupOption } from '../services/storePickup.js';
 
 const router = Router();
 
-const VALID_PAYMENT_METHODS = ['pix', 'cartao_credito', 'boleto', 'test'];
+const VALID_PAYMENT_METHODS = ['pix', 'cartao_credito', 'cartao_debito', 'boleto', 'dinheiro', 'pagar_na_loja', 'test'];
 
 function calcTotals(cartItems, shippingCost = 0, { pixDiscountPercent = 0, applyPixDiscount = false } = {}) {
   const subtotal = cartItems.reduce(
@@ -66,6 +67,10 @@ async function loadCartProducts(userId) {
 }
 
 async function resolveShippingForCheckout(userId, customerZip, shippingServiceId) {
+  if (shippingServiceId === STORE_PICKUP_ID) {
+    return resolveStorePickupShipping();
+  }
+
   if (!customerZip?.trim()) {
     throw new Error('Informe o CEP para calcular o frete');
   }
@@ -218,36 +223,47 @@ async function startCheckout(req, res) {
   } = req.body;
 
   const paymentMethod = req.body.payment_method || await getCheckoutPaymentMethod();
+  const isPickup = shippingServiceId === STORE_PICKUP_ID;
 
   if (!customer_name?.trim() || !customer_email?.trim()) {
     return res.status(400).json({ message: 'Nome e e-mail são obrigatórios' });
   }
 
   const address = normalizeAddressInput(req.body);
-  const missingAddress = validateAddressFields(address);
-  if (missingAddress.length > 0) {
-    return res.status(400).json({
-      message: `Preencha o endereço: ${missingAddress.join(', ')}`,
-    });
+  if (!isPickup) {
+    const missingAddress = validateAddressFields(address);
+    if (missingAddress.length > 0) {
+      return res.status(400).json({
+        message: `Preencha o endereço: ${missingAddress.join(', ')}`,
+      });
+    }
   }
 
   if (!VALID_PAYMENT_METHODS.includes(paymentMethod)) {
     return res.status(400).json({ message: 'Forma de pagamento não configurada' });
   }
 
+  if ((paymentMethod === 'dinheiro' || paymentMethod === 'pagar_na_loja') && !isPickup) {
+    return res.status(400).json({ message: 'Esta forma de pagamento só está disponível na retirada na loja' });
+  }
+
+  const pickupConfig = isPickup ? await getStorePickupConfig() : null;
+
   const customer = {
     customer_name,
     customer_email,
     customer_phone,
     customer_document,
-    customer_zip_code,
-    customer_address: address.customer_address,
-    address_street: address.address_street,
-    address_number: address.address_number,
-    address_complement: address.address_complement,
-    address_district: address.address_district,
-    address_city: address.address_city,
-    address_state: address.address_state,
+    customer_zip_code: isPickup ? null : customer_zip_code,
+    customer_address: isPickup
+      ? `Retirada na loja — ${pickupConfig.address}`
+      : address.customer_address,
+    address_street: isPickup ? pickupConfig.address : address.address_street,
+    address_number: isPickup ? '—' : address.address_number,
+    address_complement: isPickup ? '' : address.address_complement,
+    address_district: isPickup ? '' : address.address_district,
+    address_city: isPickup ? 'Sacramento' : address.address_city,
+    address_state: isPickup ? 'MG' : address.address_state,
   };
 
   let shipping;
@@ -297,6 +313,21 @@ async function startCheckout(req, res) {
     });
   }
 
+  if (providerInfo.provider === 'pay_at_pickup') {
+    await pool.query('DELETE FROM cart_items WHERE user_id = $1', [req.user.id]);
+
+    const message = paymentMethod === 'dinheiro'
+      ? 'Pedido registrado. Leve o valor em dinheiro na retirada.'
+      : 'Pedido registrado. Pague na loja ao retirar seu pedido.';
+
+    return res.json({
+      type: 'pay_at_pickup',
+      order_id: order.id,
+      redirect_url: `/pagamento/retorno?pedido=${order.id}`,
+      message,
+    });
+  }
+
   const cieloConfig = providerInfo.cieloConfig;
   const returnUrl = `${cieloConfig.frontendUrl}/pagamento/retorno?pedido=${order.id}`;
 
@@ -342,11 +373,16 @@ router.get('/condicoes-pagamento', async (_req, res) => {
   }
 });
 
-router.get('/metodos', requireAuth, async (_req, res) => {
+router.get('/metodos', requireAuth, async (req, res) => {
   try {
-    const methods = await getAvailablePaymentMethods();
-    const checkoutMethod = await getCheckoutPaymentMethod();
-    res.json({ methods, checkout_method: checkoutMethod });
+    const isPickup = req.query.pickup === 'true';
+    const methods = await getAvailablePaymentMethods({ pickup: isPickup });
+    const storePickup = await getStorePickupConfig();
+    res.json({
+      methods,
+      store_pickup: storePickup,
+      checkout_method: await getCheckoutPaymentMethod(),
+    });
   } catch (err) {
     console.error('Erro ao listar métodos de pagamento:', err);
     res.status(500).json({ message: 'Erro ao carregar formas de pagamento' });

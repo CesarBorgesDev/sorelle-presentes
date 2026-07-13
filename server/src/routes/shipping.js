@@ -8,6 +8,7 @@ import {
   fetchAddressByCep,
 } from '../services/correios.js';
 import { normalizeProductQuantity } from '../utils/productStock.js';
+import { getStorePickupConfig, buildStorePickupOption } from '../services/storePickup.js';
 
 const router = Router();
 
@@ -46,6 +47,12 @@ router.post('/cotacao', requireAuth, async (req, res) => {
       config,
       invoiceValue: calcInvoiceValue(cartProducts),
     });
+
+    const pickupConfig = await getStorePickupConfig();
+    const pickupOption = buildStorePickupOption(pickupConfig);
+    if (pickupOption) {
+      quote.options = [pickupOption, ...quote.options];
+    }
 
     res.json(quote);
   } catch (err) {

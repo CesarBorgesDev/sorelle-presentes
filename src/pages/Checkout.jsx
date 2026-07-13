@@ -4,12 +4,17 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import { api } from '@/api/apiClient';
 import { useAuth } from '@/lib/AuthContext';
 import { Button } from '@/components/ui/button';
-import { Loader2, ArrowLeft, Truck, FlaskConical, CreditCard, QrCode, FileText } from 'lucide-react';
+import { Loader2, ArrowLeft, Truck, FlaskConical, CreditCard, QrCode, FileText, Store, Banknote, Wallet } from 'lucide-react';
+
+const STORE_PICKUP_ID = 'retirada_loja';
 
 const PAYMENT_ICONS = {
   pix: QrCode,
   cartao_credito: CreditCard,
+  cartao_debito: Wallet,
   boleto: FileText,
+  dinheiro: Banknote,
+  pagar_na_loja: Store,
   test: FlaskConical,
 };
 
@@ -28,6 +33,7 @@ export default function Checkout() {
   const navigate = useNavigate();
   const { user, isAuthenticated } = useAuth();
   const [error, setError] = useState('');
+  const [deliveryMode, setDeliveryMode] = useState('delivery');
   const [shippingServiceId, setShippingServiceId] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('');
   const [shippingQuote, setShippingQuote] = useState(null);
@@ -59,10 +65,13 @@ export default function Checkout() {
   });
 
   const { data: methodsData, isLoading: methodsLoading } = useQuery({
-    queryKey: ['checkout-methods'],
-    queryFn: () => api.checkout.getMethods(),
+    queryKey: ['checkout-methods', deliveryMode],
+    queryFn: () => api.checkout.getMethods(deliveryMode === 'pickup'),
     enabled: isAuthenticated,
   });
+
+  const storePickup = methodsData?.store_pickup;
+  const pickupAvailable = Boolean(storePickup?.enabled);
 
   const { data: profile } = useQuery({
     queryKey: ['account-profile'],
@@ -90,6 +99,18 @@ export default function Checkout() {
       setPaymentMethod(paymentMethods[0].id);
     }
   }, [paymentMethods, paymentMethod]);
+
+  useEffect(() => {
+    if (deliveryMode === 'pickup' && pickupAvailable) {
+      setShippingServiceId(STORE_PICKUP_ID);
+      setShippingQuote(null);
+      setShippingError('');
+      return;
+    }
+    if (deliveryMode === 'delivery' && shippingServiceId === STORE_PICKUP_ID) {
+      setShippingServiceId('');
+    }
+  }, [deliveryMode, pickupAvailable, shippingServiceId]);
 
   const applyAddressFromCep = useCallback((address) => {
     if (!address) return;
@@ -139,7 +160,15 @@ export default function Checkout() {
   }, [applyAddressFromCep]);
 
   const subtotal = items.reduce((sum, item) => sum + item.price * (item.quantity || 1), 0);
-  const selectedShipping = shippingQuote?.options?.find((o) => o.id === shippingServiceId && o.available);
+  const isPickup = deliveryMode === 'pickup';
+  const selectedShipping = isPickup
+    ? {
+        id: STORE_PICKUP_ID,
+        label: storePickup?.label || 'Retirar na loja',
+        price: 0,
+        deadline_days: storePickup?.deadline_days || 3,
+      }
+    : shippingQuote?.options?.find((o) => o.id === shippingServiceId && o.available);
   const shippingCost = selectedShipping?.price || 0;
   const pixDiscountPercent = selectedPayment?.pix_discount_percent || 0;
   const pixDiscount = paymentMethod === 'pix' && pixDiscountPercent > 0
@@ -154,7 +183,7 @@ export default function Checkout() {
         navigate(result.redirect_url || `/pagamento/pix?pedido=${result.order_id}`);
         return;
       }
-      if (result.type === 'test') {
+      if (result.type === 'test' || result.type === 'pay_at_pickup') {
         navigate(result.redirect_url || `/pagamento/retorno?pedido=${result.order_id}`);
         return;
       }
@@ -194,7 +223,7 @@ export default function Checkout() {
     e.preventDefault();
     setError('');
     if (!shippingServiceId) {
-      setError('Selecione uma opção de frete');
+      setError(isPickup ? 'Retirada na loja indisponível' : 'Selecione uma opção de frete');
       return;
     }
     if (!paymentMethod) {
@@ -223,7 +252,7 @@ export default function Checkout() {
 
       <h1 className="font-display text-3xl tracking-wide mb-2">Finalizar Compra</h1>
       <p className="font-body text-sm text-muted-foreground mb-8">
-        Informe o CEP, escolha o frete, a forma de pagamento e conclua seu pedido.
+        Escolha como receber, a forma de pagamento e conclua seu pedido.
       </p>
 
       {isLoading ? (
@@ -244,6 +273,55 @@ export default function Checkout() {
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
           <form onSubmit={handleSubmit} className="lg:col-span-3 space-y-6">
             <div className="space-y-4">
+              {pickupAvailable && (
+                <div>
+                  <label className={labelClass}>Como deseja receber? *</label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setDeliveryMode('delivery')}
+                      className={`p-4 rounded-sm border text-left transition-colors font-body ${
+                        deliveryMode === 'delivery'
+                          ? 'border-primary bg-primary/5 ring-1 ring-primary'
+                          : 'border-border hover:border-primary/50'
+                      }`}
+                    >
+                      <Truck className={`w-4 h-4 mb-2 ${deliveryMode === 'delivery' ? 'text-primary' : 'text-muted-foreground'}`} />
+                      <p className="text-sm font-medium">Entrega</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">Receba em seu endereço</p>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDeliveryMode('pickup')}
+                      className={`p-4 rounded-sm border text-left transition-colors font-body ${
+                        deliveryMode === 'pickup'
+                          ? 'border-primary bg-primary/5 ring-1 ring-primary'
+                          : 'border-border hover:border-primary/50'
+                      }`}
+                    >
+                      <Store className={`w-4 h-4 mb-2 ${deliveryMode === 'pickup' ? 'text-primary' : 'text-muted-foreground'}`} />
+                      <p className="text-sm font-medium">{storePickup?.label || 'Retirar na loja'}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">Sem custo de frete</p>
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {isPickup ? (
+                <div className="p-4 border border-border rounded-sm bg-secondary/30 space-y-2">
+                  <p className="font-body text-sm font-medium text-foreground">
+                    {storePickup?.label || 'Retirar na loja'}
+                  </p>
+                  <p className="font-body text-sm text-muted-foreground">{storePickup?.address}</p>
+                  {storePickup?.instructions && (
+                    <p className="font-body text-xs text-muted-foreground">{storePickup.instructions}</p>
+                  )}
+                  <p className="font-body text-xs text-muted-foreground">
+                    Prazo estimado: {storePickup?.deadline_days || 3} dia(s) úteis após confirmação
+                  </p>
+                </div>
+              ) : (
+              <>
               <div>
                 <label className={labelClass}>CEP de entrega *</label>
                 <div className="relative">
@@ -359,7 +437,7 @@ export default function Checkout() {
                       </p>
                     )}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      {shippingQuote.options.filter((o) => o.available).map((option) => {
+                      {shippingQuote.options.filter((o) => o.available && o.id !== STORE_PICKUP_ID).map((option) => {
                         const selected = shippingServiceId === option.id;
                         return (
                           <button
@@ -384,6 +462,9 @@ export default function Checkout() {
                     </>
                   )}
                 </div>
+              )}
+
+              </>
               )}
 
               <div>
@@ -480,10 +561,12 @@ export default function Checkout() {
             <div className="border-t border-border pt-3 space-y-2 font-body text-sm">
               <div className="flex justify-between"><span className="text-muted-foreground">Subtotal</span><span>R$ {subtotal.toFixed(2).replace('.', ',')}</span></div>
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Frete</span>
+                <span className="text-muted-foreground">{isPickup ? 'Retirada' : 'Frete'}</span>
                 <span>
                   {selectedShipping
-                    ? `R$ ${shippingCost.toFixed(2).replace('.', ',')} (${selectedShipping.label})`
+                    ? isPickup
+                      ? `Grátis (${selectedShipping.label})`
+                      : `R$ ${shippingCost.toFixed(2).replace('.', ',')} (${selectedShipping.label})`
                     : '—'}
                 </span>
               </div>
