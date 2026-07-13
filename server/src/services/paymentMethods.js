@@ -40,54 +40,126 @@ export const CHECKOUT_OPTIONS = [
 
 const DEFAULT_CHECKOUT_METHOD = 'pix';
 
+async function getPixCredentials() {
+  const pixKey = ((await getSetting('pix_key')) || process.env.PIX_KEY || '').trim();
+  const pixHolder = ((await getSetting('pix_holder_name')) || process.env.PIX_HOLDER_NAME || 'Sorelle Presentes').trim();
+  return { pixKey, pixHolder };
+}
+
+/** IDs habilitados pelo admin (fallback: método único legado). */
+export async function getEnabledPaymentMethodIds() {
+  const raw = await getSetting('payment_methods_enabled');
+  if (raw) {
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed.filter((id) => PAYMENT_METHOD_DEFS[id]);
+      }
+    } catch {
+      // ignora JSON inválido
+    }
+  }
+
+  const single = (await getSetting('checkout_payment_method'))
+    || process.env.CHECKOUT_PAYMENT_METHOD
+    || DEFAULT_CHECKOUT_METHOD;
+  return PAYMENT_METHOD_DEFS[single] ? [single] : [DEFAULT_CHECKOUT_METHOD];
+}
+
 export async function getCheckoutPaymentMethod() {
-  const configured = (await getSetting('checkout_payment_method')) || process.env.CHECKOUT_PAYMENT_METHOD || DEFAULT_CHECKOUT_METHOD;
-  return PAYMENT_METHOD_DEFS[configured] ? configured : DEFAULT_CHECKOUT_METHOD;
+  const enabled = await getEnabledPaymentMethodIds();
+  return enabled[0] || DEFAULT_CHECKOUT_METHOD;
+}
+
+async function isMethodAvailable(methodId) {
+  const def = PAYMENT_METHOD_DEFS[methodId];
+  if (!def) return false;
+
+  if (methodId === 'test') return true;
+
+  const cieloConfig = await getCieloConfig();
+  const { pixKey } = await getPixCredentials();
+
+  if (methodId === 'pix') {
+    return (def.gateway && cieloConfig.isReady) || (def.manualFallback && Boolean(pixKey));
+  }
+
+  if (methodId === 'cartao_credito' || methodId === 'boleto') {
+    return def.gateway && cieloConfig.isReady;
+  }
+
+  return false;
+}
+
+async function resolveMethodProvider(methodId) {
+  const def = PAYMENT_METHOD_DEFS[methodId];
+  if (!def) return null;
+
+  const cieloConfig = await getCieloConfig();
+  const { pixKey, pixHolder } = await getPixCredentials();
+
+  if (methodId === 'test') {
+    return { provider: 'test', isTestMode: true };
+  }
+
+  if (methodId === 'pix') {
+    if (cieloConfig.isReady) {
+      return { provider: 'cielo', isTestMode: false, cieloConfig };
+    }
+    if (pixKey) {
+      return { provider: 'manual_pix', isTestMode: false, pixKey, pixHolder };
+    }
+    return null;
+  }
+
+  if ((methodId === 'cartao_credito' || methodId === 'boleto') && cieloConfig.isReady) {
+    return { provider: 'cielo', isTestMode: false, cieloConfig };
+  }
+
+  return null;
 }
 
 export async function getCheckoutConfig() {
   const methodId = await getCheckoutPaymentMethod();
   const def = PAYMENT_METHOD_DEFS[methodId];
-  const cieloConfig = await getCieloConfig();
-  const pixKey = ((await getSetting('pix_key')) || process.env.PIX_KEY || '').trim();
-  const pixHolder = ((await getSetting('pix_holder_name')) || process.env.PIX_HOLDER_NAME || 'Sorelle Presentes').trim();
-
-  if (methodId === 'test') {
-    return {
-      method: methodId,
-      ...def,
-      available: true,
-      provider: 'test',
-      isTestMode: true,
-    };
-  }
-
-  const viaCielo = def.gateway && cieloConfig.isReady;
-  const viaManualPix = methodId === 'pix' && def.manualFallback && Boolean(pixKey);
+  const providerInfo = await resolveMethodProvider(methodId);
 
   return {
     method: methodId,
     ...def,
-    available: viaCielo || viaManualPix,
-    provider: viaCielo ? 'cielo' : viaManualPix ? 'manual_pix' : null,
-    isTestMode: false,
-    cieloConfig: viaCielo ? cieloConfig : null,
-    pixKey: viaManualPix ? pixKey : null,
-    pixHolder: viaManualPix ? pixHolder : null,
+    available: Boolean(providerInfo),
+    provider: providerInfo?.provider || null,
+    isTestMode: providerInfo?.isTestMode || false,
+    cieloConfig: providerInfo?.cieloConfig || null,
+    pixKey: providerInfo?.pixKey || null,
+    pixHolder: providerInfo?.pixHolder || null,
   };
 }
 
-/** Retorna a forma de pagamento configurada (única) para exibir no checkout. */
+/** Retorna todas as formas de pagamento habilitadas e disponíveis para o cliente escolher. */
 export async function getAvailablePaymentMethods() {
-  const config = await getCheckoutConfig();
-  if (!config.available) return [];
-  return [{
-    id: config.method,
-    label: config.label,
-    description: config.description,
-    provider: config.provider,
-    isTestMode: config.isTestMode,
-  }];
+  const enabled = await getEnabledPaymentMethodIds();
+  const pixDiscountPercent = await getPixDiscountPercent();
+  const methods = [];
+
+  for (const methodId of enabled) {
+    if (!(await isMethodAvailable(methodId))) continue;
+
+    const def = PAYMENT_METHOD_DEFS[methodId];
+    const providerInfo = await resolveMethodProvider(methodId);
+    if (!providerInfo) continue;
+
+    methods.push({
+      id: methodId,
+      label: def.label,
+      description: def.description,
+      provider: providerInfo.provider,
+      isTestMode: providerInfo.isTestMode || false,
+      pix_discount_percent: methodId === 'pix' ? pixDiscountPercent : 0,
+    });
+  }
+
+  return methods;
 }
 
 export async function getPixDiscountPercent() {
@@ -98,41 +170,34 @@ export async function getPixDiscountPercent() {
 /** Condições de pagamento exibidas na loja (público). */
 export async function getPublicPaymentConditions() {
   const cieloConfig = await getCieloConfig();
-  const checkoutMethod = await getCheckoutPaymentMethod();
+  const enabledMethods = await getEnabledPaymentMethodIds();
   const pixDiscountPercent = await getPixDiscountPercent();
   const maxInstallments = cieloConfig.maxInstallments;
 
   return {
     max_installments: maxInstallments,
     pix_discount_percent: pixDiscountPercent,
-    checkout_method: checkoutMethod,
-    shows_installments: maxInstallments >= 2,
-    shows_pix_discount: pixDiscountPercent > 0,
+    checkout_method: await getCheckoutPaymentMethod(),
+    payment_methods_enabled: enabledMethods,
+    shows_installments: maxInstallments >= 2 && enabledMethods.includes('cartao_credito'),
+    shows_pix_discount: pixDiscountPercent > 0 && enabledMethods.includes('pix'),
   };
 }
 
 export async function resolvePaymentProvider(paymentMethod) {
-  const configured = await getCheckoutPaymentMethod();
-  if (paymentMethod !== configured) {
-    throw new Error('Forma de pagamento não corresponde à configuração da loja');
+  const enabled = await getEnabledPaymentMethodIds();
+  if (!enabled.includes(paymentMethod)) {
+    throw new Error('Forma de pagamento não disponível');
   }
 
-  const config = await getCheckoutConfig();
-  if (!config.available) {
-    throw new Error('Checkout não configurado. Acesse Admin → Configurações.');
+  if (!(await isMethodAvailable(paymentMethod))) {
+    throw new Error('Esta forma de pagamento não está configurada. Acesse Configurações no admin.');
   }
 
-  if (config.provider === 'test') {
-    return { provider: 'test' };
+  const providerInfo = await resolveMethodProvider(paymentMethod);
+  if (!providerInfo) {
+    throw new Error('Esta forma de pagamento não está configurada. Acesse Configurações no admin.');
   }
 
-  if (config.provider === 'cielo') {
-    return { provider: 'cielo', cieloConfig: config.cieloConfig };
-  }
-
-  if (config.provider === 'manual_pix') {
-    return { provider: 'manual_pix', pixKey: config.pixKey, pixHolder: config.pixHolder };
-  }
-
-  throw new Error('Esta forma de pagamento não está configurada. Acesse Configurações no admin.');
+  return providerInfo;
 }

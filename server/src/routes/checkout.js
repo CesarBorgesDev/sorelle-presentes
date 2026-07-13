@@ -217,7 +217,7 @@ async function startCheckout(req, res) {
     shipping_service_id: shippingServiceId,
   } = req.body;
 
-  const paymentMethod = await getCheckoutPaymentMethod();
+  const paymentMethod = req.body.payment_method || await getCheckoutPaymentMethod();
 
   if (!customer_name?.trim() || !customer_email?.trim()) {
     return res.status(400).json({ message: 'Nome e e-mail são obrigatórios' });

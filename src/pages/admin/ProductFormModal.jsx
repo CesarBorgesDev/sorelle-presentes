@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { api } from '@/api/apiClient';import { buildInitialProductImages, buildProductImagePayload } from '@/lib/productImages';
+import { api } from '@/api/apiClient';
+import { buildInitialProductImages, buildProductImagePayload } from '@/lib/productImages';
 import ProductImagesEditor from './ProductImagesEditor';
 import ProductVariantsEditor from './ProductVariantsEditor';
 import { ensureVariantStockMatrix, getTotalSizeStock, usesSizeStock } from '@/lib/productVariants';
@@ -159,7 +160,7 @@ export default function ProductFormModal({ product, onClose }) {
 
   const inputClass = 'w-full px-3 py-2.5 bg-background border border-border rounded-sm font-body text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring';
   const labelClass = 'block font-body text-xs text-muted-foreground tracking-wider uppercase mb-1.5';
-  const selectedCategory = CATEGORIES.find((c) => c.value === form.category);
+  const selectedCategory = categoryOptions.find((c) => c.value === form.category);
   const hasSizeGrid = usesSizeStock(variants);
   const computedStockTotal = getTotalSizeStock(ensureVariantStockMatrix(variants));
 

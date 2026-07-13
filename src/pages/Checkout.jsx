@@ -4,7 +4,14 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import { api } from '@/api/apiClient';
 import { useAuth } from '@/lib/AuthContext';
 import { Button } from '@/components/ui/button';
-import { Loader2, ArrowLeft, Truck, FlaskConical } from 'lucide-react';
+import { Loader2, ArrowLeft, Truck, FlaskConical, CreditCard, QrCode, FileText } from 'lucide-react';
+
+const PAYMENT_ICONS = {
+  pix: QrCode,
+  cartao_credito: CreditCard,
+  boleto: FileText,
+  test: FlaskConical,
+};
 
 const BRAZILIAN_STATES = [
   'AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG',
@@ -22,6 +29,7 @@ export default function Checkout() {
   const { user, isAuthenticated } = useAuth();
   const [error, setError] = useState('');
   const [shippingServiceId, setShippingServiceId] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState('');
   const [shippingQuote, setShippingQuote] = useState(null);
   const [shippingLoading, setShippingLoading] = useState(false);
   const [shippingError, setShippingError] = useState('');
@@ -72,8 +80,16 @@ export default function Checkout() {
     }));
   }, [profile, user]);
 
-  const checkoutMethod = methodsData?.methods?.[0];
-  const isTestMode = checkoutMethod?.isTestMode;
+  const paymentMethods = methodsData?.methods || [];
+  const selectedPayment = paymentMethods.find((method) => method.id === paymentMethod);
+  const isTestMode = selectedPayment?.isTestMode;
+
+  useEffect(() => {
+    if (!paymentMethods.length) return;
+    if (!paymentMethod || !paymentMethods.some((method) => method.id === paymentMethod)) {
+      setPaymentMethod(paymentMethods[0].id);
+    }
+  }, [paymentMethods, paymentMethod]);
 
   const applyAddressFromCep = useCallback((address) => {
     if (!address) return;
@@ -125,7 +141,11 @@ export default function Checkout() {
   const subtotal = items.reduce((sum, item) => sum + item.price * (item.quantity || 1), 0);
   const selectedShipping = shippingQuote?.options?.find((o) => o.id === shippingServiceId && o.available);
   const shippingCost = selectedShipping?.price || 0;
-  const total = subtotal + shippingCost;
+  const pixDiscountPercent = selectedPayment?.pix_discount_percent || 0;
+  const pixDiscount = paymentMethod === 'pix' && pixDiscountPercent > 0
+    ? subtotal * (pixDiscountPercent / 100)
+    : 0;
+  const total = subtotal + shippingCost - pixDiscount;
 
   const checkoutMutation = useMutation({
     mutationFn: (data) => api.checkout.start(data),
@@ -177,17 +197,22 @@ export default function Checkout() {
       setError('Selecione uma opção de frete');
       return;
     }
+    if (!paymentMethod) {
+      setError('Selecione uma forma de pagamento');
+      return;
+    }
     checkoutMutation.mutate({
       ...form,
       customer_zip_code: form.customer_zip_code.replace(/\D/g, ''),
       shipping_service_id: shippingServiceId,
+      payment_method: paymentMethod,
     });
   };
 
   const inputClass = 'w-full px-3 py-2.5 bg-background border border-border rounded-sm font-body text-sm focus:outline-none focus:ring-1 focus:ring-ring';
   const labelClass = 'block font-body text-xs text-muted-foreground tracking-wider uppercase mb-1.5';
   const isLoading = cartLoading || methodsLoading;
-  const checkoutUnavailable = !isLoading && !checkoutMethod;
+  const checkoutUnavailable = !isLoading && paymentMethods.length === 0;
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-10">
@@ -198,24 +223,8 @@ export default function Checkout() {
 
       <h1 className="font-display text-3xl tracking-wide mb-2">Finalizar Compra</h1>
       <p className="font-body text-sm text-muted-foreground mb-8">
-        Informe o CEP, escolha o frete e conclua seu pedido.
+        Informe o CEP, escolha o frete, a forma de pagamento e conclua seu pedido.
       </p>
-
-      {checkoutMethod && (
-        <div className={`mb-6 flex items-center gap-2 px-4 py-3 rounded-sm border font-body text-sm ${
-          isTestMode
-            ? 'bg-amber-500/10 border-amber-500/30 text-amber-800 dark:text-amber-300'
-            : 'bg-secondary/50 border-border text-muted-foreground'
-        }`}>
-          {isTestMode ? <FlaskConical className="w-4 h-4 shrink-0" /> : null}
-          <span>
-            Pagamento: <strong className="text-foreground">{checkoutMethod.label}</strong>
-            {isTestMode && ' — pedido aprovado automaticamente (sem cobrança)'}
-            {!isTestMode && checkoutMethod.provider === 'cielo' && ' via Cielo'}
-            {!isTestMode && checkoutMethod.provider === 'manual_pix' && ' — chave PIX após confirmar'}
-          </span>
-        </div>
-      )}
 
       {isLoading ? (
         <div className="flex items-center gap-2 text-muted-foreground">
@@ -377,6 +386,42 @@ export default function Checkout() {
                 </div>
               )}
 
+              <div>
+                <label className={labelClass}>Forma de pagamento *</label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {paymentMethods.map((method) => {
+                    const Icon = PAYMENT_ICONS[method.id] || CreditCard;
+                    const selected = paymentMethod === method.id;
+                    return (
+                      <button
+                        key={method.id}
+                        type="button"
+                        onClick={() => setPaymentMethod(method.id)}
+                        className={`p-4 rounded-sm border text-left transition-colors font-body ${
+                          selected
+                            ? 'border-primary bg-primary/5 ring-1 ring-primary'
+                            : 'border-border hover:border-primary/50'
+                        }`}
+                      >
+                        <Icon className={`w-4 h-4 mb-2 ${selected ? 'text-primary' : 'text-muted-foreground'}`} />
+                        <p className="text-sm font-medium">{method.label}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">{method.description}</p>
+                        {method.pix_discount_percent > 0 && (
+                          <p className="text-xs text-emerald-700 dark:text-emerald-400 mt-1">
+                            {method.pix_discount_percent}% de desconto
+                          </p>
+                        )}
+                        {method.isTestMode && (
+                          <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">
+                            Aprovação automática (sem cobrança)
+                          </p>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
               <div className="space-y-4 pt-2 border-t border-border">
                 <p className="font-body text-xs text-muted-foreground tracking-wider uppercase">Dados pessoais</p>
                 <div>
@@ -406,7 +451,7 @@ export default function Checkout() {
 
             <Button
               type="submit"
-              disabled={checkoutMutation.isPending || !shippingServiceId}
+              disabled={checkoutMutation.isPending || !shippingServiceId || !paymentMethod}
               className="w-full py-6 font-body tracking-wider"
             >
               {checkoutMutation.isPending ? (
@@ -442,6 +487,12 @@ export default function Checkout() {
                     : '—'}
                 </span>
               </div>
+              {pixDiscount > 0 && (
+                <div className="flex justify-between text-emerald-700 dark:text-emerald-400">
+                  <span>Desconto PIX ({pixDiscountPercent}%)</span>
+                  <span>- R$ {pixDiscount.toFixed(2).replace('.', ',')}</span>
+                </div>
+              )}
               <div className="flex justify-between font-display text-base pt-2 border-t border-border">
                 <span>Total</span>
                 <span>R$ {total.toFixed(2).replace('.', ',')}</span>

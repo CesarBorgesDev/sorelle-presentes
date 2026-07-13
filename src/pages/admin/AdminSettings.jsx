@@ -52,6 +52,7 @@ export default function AdminSettings() {
   const [cieloCheckoutApiUrl, setCieloCheckoutApiUrl] = useState('');
   const [cieloMaxInstallments, setCieloMaxInstallments] = useState('12');
   const [checkoutMethod, setCheckoutMethod] = useState('pix');
+  const [enabledPaymentMethods, setEnabledPaymentMethods] = useState(['pix']);
   const [pixKey, setPixKey] = useState('');
   const [pixHolderName, setPixHolderName] = useState('');
   const [pixDiscountPercent, setPixDiscountPercent] = useState('0');
@@ -101,7 +102,11 @@ export default function AdminSettings() {
       setCieloMaxInstallments(String(data.cielo.maxInstallments || 12));
     }
     if (data?.payment) {
-      setCheckoutMethod(data.payment.checkout_method || 'pix');
+      const enabled = Array.isArray(data.payment.payment_methods_enabled) && data.payment.payment_methods_enabled.length
+        ? data.payment.payment_methods_enabled
+        : [data.payment.checkout_method || 'pix'];
+      setEnabledPaymentMethods(enabled);
+      setCheckoutMethod(data.payment.checkout_method || enabled[0] || 'pix');
       setPixHolderName(data.payment.pix_holder_name || '');
       setPixDiscountPercent(String(data.payment.pix_discount_percent ?? 0));
       if (data.payment.max_installments) {
@@ -162,7 +167,8 @@ export default function AdminSettings() {
       cielo_backend_public_url: cieloBackendUrl.trim(),
       cielo_checkout_api_url: cieloCheckoutApiUrl.trim(),
       cielo_max_installments: cieloMaxInstallments,
-      checkout_payment_method: checkoutMethod,
+      checkout_payment_method: enabledPaymentMethods[0] || checkoutMethod,
+      payment_methods_enabled: enabledPaymentMethods,
       pix_holder_name: pixHolderName.trim(),
       pix_discount_percent: pixDiscountPercent,
       correios_origin_zip: correiosOriginZip.replace(/\D/g, ''),
@@ -286,7 +292,7 @@ export default function AdminSettings() {
               <div>
                 <h2 className="font-display text-lg tracking-wide text-foreground">Finalizar compra</h2>
                 <p className="font-body text-sm text-muted-foreground mt-1">
-                  Define como todos os clientes concluem o pedido. O checkout da loja usa apenas esta opção.
+                  Escolha quais formas de pagamento o cliente pode selecionar no checkout.
                 </p>
               </div>
 
@@ -297,7 +303,7 @@ export default function AdminSettings() {
                   : 'bg-amber-500/10 text-amber-700 dark:text-amber-400'
               }`}>
                 {payment.checkout_config.available
-                  ? `Ativo: ${payment.checkout_config.label}${payment.checkout_config.isTestMode ? ' (sem cobrança real)' : ''}`
+                  ? `${enabledPaymentMethods.length} forma(s) habilitada(s) para o cliente`
                   : 'Checkout indisponível — configure Cielo ou chave PIX abaixo'}
               </div>
             )}
@@ -307,16 +313,21 @@ export default function AdminSettings() {
                 <label
                   key={option.id}
                   className={`flex items-start gap-3 p-4 border rounded-sm cursor-pointer transition-colors ${
-                    checkoutMethod === option.id
+                    enabledPaymentMethods.includes(option.id)
                       ? 'border-primary bg-primary/5 ring-1 ring-primary'
                       : 'border-border hover:bg-secondary/30'
                   }`}
                 >
                   <input
-                    type="radio"
-                    name="checkout_method"
-                    checked={checkoutMethod === option.id}
-                    onChange={() => setCheckoutMethod(option.id)}
+                    type="checkbox"
+                    checked={enabledPaymentMethods.includes(option.id)}
+                    onChange={() => {
+                      setEnabledPaymentMethods((current) => (
+                        current.includes(option.id)
+                          ? current.filter((id) => id !== option.id)
+                          : [...current, option.id]
+                      ));
+                    }}
                     className="mt-1"
                   />
                   <div>
@@ -329,14 +340,20 @@ export default function AdminSettings() {
               ))}
             </div>
 
-            {checkoutMethod === 'test' && (
+            {enabledPaymentMethods.length === 0 && (
+              <p className="font-body text-xs text-destructive">
+                Selecione ao menos uma forma de pagamento.
+              </p>
+            )}
+
+            {enabledPaymentMethods.includes('test') && (
               <div className="p-3 rounded-sm bg-amber-500/10 border border-amber-500/30 font-body text-xs text-amber-800 dark:text-amber-300">
                 Modo teste aprova pedidos automaticamente, esvazia o carrinho e não cobra nada.
                 Use apenas em desenvolvimento ou homologação.
               </div>
             )}
 
-            {checkoutMethod === 'pix' && (
+            {enabledPaymentMethods.includes('pix') && (
               <>
                 <div>
                   <label className={labelClass}>Chave PIX (pagamento manual)</label>

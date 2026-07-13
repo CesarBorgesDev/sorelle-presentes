@@ -8,6 +8,7 @@ import {
   getCheckoutPaymentMethod,
   getCheckoutConfig,
   getPixDiscountPercent,
+  getEnabledPaymentMethodIds,
 } from '../services/paymentMethods.js';
 import { getCorreiosConfig } from '../services/correios.js';
 import { getRodonavesConfig } from '../services/rodonaves.js';
@@ -26,7 +27,7 @@ async function buildSettingsResponse(message) {
   const hfToken = await getSetting('huggingface_api_token');
   const stableHordeKey = await getSetting('stable_horde_api_key');
   const cieloConfig = await getCieloConfig();
-  const enabledPaymentMethods = await getCheckoutPaymentMethod();
+  const enabledPaymentMethods = await getEnabledPaymentMethodIds();
   const checkoutConfig = await getCheckoutConfig();
   const pixKey = await getSetting('pix_key');
   const pixHolderName = await getSetting('pix_holder_name');
@@ -45,7 +46,8 @@ async function buildSettingsResponse(message) {
     image_model: (await getSetting('image_model')) || DEFAULT_IMAGE_MODEL,
     product_sort_order: await getProductSortOrder(),
     payment: {
-      checkout_method: enabledPaymentMethods,
+      checkout_method: await getCheckoutPaymentMethod(),
+      payment_methods_enabled: enabledPaymentMethods,
       checkout_options: CHECKOUT_OPTIONS,
       checkout_config: {
         available: checkoutConfig.available,
