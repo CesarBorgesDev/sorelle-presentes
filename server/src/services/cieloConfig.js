@@ -1,17 +1,26 @@
 import { getSetting } from './settings.js';
 
 const DEFAULT_CHECKOUT_URL = 'https://cieloecommerce.cielo.com.br/api/public/v1/orders/';
+const MERCHANT_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function normalizeCheckoutApiUrl(url) {
+  const trimmed = String(url || DEFAULT_CHECKOUT_URL).trim();
+  return trimmed.endsWith('/') ? trimmed : `${trimmed}/`;
+}
 
 export async function getCieloConfig() {
   const merchantId = ((await getSetting('cielo_merchant_id')) || process.env.CIELO_MERCHANT_ID || '').trim();
   const softDescriptor = ((await getSetting('cielo_soft_descriptor')) || process.env.CIELO_SOFT_DESCRIPTOR || 'SORELLE').trim();
   const frontendUrl = ((await getSetting('cielo_frontend_url')) || process.env.FRONTEND_URL || process.env.CORS_ORIGIN || 'http://localhost:3000').replace(/\/$/, '');
   const backendPublicUrl = ((await getSetting('cielo_backend_public_url')) || process.env.APP_PUBLIC_URL || 'http://localhost:3001').replace(/\/$/, '');
-  const checkoutApiUrl = ((await getSetting('cielo_checkout_api_url')) || process.env.CIELO_CHECKOUT_URL || DEFAULT_CHECKOUT_URL).trim();
+  const checkoutApiUrl = normalizeCheckoutApiUrl(
+    (await getSetting('cielo_checkout_api_url')) || process.env.CIELO_CHECKOUT_URL || DEFAULT_CHECKOUT_URL
+  );
   const maxInstallments = Number((await getSetting('cielo_max_installments')) || process.env.CIELO_MAX_INSTALLMENTS || 12);
 
   return {
     merchantId,
+    merchantIdValid: MERCHANT_ID_PATTERN.test(merchantId),
     softDescriptor: softDescriptor.slice(0, 13),
     frontendUrl,
     backendPublicUrl,
@@ -20,7 +29,7 @@ export async function getCieloConfig() {
     returnUrlExample: `${frontendUrl}/pagamento/retorno?pedido=ID_DO_PEDIDO`,
     notificationUrl: `${backendPublicUrl}/api/checkout/cielo/notificacao`,
     statusChangeUrl: `${backendPublicUrl}/api/checkout/cielo/mudanca-status`,
-    isReady: Boolean(merchantId),
+    isReady: Boolean(merchantId) && MERCHANT_ID_PATTERN.test(merchantId),
   };
 }
 

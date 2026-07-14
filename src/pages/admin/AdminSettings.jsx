@@ -996,7 +996,11 @@ export default function AdminSettings() {
                   placeholder="https://cieloecommerce.cielo.com.br/api/public/v1/orders/"
                 />
                 <p className="font-body text-xs text-muted-foreground mt-1">
-                  Endpoint POST para criar pedidos. Mantenha o padrão salvo, salvo orientação da Cielo.
+                  Endpoint POST para criar pedidos. Use exatamente:{' '}
+                  <span className="font-mono break-all">https://cieloecommerce.cielo.com.br/api/public/v1/orders/</span>
+                </p>
+                <p className="font-body text-xs text-muted-foreground mt-1">
+                  No painel Cielo, habilite cartão de crédito e/ou PIX em Configurações → Meios de pagamento.
                 </p>
               </div>
             </div>

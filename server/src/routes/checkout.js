@@ -254,7 +254,7 @@ async function startCheckout(req, res) {
       ? `Retirada na loja — ${pickupConfig.address}`
       : address.customer_address,
     address_street: isPickup ? pickupConfig.address : address.address_street,
-    address_number: isPickup ? '—' : address.address_number,
+    address_number: isPickup ? 'S/N' : address.address_number,
     address_complement: isPickup ? '' : address.address_complement,
     address_district: isPickup ? '' : address.address_district,
     address_city: isPickup ? 'Sacramento' : address.address_city,
@@ -326,22 +326,32 @@ async function startCheckout(req, res) {
   const cieloConfig = providerInfo.cieloConfig;
   const returnUrl = `${cieloConfig.frontendUrl}/pagamento/retorno?pedido=${order.id}`;
 
-  const payload = buildCieloPayload({
-    order,
-    customer,
-    returnUrl,
-    config: cieloConfig,
-    shipping: {
-      cost: shipping.price,
-      deadlineDays: shipping.deadline_days,
-      serviceName: shipping.label,
-    },
-  });
+  let checkoutUrl;
+  try {
+    const payload = buildCieloPayload({
+      order,
+      customer,
+      returnUrl,
+      config: cieloConfig,
+      isPickup,
+      shipping: {
+        cost: shipping.price,
+        deadlineDays: shipping.deadline_days,
+        serviceName: shipping.label,
+      },
+    });
 
-  const { checkoutUrl } = await createCieloCheckout(payload, {
-    merchantId: cieloConfig.merchantId,
-    checkoutApiUrl: cieloConfig.checkoutApiUrl,
-  });
+    ({ checkoutUrl } = await createCieloCheckout(payload, {
+      merchantId: cieloConfig.merchantId,
+      checkoutApiUrl: cieloConfig.checkoutApiUrl,
+    }));
+  } catch (err) {
+    await pool.query(
+      `UPDATE orders SET status = 'cancelado', payment_status = 'cancelado', updated_date = NOW() WHERE id = $1`,
+      [order.id]
+    );
+    throw err;
+  }
 
   const gatewayOrderNumber = buildOrderNumber(order.id);
 
