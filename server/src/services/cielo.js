@@ -31,14 +31,31 @@ export function extractCheckoutUrl(data) {
     data?.settings?.checkoutUrl,
     data?.CheckoutUrl,
     data?.checkoutUrl,
-    data?.Url,
-    data?.url,
     data?.data?.Settings?.CheckoutUrl,
     data?.data?.settings?.checkoutUrl,
     data?.data?.checkoutUrl,
   ];
 
   return candidates.find((value) => typeof value === 'string' && value.trim())?.trim() || null;
+}
+
+/** Tipos válidos conforme manual Checkout Cielo (FixedAmount, Free, WithoutShippingPickUp, etc.) */
+export function resolveCieloShippingType({ isPickup = false, shippingCost = 0 } = {}) {
+  if (isPickup) return 'WithoutShippingPickUp';
+  if (Number(shippingCost) > 0) return 'FixedAmount';
+  return 'Free';
+}
+
+export function isValidCieloCheckoutUrl(url) {
+  if (!url?.trim()) return false;
+  try {
+    const parsed = new URL(url.trim());
+    const hostOk = parsed.hostname.includes('cieloecommerce.cielo.com.br');
+    const pathOk = /checkoutui|transacional/i.test(`${parsed.pathname}${parsed.hash}`);
+    return hostOk && pathOk;
+  } catch {
+    return false;
+  }
 }
 
 function extractCieloErrorMessage(data) {
@@ -79,9 +96,22 @@ export function validateCieloPayload(payload) {
   if (!payload?.Customer?.Email?.trim()) {
     throw new Error('E-mail do cliente é obrigatório para pagamento com Cielo');
   }
+
+  const phone = onlyDigits(payload?.Customer?.Phone);
+  if (phone.length < 10 || phone.length > 11) {
+    throw new Error('Informe um telefone válido com DDD (10 ou 11 dígitos) para pagamento com Cielo');
+  }
 }
 
-export function buildCieloPayload({ order, customer, returnUrl, config = {}, shipping = {}, isPickup = false }) {
+export function buildCieloPayload({
+  order,
+  customer,
+  returnUrl,
+  config = {},
+  shipping = {},
+  isPickup = false,
+  originZipCode = '',
+}) {
   const softDescriptor = (config.softDescriptor || process.env.CIELO_SOFT_DESCRIPTOR || 'SORELLE').slice(0, 13);
   const maxInstallments = config.maxInstallments || 12;
   const shippingCost = Number(shipping.cost || order.shipping_cost || 0);
@@ -107,40 +137,45 @@ export function buildCieloPayload({ order, customer, returnUrl, config = {}, shi
   }
 
   const address = toCieloAddress(customer);
-  const zipCode = onlyDigits(customer.customer_zip_code).slice(0, 8) || '01310100';
+  const targetZip = onlyDigits(customer.customer_zip_code).slice(0, 8);
+  const sourceZip = onlyDigits(originZipCode).slice(0, 8) || '01310100';
+  const shippingType = resolveCieloShippingType({ isPickup, shippingCost });
+  const phone = onlyDigits(customer.customer_phone).slice(0, 11);
 
-  const shippingType = shippingCost > 0 && !isPickup
-    ? 'Normal'
-    : 'FreeWithoutShipping';
+  const shippingBlock = {
+    Type: shippingType,
+    TargetZipCode: targetZip || sourceZip,
+    Address: {
+      ...address,
+      Number: String(address.Number || 'S/N').replace(/[^\w\s/-]/g, '').slice(0, 15) || 'S/N',
+      District: address.District || 'Centro',
+    },
+    Services: [
+      {
+        Name: shippingLabel.slice(0, 128),
+        Price: toCents(shippingCost),
+        Deadline: shippingDeadline,
+      },
+    ],
+  };
+
+  if (sourceZip) {
+    shippingBlock.SourceZipCode = sourceZip;
+  }
 
   return {
     OrderNumber: buildOrderNumber(order.id),
     SoftDescriptor: softDescriptor,
     Cart: { Items: cartItems },
-    Shipping: {
-      Type: shippingType,
-      TargetZipCode: zipCode,
-      Address: {
-        ...address,
-        Number: String(address.Number || 'S/N').replace(/[^\w\s/-]/g, '').slice(0, 15) || 'S/N',
-        District: address.District || 'Centro',
-      },
-      Services: [
-        {
-          Name: shippingLabel.slice(0, 128),
-          Price: toCents(shippingCost),
-          Deadline: shippingDeadline,
-        },
-      ],
-    },
+    Shipping: shippingBlock,
     Payment: {
       MaxNumberOfInstallments: maxInstallments,
     },
     Customer: {
       Identity: onlyDigits(customer.customer_document),
-      FullName: customer.customer_name,
-      Email: customer.customer_email,
-      Phone: onlyDigits(customer.customer_phone).slice(0, 11),
+      FullName: String(customer.customer_name || '').trim().slice(0, 288),
+      Email: String(customer.customer_email || '').trim().slice(0, 64),
+      Phone: phone,
     },
     Options: {
       ReturnUrl: returnUrl,
@@ -198,19 +233,26 @@ export async function createCieloCheckout(payload, { merchantId, checkoutApiUrl 
   }
 
   const checkoutUrl = extractCheckoutUrl(data);
-  if (!checkoutUrl) {
+  if (!checkoutUrl || !isValidCieloCheckoutUrl(checkoutUrl)) {
     const detail = extractCieloErrorMessage(data);
-    console.error('[Cielo] Resposta sem CheckoutUrl:', {
+    console.error('[Cielo] Resposta sem CheckoutUrl válida:', {
       status: response.status,
       detail,
+      checkoutUrl,
       keys: Object.keys(data),
       data,
     });
     throw new Error(
       detail
-        || 'Cielo não retornou URL de pagamento. Confira no painel Cielo se cartão/PIX estão habilitados e se o Modo Teste está correto.'
+        || 'Cielo não retornou URL de pagamento válida. Confira MerchantId, meios de pagamento e Modo Teste no painel Cielo.'
     );
   }
+
+  console.info('[Cielo] Checkout criado:', {
+    orderNumber: payload.OrderNumber,
+    shippingType: payload.Shipping?.Type,
+    checkoutUrl,
+  });
 
   return { checkoutUrl, raw: data };
 }

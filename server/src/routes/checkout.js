@@ -325,6 +325,7 @@ async function startCheckout(req, res) {
 
   const cieloConfig = providerInfo.cieloConfig;
   const returnUrl = `${cieloConfig.frontendUrl}/pagamento/retorno?pedido=${order.id}`;
+  const correiosConfig = await getCorreiosConfig();
 
   let checkoutUrl;
   try {
@@ -334,6 +335,7 @@ async function startCheckout(req, res) {
       returnUrl,
       config: cieloConfig,
       isPickup,
+      originZipCode: correiosConfig.originZip,
       shipping: {
         cost: shipping.price,
         deadlineDays: shipping.deadline_days,
