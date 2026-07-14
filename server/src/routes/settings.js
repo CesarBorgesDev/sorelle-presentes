@@ -141,6 +141,7 @@ router.put('/', requireAuth, requireAdmin, async (req, res) => {
       cielo_backend_public_url,
       cielo_checkout_api_url,
       cielo_max_installments,
+      cielo_notification_method,
       payment_methods_enabled,
       checkout_payment_method,
       pix_key,
@@ -215,6 +216,13 @@ router.put('/', requireAuth, requireAdmin, async (req, res) => {
 
     if (cielo_max_installments !== undefined && cielo_max_installments !== '') {
       await setSetting('cielo_max_installments', String(cielo_max_installments));
+    }
+
+    if (cielo_notification_method !== undefined && cielo_notification_method !== '') {
+      const method = String(cielo_notification_method).trim().toLowerCase();
+      if (method === 'post' || method === 'json') {
+        await setSetting('cielo_notification_method', method);
+      }
     }
 
     if (checkout_payment_method !== undefined && checkout_payment_method !== '') {

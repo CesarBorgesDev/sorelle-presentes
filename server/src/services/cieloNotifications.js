@@ -32,10 +32,17 @@ export async function fetchCieloOrderFromUrl(url, merchantId) {
 }
 
 export async function resolveCieloNotificationPayload(body = {}) {
+  const config = await getCieloConfig();
+
+  // Modo POST (padrão): campos vêm direto no form-data (order_number, payment_status, etc.)
+  if (config.notificationMethod !== 'json') {
+    return body;
+  }
+
+  // Modo JSON: Cielo envia Url para consulta GET dos detalhes da transação
   const url = extractCieloNotificationUrl(body);
   if (!url) return body;
 
-  const config = await getCieloConfig();
   const merchantId = body.MerchantId || body.merchantId || config.merchantId;
   const details = await fetchCieloOrderFromUrl(url, merchantId);
 

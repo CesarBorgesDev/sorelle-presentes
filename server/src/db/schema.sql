@@ -268,5 +268,9 @@ UPDATE app_settings
 SET value = '["pix","cartao_credito"]', updated_date = NOW()
 WHERE key = 'payment_methods_enabled' AND value = '["pix"]';
 
+INSERT INTO app_settings (key, value) VALUES
+  ('cielo_notification_method', 'post')
+ON CONFLICT (key) DO NOTHING;
+
 -- Categoria de produto agora é validada pela tabela categories (constraint antiga removida)
 ALTER TABLE products DROP CONSTRAINT IF EXISTS products_category_check;

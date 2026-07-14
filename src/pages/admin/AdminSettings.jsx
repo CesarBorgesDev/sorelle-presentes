@@ -51,6 +51,7 @@ export default function AdminSettings() {
   const [cieloBackendUrl, setCieloBackendUrl] = useState('');
   const [cieloCheckoutApiUrl, setCieloCheckoutApiUrl] = useState('');
   const [cieloMaxInstallments, setCieloMaxInstallments] = useState('12');
+  const [cieloNotificationMethod, setCieloNotificationMethod] = useState('post');
   const [checkoutMethod, setCheckoutMethod] = useState('pix');
   const [enabledPaymentMethods, setEnabledPaymentMethods] = useState(['pix', 'cartao_credito']);
   const [pixKey, setPixKey] = useState('');
@@ -105,6 +106,7 @@ export default function AdminSettings() {
       setCieloBackendUrl(data.cielo.backendPublicUrl || '');
       setCieloCheckoutApiUrl(data.cielo.checkoutApiUrl || '');
       setCieloMaxInstallments(String(data.cielo.maxInstallments || 12));
+      setCieloNotificationMethod(data.cielo.notificationMethod || 'post');
     }
     if (data?.payment) {
       const enabled = Array.isArray(data.payment.payment_methods_enabled) && data.payment.payment_methods_enabled.length
@@ -179,6 +181,7 @@ export default function AdminSettings() {
       cielo_backend_public_url: cieloBackendUrl.trim(),
       cielo_checkout_api_url: cieloCheckoutApiUrl.trim(),
       cielo_max_installments: cieloMaxInstallments,
+      cielo_notification_method: cieloNotificationMethod,
       checkout_payment_method: enabledPaymentMethods[0] || checkoutMethod,
       payment_methods_enabled: enabledPaymentMethods,
       pix_holder_name: pixHolderName.trim(),
@@ -964,6 +967,26 @@ export default function AdminSettings() {
               </div>
 
               <div className="sm:col-span-2">
+                <label className={labelClass}>Formato das notificações Cielo</label>
+                <select
+                  className={inputClass}
+                  value={cieloNotificationMethod}
+                  onChange={(e) => setCieloNotificationMethod(e.target.value)}
+                >
+                  {(cielo?.notificationMethods || [
+                    { id: 'post', label: 'POST (form-data)' },
+                    { id: 'json', label: 'JSON (com URL de consulta)' },
+                  ]).map((option) => (
+                    <option key={option.id} value={option.id}>{option.label}</option>
+                  ))}
+                </select>
+                <p className="font-body text-xs text-muted-foreground mt-1">
+                  Deve ser o <strong>mesmo formato</strong> selecionado no painel Cielo (Configurações → Notificação de Pagamentos).
+                  Padrão recomendado: <strong>POST (form-data)</strong>.
+                </p>
+              </div>
+
+              <div className="sm:col-span-2">
                 <label className={labelClass}>URL pública do backend</label>
                 <input
                   type="url"
@@ -982,6 +1005,7 @@ export default function AdminSettings() {
                 </p>
                 <p className="font-body text-xs text-muted-foreground mt-1">
                   Cadastre as duas URLs do backend no painel Cielo (Configurações → Notificação de Pagamentos).
+                  Use o formato <strong>{cielo?.notificationMethodLabel || 'POST (form-data)'}</strong> nas notificações.
                   Pedidos com status <strong>Autorizado (7)</strong> ou <strong>Pago (2)</strong> são marcados como pagos automaticamente.
                 </p>
               </div>
