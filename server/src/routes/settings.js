@@ -104,7 +104,12 @@ async function buildSettingsResponse(message) {
     store_pickup: await getStorePickupConfig(),
     cielo: {
       ...cieloConfig,
+      merchantId: undefined,
+      merchantKey: undefined,
+      has_merchant_id: Boolean(cieloConfig.merchantId),
+      has_merchant_key: Boolean(cieloConfig.merchantKey),
       merchant_id_masked: maskToken(cieloConfig.merchantId),
+      merchant_key_masked: maskToken(cieloConfig.merchantKey),
       requirements: getCieloRequirements(cieloConfig),
     },
   };
@@ -136,12 +141,12 @@ router.put('/', requireAuth, requireAdmin, async (req, res) => {
       huggingface_api_token,
       stable_horde_api_key,
       cielo_merchant_id,
+      cielo_merchant_key,
       cielo_soft_descriptor,
       cielo_frontend_url,
       cielo_backend_public_url,
-      cielo_checkout_api_url,
       cielo_max_installments,
-      cielo_notification_method,
+      cielo_environment,
       payment_methods_enabled,
       checkout_payment_method,
       pix_key,
@@ -198,6 +203,10 @@ router.put('/', requireAuth, requireAdmin, async (req, res) => {
       await setSetting('cielo_merchant_id', cielo_merchant_id.trim());
     }
 
+    if (cielo_merchant_key !== undefined && cielo_merchant_key !== '') {
+      await setSetting('cielo_merchant_key', cielo_merchant_key.trim());
+    }
+
     if (cielo_soft_descriptor !== undefined) {
       await setSetting('cielo_soft_descriptor', cielo_soft_descriptor.trim());
     }
@@ -210,18 +219,14 @@ router.put('/', requireAuth, requireAdmin, async (req, res) => {
       await setSetting('cielo_backend_public_url', cielo_backend_public_url.trim());
     }
 
-    if (cielo_checkout_api_url !== undefined && cielo_checkout_api_url !== '') {
-      await setSetting('cielo_checkout_api_url', cielo_checkout_api_url.trim());
-    }
-
     if (cielo_max_installments !== undefined && cielo_max_installments !== '') {
       await setSetting('cielo_max_installments', String(cielo_max_installments));
     }
 
-    if (cielo_notification_method !== undefined && cielo_notification_method !== '') {
-      const method = String(cielo_notification_method).trim().toLowerCase();
-      if (method === 'post' || method === 'json') {
-        await setSetting('cielo_notification_method', method);
+    if (cielo_environment !== undefined && cielo_environment !== '') {
+      const env = String(cielo_environment).trim().toLowerCase();
+      if (env === 'production' || env === 'sandbox') {
+        await setSetting('cielo_environment', env);
       }
     }
 

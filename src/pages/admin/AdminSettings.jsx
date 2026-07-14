@@ -14,7 +14,7 @@ const MODELS = [
   { value: 'nanobanana', label: 'Nano Banana (requer token Pollinations)' },
 ];
 
-const CIELO_DOCS_URL = 'https://developercielo.github.io/manual/checkout-cielo';
+const CIELO_DOCS_URL = 'https://docs.cielo.com.br/ecommerce-cielo/docs/sobre-api-ecommerce';
 
 function RequirementItem({ item }) {
   const Icon = item.done ? CheckCircle2 : item.manual ? AlertCircle : Circle;
@@ -46,12 +46,12 @@ export default function AdminSettings() {
   const [hfToken, setHfToken] = useState('');
   const [stableHordeKey, setStableHordeKey] = useState('');
   const [cieloMerchantId, setCieloMerchantId] = useState('');
+  const [cieloMerchantKey, setCieloMerchantKey] = useState('');
   const [cieloSoftDescriptor, setCieloSoftDescriptor] = useState('');
   const [cieloFrontendUrl, setCieloFrontendUrl] = useState('');
   const [cieloBackendUrl, setCieloBackendUrl] = useState('');
-  const [cieloCheckoutApiUrl, setCieloCheckoutApiUrl] = useState('');
   const [cieloMaxInstallments, setCieloMaxInstallments] = useState('12');
-  const [cieloNotificationMethod, setCieloNotificationMethod] = useState('post');
+  const [cieloEnvironment, setCieloEnvironment] = useState('production');
   const [checkoutMethod, setCheckoutMethod] = useState('pix');
   const [enabledPaymentMethods, setEnabledPaymentMethods] = useState(['pix', 'cartao_credito']);
   const [pixKey, setPixKey] = useState('');
@@ -104,9 +104,8 @@ export default function AdminSettings() {
       setCieloSoftDescriptor(data.cielo.softDescriptor || 'SORELLE');
       setCieloFrontendUrl(data.cielo.frontendUrl || '');
       setCieloBackendUrl(data.cielo.backendPublicUrl || '');
-      setCieloCheckoutApiUrl(data.cielo.checkoutApiUrl || '');
       setCieloMaxInstallments(String(data.cielo.maxInstallments || 12));
-      setCieloNotificationMethod(data.cielo.notificationMethod || 'post');
+      setCieloEnvironment(data.cielo.environment || 'production');
     }
     if (data?.payment) {
       const enabled = Array.isArray(data.payment.payment_methods_enabled) && data.payment.payment_methods_enabled.length
@@ -162,6 +161,7 @@ export default function AdminSettings() {
       setHfToken('');
       setStableHordeKey('');
       setCieloMerchantId('');
+      setCieloMerchantKey('');
       setPixKey('');
       setCorreiosPassword('');
       setCorreiosApiPassword('');
@@ -179,9 +179,8 @@ export default function AdminSettings() {
       cielo_soft_descriptor: cieloSoftDescriptor.trim(),
       cielo_frontend_url: cieloFrontendUrl.trim(),
       cielo_backend_public_url: cieloBackendUrl.trim(),
-      cielo_checkout_api_url: cieloCheckoutApiUrl.trim(),
       cielo_max_installments: cieloMaxInstallments,
-      cielo_notification_method: cieloNotificationMethod,
+      cielo_environment: cieloEnvironment,
       checkout_payment_method: enabledPaymentMethods[0] || checkoutMethod,
       payment_methods_enabled: enabledPaymentMethods,
       pix_holder_name: pixHolderName.trim(),
@@ -213,6 +212,7 @@ export default function AdminSettings() {
     if (hfToken.trim()) payload.huggingface_api_token = hfToken.trim();
     if (stableHordeKey.trim()) payload.stable_horde_api_key = stableHordeKey.trim();
     if (cieloMerchantId.trim()) payload.cielo_merchant_id = cieloMerchantId.trim();
+    if (cieloMerchantKey.trim()) payload.cielo_merchant_key = cieloMerchantKey.trim();
     if (pixKey.trim()) payload.pix_key = pixKey.trim();
     if (correiosCompanyCode.trim()) payload.correios_company_code = correiosCompanyCode.trim();
     if (correiosPassword.trim()) payload.correios_password = correiosPassword.trim();
@@ -850,9 +850,10 @@ export default function AdminSettings() {
               <div className="flex items-start gap-3">
                 <CreditCard className="w-5 h-5 text-primary mt-0.5 shrink-0" />
                 <div>
-                  <h2 className="font-display text-lg tracking-wide text-foreground">Pagamento Cielo</h2>
+                  <h2 className="font-display text-lg tracking-wide text-foreground">API E-commerce Cielo</h2>
                   <p className="font-body text-sm text-muted-foreground mt-1">
-                    Checkout Cielo — o cliente é redirecionado ao gateway seguro da Cielo para pagar com cartão.
+                    Integração direta com a API E-commerce (API 3.0): cartão de crédito, PIX com QR Code e boleto
+                    são processados no próprio site, sem redirecionamento.
                   </p>
                   <a
                     href={CIELO_DOCS_URL}
@@ -874,8 +875,8 @@ export default function AdminSettings() {
               }`}>
                 {cielo.isReady ? <CheckCircle2 className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
                 {cielo.isReady
-                  ? 'API Cielo pronta para checkout'
-                  : 'Configure o MerchantId para habilitar pagamentos'}
+                  ? `API E-commerce Cielo pronta (${cielo.environmentLabel || 'Produção'})`
+                  : 'Configure MerchantId e MerchantKey para habilitar pagamentos'}
                 {autoTotal > 0 && (
                   <span className="ml-auto text-xs opacity-80">
                     {autoDoneCount}/{autoTotal} requisitos automáticos
@@ -903,7 +904,7 @@ export default function AdminSettings() {
                     MerchantId *
                   </span>
                 </label>
-                {cielo?.merchantId && (
+                {cielo?.has_merchant_id && (
                   <p className="font-body text-xs text-muted-foreground mb-2">
                     Atual: <span className="font-mono text-foreground">{cielo.merchant_id_masked}</span>
                   </p>
@@ -917,7 +918,52 @@ export default function AdminSettings() {
                   autoComplete="off"
                 />
                 <p className="font-body text-xs text-muted-foreground mt-1">
-                  GUID de 36 caracteres. Enviado no header <code className="font-mono">MerchantId</code> em cada requisição POST.
+                  GUID de 36 caracteres, obtido no site Cielo em E-commerce → Gestão API E-commerce → Credenciais.
+                </p>
+              </div>
+
+              <div className="sm:col-span-2">
+                <label className={labelClass}>
+                  <span className="inline-flex items-center gap-1.5">
+                    <Key className="w-3.5 h-3.5" />
+                    MerchantKey *
+                  </span>
+                </label>
+                {cielo?.has_merchant_key && (
+                  <p className="font-body text-xs text-muted-foreground mb-2">
+                    Atual: <span className="font-mono text-foreground">{cielo.merchant_key_masked}</span>
+                  </p>
+                )}
+                <input
+                  type="password"
+                  className={inputClass}
+                  value={cieloMerchantKey}
+                  onChange={(e) => setCieloMerchantKey(e.target.value)}
+                  placeholder="Chave de 40 caracteres"
+                  autoComplete="off"
+                />
+                <p className="font-body text-xs text-muted-foreground mt-1">
+                  Gerada junto com o MerchantId. Ambos são enviados nos headers de todas as requisições à API.
+                </p>
+              </div>
+
+              <div className="sm:col-span-2">
+                <label className={labelClass}>Ambiente</label>
+                <select
+                  className={inputClass}
+                  value={cieloEnvironment}
+                  onChange={(e) => setCieloEnvironment(e.target.value)}
+                >
+                  {(cielo?.environments || [
+                    { id: 'production', label: 'Produção' },
+                    { id: 'sandbox', label: 'Sandbox (testes)' },
+                  ]).map((option) => (
+                    <option key={option.id} value={option.id}>{option.label}</option>
+                  ))}
+                </select>
+                <p className="font-body text-xs text-muted-foreground mt-1">
+                  Sandbox usa credenciais próprias de teste (sem cobrança real). Em produção, use as credenciais
+                  definitivas obtidas no site Cielo.
                 </p>
               </div>
 
@@ -949,7 +995,7 @@ export default function AdminSettings() {
               </div>
 
               <div className="sm:col-span-2">
-                <label className={labelClass}>URL do site (retorno)</label>
+                <label className={labelClass}>URL do site (frontend)</label>
                 <input
                   type="url"
                   className={inputClass}
@@ -958,31 +1004,7 @@ export default function AdminSettings() {
                   placeholder="http://localhost:3000"
                 />
                 <p className="font-body text-xs text-muted-foreground mt-1">
-                  <strong>URL de Retorno</strong> (cadastre no painel Cielo):{' '}
-                  <span className="font-mono break-all">{cielo?.returnUrlExample || '—'}</span>
-                </p>
-                <p className="font-body text-xs text-muted-foreground mt-1">
-                  O comprador é redirecionado para esta página após o pagamento. Nenhum dado é enviado pela Cielo.
-                </p>
-              </div>
-
-              <div className="sm:col-span-2">
-                <label className={labelClass}>Formato das notificações Cielo</label>
-                <select
-                  className={inputClass}
-                  value={cieloNotificationMethod}
-                  onChange={(e) => setCieloNotificationMethod(e.target.value)}
-                >
-                  {(cielo?.notificationMethods || [
-                    { id: 'post', label: 'POST (form-data)' },
-                    { id: 'json', label: 'JSON (com URL de consulta)' },
-                  ]).map((option) => (
-                    <option key={option.id} value={option.id}>{option.label}</option>
-                  ))}
-                </select>
-                <p className="font-body text-xs text-muted-foreground mt-1">
-                  Deve ser o <strong>mesmo formato</strong> selecionado no painel Cielo (Configurações → Notificação de Pagamentos).
-                  Padrão recomendado: <strong>POST (form-data)</strong>.
+                  Usada para montar as páginas de retorno e de PIX exibidas ao cliente após o pagamento.
                 </p>
               </div>
 
@@ -996,46 +1018,23 @@ export default function AdminSettings() {
                   placeholder="http://localhost:3001"
                 />
                 <p className="font-body text-xs text-muted-foreground mt-1">
-                  <strong>URL de Notificação</strong> (transação finalizada):{' '}
+                  <strong>URL de notificação</strong> (cadastre no site Cielo em E-commerce → URL de notificações):{' '}
                   <span className="font-mono break-all">{cielo?.notificationUrl || '—'}</span>
                 </p>
                 <p className="font-body text-xs text-muted-foreground mt-1">
-                  <strong>URL de Mudança de Status</strong>:{' '}
-                  <span className="font-mono break-all">{cielo?.statusChangeUrl || '—'}</span>
-                </p>
-                <p className="font-body text-xs text-muted-foreground mt-1">
-                  Cadastre as duas URLs do backend no painel Cielo (Configurações → Notificação de Pagamentos).
-                  Use o formato <strong>{cielo?.notificationMethodLabel || 'POST (form-data)'}</strong> nas notificações.
-                  Pedidos com status <strong>Autorizado (7)</strong> ou <strong>Pago (2)</strong> são marcados como pagos automaticamente.
-                </p>
-              </div>
-
-              <div className="sm:col-span-2">
-                <label className={labelClass}>URL da API Checkout</label>
-                <input
-                  type="url"
-                  className={inputClass}
-                  value={cieloCheckoutApiUrl}
-                  onChange={(e) => setCieloCheckoutApiUrl(e.target.value)}
-                  placeholder="https://cieloecommerce.cielo.com.br/api/public/v1/orders/"
-                />
-                <p className="font-body text-xs text-muted-foreground mt-1">
-                  Endpoint POST para criar pedidos. Use exatamente:{' '}
-                  <span className="font-mono break-all">https://cieloecommerce.cielo.com.br/api/public/v1/orders/</span>
-                </p>
-                <p className="font-body text-xs text-muted-foreground mt-1">
-                  No painel Cielo, habilite cartão de crédito e/ou PIX em Configurações → Meios de pagamento.
+                  A Cielo envia um POST JSON com <code className="font-mono">PaymentId</code> e{' '}
+                  <code className="font-mono">ChangeType</code> a cada mudança de status. O sistema consulta a
+                  transação e atualiza o pedido automaticamente (Autorizado/Confirmado → pago).
                 </p>
               </div>
             </div>
 
             <div className="p-4 bg-secondary/30 rounded-sm border border-border font-body text-xs text-muted-foreground space-y-1">
-              <p className="text-foreground font-medium text-sm mb-2">Campos enviados no checkout</p>
-              <p>• <strong>Cart.Items</strong> — produtos do carrinho (preço em centavos)</p>
-              <p>• <strong>Customer</strong> — CPF, nome, e-mail e telefone do comprador</p>
-              <p>• <strong>Shipping</strong> — endereço e CEP informados no checkout</p>
-              <p>• <strong>Options.ReturnUrl</strong> — redirecionamento após pagamento</p>
-              <p>• <strong>Payment.MaxNumberOfInstallments</strong> — parcelas configuradas acima</p>
+              <p className="text-foreground font-medium text-sm mb-2">Como funciona a integração</p>
+              <p>• <strong>Cartão de crédito</strong> — dados do cartão coletados no checkout e enviados à API com captura automática</p>
+              <p>• <strong>PIX</strong> — QR Code e código copia-e-cola gerados pela Cielo e exibidos na loja</p>
+              <p>• <strong>Boleto</strong> — emitido pela Cielo com linha digitável e link para impressão</p>
+              <p>• <strong>Confirmação</strong> — via Post de Notificação (PaymentId + ChangeType) com consulta à API</p>
             </div>
             </TabsContent>
 

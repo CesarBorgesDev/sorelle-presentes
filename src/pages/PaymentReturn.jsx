@@ -118,6 +118,23 @@ export default function PaymentReturn() {
                 : paymentStatusLabels[order.payment_status] || order.payment_status}
             </span>
           </div>
+          {order.payment_method === 'boleto' && !isPaid && order.boleto_url && (
+            <div className="pt-2 border-t border-border space-y-2">
+              <a
+                href={order.boleto_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-block text-primary hover:underline"
+              >
+                Visualizar / imprimir boleto
+              </a>
+              {order.boleto_digitable_line && (
+                <p className="text-xs text-muted-foreground break-all">
+                  Linha digitável: <span className="font-mono">{order.boleto_digitable_line}</span>
+                </p>
+              )}
+            </div>
+          )}
         </div>
       )}
 

@@ -158,6 +158,10 @@ ALTER TABLE orders ADD COLUMN IF NOT EXISTS shipping_label_url TEXT;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS shipped_at TIMESTAMPTZ;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS cielo_authorization_code VARCHAR(64);
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS cielo_payment_id VARCHAR(64);
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS pix_qr_code_image TEXT;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS pix_qr_code_text TEXT;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS boleto_url TEXT;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS boleto_digitable_line TEXT;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS invoice_pdf_url TEXT;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS invoice_xml_url TEXT;
 
@@ -268,8 +272,9 @@ UPDATE app_settings
 SET value = '["pix","cartao_credito"]', updated_date = NOW()
 WHERE key = 'payment_methods_enabled' AND value = '["pix"]';
 
+-- API E-commerce Cielo (API 3.0): ambiente padrão de produção
 INSERT INTO app_settings (key, value) VALUES
-  ('cielo_notification_method', 'post')
+  ('cielo_environment', 'production')
 ON CONFLICT (key) DO NOTHING;
 
 -- Categoria de produto agora é validada pela tabela categories (constraint antiga removida)

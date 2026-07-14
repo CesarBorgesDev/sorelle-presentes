@@ -1,68 +1,45 @@
 import { getCieloConfig } from './cieloConfig.js';
-import {
-  mapCieloPaymentStatus,
-  extractCieloAuthorizationCode,
-  extractCieloPaymentId,
-  extractCieloMerchantOrderNumber,
-  extractCieloNotificationUrl,
-} from '../utils/cieloWebhook.js';
+import { queryCieloSale } from './cielo.js';
+import { extractCieloPaymentId, extractCieloChangeType } from '../utils/cieloWebhook.js';
 
-export async function fetchCieloOrderFromUrl(url, merchantId) {
-  if (!url?.trim() || !merchantId?.trim()) return null;
-
-  try {
-    const response = await fetch(url.trim(), {
-      method: 'GET',
-      headers: {
-        Accept: 'application/json',
-        MerchantId: merchantId.trim(),
-      },
-    });
-
-    if (!response.ok) {
-      console.error('[Cielo] Consulta de pedido falhou:', response.status, url);
-      return null;
-    }
-
-    return await response.json();
-  } catch (err) {
-    console.error('[Cielo] Erro ao consultar pedido:', err.message);
-    return null;
-  }
-}
-
-export async function resolveCieloNotificationPayload(body = {}) {
-  const config = await getCieloConfig();
-
-  // Modo POST (padrão): campos vêm direto no form-data (order_number, payment_status, etc.)
-  if (config.notificationMethod !== 'json') {
-    return body;
-  }
-
-  // Modo JSON: Cielo envia Url para consulta GET dos detalhes da transação
-  const url = extractCieloNotificationUrl(body);
-  if (!url) return body;
-
-  const merchantId = body.MerchantId || body.merchantId || config.merchantId;
-  const details = await fetchCieloOrderFromUrl(url, merchantId);
-
-  return details ? { ...body, ...details } : body;
-}
-
+/**
+ * Processa o Post de Notificação da API E-commerce Cielo.
+ *
+ * Fluxo: a Cielo envia { PaymentId, ChangeType }. Consultamos a transação
+ * na API de consulta e atualizamos o pedido correspondente
+ * (por cielo_payment_id ou gateway_order_number = MerchantOrderId).
+ */
 export async function applyCieloPaymentUpdate(pool, body = {}) {
-  const payload = await resolveCieloNotificationPayload(body);
-  const merchantOrderNumber = extractCieloMerchantOrderNumber(payload);
+  const paymentId = extractCieloPaymentId(body);
+  const changeType = extractCieloChangeType(body);
 
-  if (!merchantOrderNumber) {
-    const err = new Error('Notificação inválida: order_number ausente');
+  if (!paymentId) {
+    const err = new Error('Notificação inválida: PaymentId ausente');
     err.status = 400;
     throw err;
   }
 
-  const paymentStatus = mapCieloPaymentStatus(payload);
+  // Só mudanças de status de pagamento/boleto interessam à loja
+  if (changeType !== null && ![1, 6].includes(changeType)) {
+    return { received: true, updated: false, payment_id: paymentId, change_type: changeType };
+  }
+
+  const config = await getCieloConfig();
+  if (!config.isReady) {
+    const err = new Error('Cielo não configurada para processar notificações');
+    err.status = 500;
+    throw err;
+  }
+
+  const sale = await queryCieloSale(paymentId, config);
+  if (!sale) {
+    const err = new Error('Não foi possível consultar a transação na Cielo');
+    err.status = 502;
+    throw err;
+  }
+
+  const paymentStatus = sale.paymentStatus;
   const isPaid = paymentStatus === 'pago';
-  const authorizationCode = extractCieloAuthorizationCode(payload);
-  const paymentId = extractCieloPaymentId(payload);
 
   const result = await pool.query(
     `UPDATE orders SET
@@ -73,16 +50,17 @@ export async function applyCieloPaymentUpdate(pool, body = {}) {
         ELSE status
       END,
       cielo_authorization_code = COALESCE($3, cielo_authorization_code),
-      cielo_payment_id = COALESCE($4, cielo_payment_id),
+      cielo_payment_id = COALESCE(cielo_payment_id, $4),
       updated_date = NOW()
-    WHERE gateway_order_number = $5
+    WHERE cielo_payment_id = $4
+       OR ($5::text IS NOT NULL AND gateway_order_number = $5)
     RETURNING id, customer_email, payment_status`,
-    [paymentStatus, isPaid, authorizationCode, paymentId, merchantOrderNumber]
+    [paymentStatus, isPaid, sale.authorizationCode, paymentId, sale.merchantOrderId]
   );
 
   if (result.rows.length === 0) {
-    console.warn('[Cielo] Pedido não encontrado para order_number:', merchantOrderNumber);
-    return { received: true, updated: false, order_number: merchantOrderNumber };
+    console.warn('[Cielo] Pedido não encontrado para PaymentId:', paymentId, 'MerchantOrderId:', sale.merchantOrderId);
+    return { received: true, updated: false, payment_id: paymentId };
   }
 
   if (isPaid) {
@@ -92,8 +70,9 @@ export async function applyCieloPaymentUpdate(pool, body = {}) {
     );
   }
 
-  console.info('[Cielo] Pedido atualizado:', {
-    order_number: merchantOrderNumber,
+  console.info('[Cielo] Pedido atualizado via notificação:', {
+    payment_id: paymentId,
+    cielo_status: sale.status,
     payment_status: paymentStatus,
     order_id: result.rows[0].id,
   });
