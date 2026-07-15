@@ -10,9 +10,8 @@ import {
 } from '../services/paymentMethods.js';
 import { rowToEntity, rowsToEntities } from '../utils/helpers.js';
 import {
-  createCieloCreditSale,
-  createCieloPixSale,
-  createCieloBoletoSale,
+  buildCieloPayload,
+  createCieloCheckout,
   buildOrderNumber,
 } from '../services/cielo.js';
 import {
@@ -21,7 +20,7 @@ import {
   resolveShippingQuote,
 } from '../services/correios.js';
 import { normalizeAddressInput, validateAddressFields } from '../utils/address.js';
-import { applyCieloPaymentUpdate } from '../services/cieloNotifications.js';
+import { applyCieloPaymentUpdate, refreshCieloOrderStatus } from '../services/cieloNotifications.js';
 import { trackCorreiosPackage } from '../services/correiosTracking.js';
 import { normalizeProductQuantity } from '../utils/productStock.js';
 import { resolveVariantAvailability, decrementProductVariantStock } from '../utils/productVariants.js';
@@ -323,8 +322,38 @@ async function startCheckout(req, res) {
     });
   }
 
-  // Provider Cielo — transação direta via API E-commerce (API 3.0)
   const cieloConfig = providerInfo.cieloConfig;
+  const returnUrl = `${cieloConfig.frontendUrl}/pagamento/retorno?pedido=${order.id}`;
+  const correiosConfig = await getCorreiosConfig();
+
+  let checkoutUrl;
+  try {
+    const payload = buildCieloPayload({
+      order,
+      customer,
+      returnUrl,
+      config: cieloConfig,
+      isPickup,
+      originZipCode: correiosConfig.originZip,
+      shipping: {
+        cost: shipping.price,
+        deadlineDays: shipping.deadline_days,
+        serviceName: shipping.label,
+      },
+    });
+
+    ({ checkoutUrl } = await createCieloCheckout(payload, {
+      merchantId: cieloConfig.merchantId,
+      checkoutApiUrl: cieloConfig.checkoutApiUrl,
+    }));
+  } catch (err) {
+    await pool.query(
+      `UPDATE orders SET status = 'cancelado', payment_status = 'cancelado', updated_date = NOW() WHERE id = $1`,
+      [order.id]
+    );
+    throw err;
+  }
+
   const gatewayOrderNumber = buildOrderNumber(order.id);
 
   await pool.query(
@@ -332,123 +361,13 @@ async function startCheckout(req, res) {
     [gatewayOrderNumber, order.id]
   );
 
-  const cancelOrder = () => pool.query(
-    `UPDATE orders SET status = 'cancelado', payment_status = 'cancelado', updated_date = NOW() WHERE id = $1`,
-    [order.id]
-  );
-
-  if (paymentMethod === 'cartao_credito') {
-    let sale;
-    try {
-      sale = await createCieloCreditSale({
-        order,
-        customer,
-        card: req.body.card,
-        config: cieloConfig,
-      });
-    } catch (err) {
-      await cancelOrder();
-      return res.status(400).json({ message: err.message || 'Erro ao processar o cartão' });
-    }
-
-    await pool.query(
-      `UPDATE orders SET
-        payment_status = $1,
-        status = CASE WHEN $1 = 'pago' THEN 'confirmado' WHEN $1 = 'recusado' THEN 'cancelado' ELSE status END,
-        cielo_payment_id = $2,
-        cielo_authorization_code = COALESCE($3, cielo_authorization_code),
-        updated_date = NOW()
-      WHERE id = $4`,
-      [sale.paymentStatus, sale.paymentId, sale.authorizationCode, order.id]
-    );
-
-    if (sale.paymentStatus === 'pago') {
-      await pool.query('DELETE FROM cart_items WHERE user_id = $1', [req.user.id]);
-      return res.json({
-        type: 'cielo_credit',
-        order_id: order.id,
-        payment_status: 'pago',
-        redirect_url: `/pagamento/retorno?pedido=${order.id}`,
-        message: 'Pagamento aprovado!',
-      });
-    }
-
-    if (sale.paymentStatus === 'recusado' || sale.paymentStatus === 'cancelado') {
-      return res.status(400).json({
-        message: sale.returnMessage
-          ? `Pagamento não autorizado: ${sale.returnMessage}`
-          : 'Pagamento não autorizado pela operadora do cartão. Confira os dados e tente novamente.',
-      });
-    }
-
-    return res.json({
-      type: 'cielo_credit',
-      order_id: order.id,
-      payment_status: sale.paymentStatus,
-      redirect_url: `/pagamento/retorno?pedido=${order.id}`,
-      message: 'Pagamento em processamento',
-    });
-  }
-
-  if (paymentMethod === 'pix') {
-    let sale;
-    try {
-      sale = await createCieloPixSale({ order, customer, config: cieloConfig });
-    } catch (err) {
-      await cancelOrder();
-      return res.status(400).json({ message: err.message || 'Erro ao gerar o PIX' });
-    }
-
-    await pool.query(
-      `UPDATE orders SET
-        cielo_payment_id = $1,
-        pix_qr_code_image = $2,
-        pix_qr_code_text = $3,
-        updated_date = NOW()
-      WHERE id = $4`,
-      [sale.paymentId, sale.qrCodeBase64, sale.qrCodeString, order.id]
-    );
-
-    return res.json({
-      type: 'cielo_pix',
-      order_id: order.id,
-      total: order.total,
-      redirect_url: `/pagamento/pix?pedido=${order.id}`,
-    });
-  }
-
-  if (paymentMethod === 'boleto') {
-    let sale;
-    try {
-      sale = await createCieloBoletoSale({ order, customer, config: cieloConfig });
-    } catch (err) {
-      await cancelOrder();
-      return res.status(400).json({ message: err.message || 'Erro ao emitir o boleto' });
-    }
-
-    await pool.query(
-      `UPDATE orders SET
-        cielo_payment_id = $1,
-        boleto_url = $2,
-        boleto_digitable_line = $3,
-        updated_date = NOW()
-      WHERE id = $4`,
-      [sale.paymentId, sale.boletoUrl, sale.digitableLine, order.id]
-    );
-
-    await pool.query('DELETE FROM cart_items WHERE user_id = $1', [req.user.id]);
-
-    return res.json({
-      type: 'cielo_boleto',
-      order_id: order.id,
-      boleto_url: sale.boletoUrl,
-      digitable_line: sale.digitableLine,
-      redirect_url: `/pagamento/retorno?pedido=${order.id}`,
-    });
-  }
-
-  await cancelOrder();
-  return res.status(400).json({ message: 'Forma de pagamento não suportada pela integração Cielo' });
+  return res.json({
+    type: 'cielo',
+    checkout_url: checkoutUrl,
+    order_id: order.id,
+    gateway_order_number: gatewayOrderNumber,
+    payment_method: paymentMethod,
+  });
 }
 
 router.get('/condicoes-pagamento', async (_req, res) => {
@@ -521,7 +440,7 @@ router.get('/pedido/:id', requireAuth, async (req, res) => {
       `SELECT id, status, payment_status, payment_method, total, subtotal, wrapping_cost,
               shipping_cost, shipping_service_code, shipping_service_name, shipping_deadline_days,
               tracking_code, shipping_label_url, cielo_authorization_code, gateway_order_number,
-              boleto_url, boleto_digitable_line,
+              cielo_payment_id, boleto_url, boleto_digitable_line,
               customer_name, customer_address, items, created_date, updated_date, shipped_at
        FROM orders WHERE id = $1 AND LOWER(customer_email) = LOWER($2)`,
       [req.params.id, req.user.email]
@@ -531,7 +450,12 @@ router.get('/pedido/:id', requireAuth, async (req, res) => {
       return res.status(404).json({ message: 'Pedido não encontrado' });
     }
 
-    res.json(withInvoiceFlags(rowToEntity(result.rows[0])));
+    let order = result.rows[0];
+    if (order.payment_status === 'aguardando_pagamento') {
+      order = await refreshCieloOrderStatus(pool, order);
+    }
+
+    res.json(withInvoiceFlags(rowToEntity(order)));
   } catch (err) {
     res.status(500).json({ message: 'Erro ao buscar pedido' });
   }
@@ -594,9 +518,7 @@ router.get('/pedido/:id/nota-fiscal/:type', requireAuth, async (req, res) => {
 router.get('/pedido/:id/pix', requireAuth, async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT id, total, payment_method, payment_status, customer_name,
-              cielo_payment_id, pix_qr_code_image, pix_qr_code_text
-       FROM orders WHERE id = $1 AND LOWER(customer_email) = LOWER($2)`,
+      'SELECT id, total, payment_method, payment_status, customer_name FROM orders WHERE id = $1 AND LOWER(customer_email) = LOWER($2)',
       [req.params.id, req.user.email]
     );
 
@@ -609,22 +531,9 @@ router.get('/pedido/:id/pix', requireAuth, async (req, res) => {
       return res.status(400).json({ message: 'Este pedido não utiliza PIX' });
     }
 
-    // PIX gerado pela API Cielo — QR Code salvo no pedido
-    if (order.pix_qr_code_text || order.pix_qr_code_image) {
-      return res.json({
-        order_id: order.id,
-        total: order.total,
-        payment_status: order.payment_status,
-        provider: 'cielo',
-        qr_code_image: order.pix_qr_code_image || null,
-        qr_code_text: order.pix_qr_code_text || null,
-      });
-    }
-
-    // Fallback: chave PIX manual configurada no admin
     const providerInfo = await resolvePaymentProvider('pix');
     if (providerInfo.provider !== 'manual_pix') {
-      return res.status(400).json({ message: 'Dados PIX deste pedido não estão disponíveis' });
+      return res.status(400).json({ message: 'PIX deste pedido é processado na página da Cielo' });
     }
 
     res.json({
@@ -651,12 +560,12 @@ async function handleCieloWebhook(req, res, label) {
 }
 
 /**
- * Post de Notificação da API E-commerce Cielo: { PaymentId, ChangeType }.
- * Cadastre esta URL no site Cielo (E-commerce → URL de notificações).
+ * Notificação de finalização da transação (POST form-data ou JSON).
+ * Cadastre no site Cielo: E-commerce → Checkout → Configurações → URL de Notificação.
  */
 router.post('/cielo/notificacao', (req, res) => handleCieloWebhook(req, res, 'notificação'));
 
-/** Alias mantido para URLs já cadastradas no painel Cielo. */
+/** Notificação de mudança de status (POST form-data). */
 router.post('/cielo/mudanca-status', (req, res) => handleCieloWebhook(req, res, 'mudança de status'));
 
 export default router;

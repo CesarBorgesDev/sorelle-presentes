@@ -29,17 +29,6 @@ function formatZip(value) {
   return `${digits.slice(0, 5)}-${digits.slice(5)}`;
 }
 
-function formatCardNumber(value) {
-  const digits = value.replace(/\D/g, '').slice(0, 19);
-  return digits.replace(/(\d{4})(?=\d)/g, '$1 ').trim();
-}
-
-function formatCardExpiry(value) {
-  const digits = value.replace(/\D/g, '').slice(0, 4);
-  if (digits.length <= 2) return digits;
-  return `${digits.slice(0, 2)}/${digits.slice(2)}`;
-}
-
 export default function Checkout() {
   const navigate = useNavigate();
   const { user, isAuthenticated } = useAuth();
@@ -52,13 +41,6 @@ export default function Checkout() {
   const [shippingError, setShippingError] = useState('');
   const [cepLoading, setCepLoading] = useState(false);
   const [cepError, setCepError] = useState('');
-  const [card, setCard] = useState({
-    number: '',
-    holder: '',
-    expiry: '',
-    cvv: '',
-    installments: 1,
-  });
 
   const [form, setForm] = useState({
     customer_name: user?.full_name || user?.email?.split('@')[0] || '',
@@ -197,15 +179,16 @@ export default function Checkout() {
   const checkoutMutation = useMutation({
     mutationFn: (data) => api.checkout.start(data),
     onSuccess: (result) => {
-      if (result.type === 'manual_pix' || result.type === 'cielo_pix') {
+      if (result.type === 'manual_pix') {
         navigate(result.redirect_url || `/pagamento/pix?pedido=${result.order_id}`);
         return;
       }
-      if (result.type === 'cielo_boleto') {
-        if (result.boleto_url) {
-          window.open(result.boleto_url, '_blank', 'noopener');
-        }
+      if (result.type === 'test' || result.type === 'pay_at_pickup') {
         navigate(result.redirect_url || `/pagamento/retorno?pedido=${result.order_id}`);
+        return;
+      }
+      if (result.checkout_url) {
+        window.location.href = result.checkout_url;
         return;
       }
       navigate(result.redirect_url || `/pagamento/retorno?pedido=${result.order_id}`);
@@ -238,8 +221,6 @@ export default function Checkout() {
     }
   };
 
-  const requiresCardForm = paymentMethod === 'cartao_credito' && selectedPayment?.provider === 'cielo';
-
   const handleSubmit = (e) => {
     e.preventDefault();
     setError('');
@@ -252,58 +233,32 @@ export default function Checkout() {
       return;
     }
 
-    const payload = {
+    checkoutMutation.mutate({
       ...form,
       customer_zip_code: form.customer_zip_code.replace(/\D/g, ''),
       shipping_service_id: shippingServiceId,
       payment_method: paymentMethod,
-    };
-
-    if (requiresCardForm) {
-      const cardDigits = card.number.replace(/\D/g, '');
-      const [expMonth, expYear] = card.expiry.split('/');
-      if (cardDigits.length < 13) {
-        setError('Informe o número completo do cartão');
-        return;
-      }
-      if (!card.holder.trim()) {
-        setError('Informe o nome impresso no cartão');
-        return;
-      }
-      if (!expMonth || !expYear || expYear.length !== 2) {
-        setError('Informe a validade do cartão (MM/AA)');
-        return;
-      }
-      if (card.cvv.replace(/\D/g, '').length < 3) {
-        setError('Informe o código de segurança (CVV)');
-        return;
-      }
-      payload.card = {
-        number: cardDigits,
-        holder: card.holder.trim(),
-        expiration_month: expMonth,
-        expiration_year: expYear,
-        cvv: card.cvv.replace(/\D/g, ''),
-        installments: card.installments,
-      };
-    }
-
-    checkoutMutation.mutate(payload);
+    });
   };
 
   const inputClass = 'w-full px-3 py-2.5 bg-background border border-border rounded-sm font-body text-sm focus:outline-none focus:ring-1 focus:ring-ring';
   const labelClass = 'block font-body text-xs text-muted-foreground tracking-wider uppercase mb-1.5';
   const isLoading = cartLoading || methodsLoading;
   const checkoutUnavailable = !isLoading && paymentMethods.length === 0;
+  const paymentMethodLabels = {
+    pix: 'PIX',
+    cartao_credito: 'cartão de crédito',
+    cartao_debito: 'cartão de débito',
+    boleto: 'boleto',
+  };
+  const usesCieloCheckout = selectedPayment?.provider === 'cielo';
   const checkoutButtonLabel = isTestMode
     ? 'Finalizar pedido de teste'
-    : paymentMethod === 'pix'
-      ? 'Pagar com PIX'
-      : paymentMethod === 'cartao_credito'
-        ? 'Pagar com cartão de crédito'
-        : paymentMethod === 'boleto'
-          ? 'Gerar boleto'
-          : 'Finalizar compra';
+    : usesCieloCheckout
+      ? `Pagar com ${paymentMethodLabels[paymentMethod] || 'pagamento'} na Cielo`
+      : paymentMethod === 'pix'
+        ? 'Pagar com PIX'
+        : 'Finalizar compra';
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-10">
@@ -569,80 +524,6 @@ export default function Checkout() {
                   })}
                 </div>
               </div>
-
-              {requiresCardForm && (
-                <div className="p-4 border border-border rounded-sm bg-secondary/20 space-y-4">
-                  <p className="font-body text-xs text-muted-foreground tracking-wider uppercase">Dados do cartão</p>
-                  <div>
-                    <label className={labelClass}>Número do cartão *</label>
-                    <input
-                      required
-                      inputMode="numeric"
-                      autoComplete="cc-number"
-                      className={inputClass}
-                      value={card.number}
-                      onChange={(e) => setCard((c) => ({ ...c, number: formatCardNumber(e.target.value) }))}
-                      placeholder="0000 0000 0000 0000"
-                    />
-                  </div>
-                  <div>
-                    <label className={labelClass}>Nome impresso no cartão *</label>
-                    <input
-                      required
-                      autoComplete="cc-name"
-                      className={inputClass}
-                      value={card.holder}
-                      onChange={(e) => setCard((c) => ({ ...c, holder: e.target.value.toUpperCase() }))}
-                      placeholder="COMO ESTÁ NO CARTÃO"
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className={labelClass}>Validade (MM/AA) *</label>
-                      <input
-                        required
-                        inputMode="numeric"
-                        autoComplete="cc-exp"
-                        className={inputClass}
-                        value={card.expiry}
-                        onChange={(e) => setCard((c) => ({ ...c, expiry: formatCardExpiry(e.target.value) }))}
-                        placeholder="12/28"
-                      />
-                    </div>
-                    <div>
-                      <label className={labelClass}>CVV *</label>
-                      <input
-                        required
-                        inputMode="numeric"
-                        autoComplete="cc-csc"
-                        className={inputClass}
-                        value={card.cvv}
-                        onChange={(e) => setCard((c) => ({ ...c, cvv: e.target.value.replace(/\D/g, '').slice(0, 4) }))}
-                        placeholder="123"
-                      />
-                    </div>
-                  </div>
-                  {(selectedPayment?.max_installments || 1) > 1 && (
-                    <div>
-                      <label className={labelClass}>Parcelas</label>
-                      <select
-                        className={inputClass}
-                        value={card.installments}
-                        onChange={(e) => setCard((c) => ({ ...c, installments: Number(e.target.value) }))}
-                      >
-                        {Array.from({ length: selectedPayment.max_installments }, (_, i) => i + 1).map((n) => (
-                          <option key={n} value={n}>
-                            {n}x de R$ {(total / n).toFixed(2).replace('.', ',')} sem juros
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
-                  <p className="font-body text-xs text-muted-foreground">
-                    Pagamento processado com segurança pela Cielo. Os dados do cartão não ficam salvos na loja.
-                  </p>
-                </div>
-              )}
 
               <div className="space-y-4 pt-2 border-t border-border">
                 <p className="font-body text-xs text-muted-foreground tracking-wider uppercase">Dados pessoais</p>

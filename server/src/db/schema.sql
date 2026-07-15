@@ -272,9 +272,9 @@ UPDATE app_settings
 SET value = '["pix","cartao_credito"]', updated_date = NOW()
 WHERE key = 'payment_methods_enabled' AND value = '["pix"]';
 
--- API E-commerce Cielo (API 3.0): ambiente padrão de produção
+-- Checkout Cielo: formato de notificação padrão POST (form-data)
 INSERT INTO app_settings (key, value) VALUES
-  ('cielo_environment', 'production')
+  ('cielo_notification_method', 'post')
 ON CONFLICT (key) DO NOTHING;
 
 -- Categoria de produto agora é validada pela tabela categories (constraint antiga removida)

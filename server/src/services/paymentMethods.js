@@ -5,21 +5,21 @@ export const PAYMENT_METHOD_DEFS = {
   pix: {
     id: 'pix',
     label: 'PIX',
-    description: 'QR Code com aprovação instantânea',
+    description: 'Pagamento instantâneo via Cielo',
     gateway: true,
     manualFallback: true,
   },
   cartao_credito: {
     id: 'cartao_credito',
     label: 'Cartão de crédito',
-    description: 'Pague direto no site, com parcelamento',
+    description: 'Parcelamento via Checkout Cielo',
     gateway: true,
   },
   cartao_debito: {
     id: 'cartao_debito',
     label: 'Cartão de débito',
-    description: 'Indisponível — débito online exige autenticação 3DS',
-    gateway: false,
+    description: 'Débito online via Checkout Cielo',
+    gateway: true,
   },
   boleto: {
     id: 'boleto',
@@ -50,9 +50,10 @@ export const PAYMENT_METHOD_DEFS = {
 };
 
 export const CHECKOUT_OPTIONS = [
-  { id: 'pix', label: 'PIX', hint: 'QR Code via API Cielo (ou chave PIX manual)' },
-  { id: 'cartao_credito', label: 'Cartão de crédito', hint: 'Transação direta via API E-commerce Cielo' },
-  { id: 'boleto', label: 'Boleto bancário', hint: 'Emitido via API E-commerce Cielo' },
+  { id: 'pix', label: 'PIX', hint: 'Checkout Cielo (ou chave PIX manual)' },
+  { id: 'cartao_credito', label: 'Cartão de crédito', hint: 'Redireciona ao Checkout Cielo' },
+  { id: 'cartao_debito', label: 'Cartão de débito', hint: 'Débito online via Checkout Cielo' },
+  { id: 'boleto', label: 'Boleto bancário', hint: 'Redireciona ao Checkout Cielo' },
   { id: 'dinheiro', label: 'Dinheiro na retirada', hint: 'Disponível apenas com retirada na loja' },
   { id: 'pagar_na_loja', label: 'Pagar na loja', hint: 'Cliente paga ao retirar o pedido' },
   { id: 'test', label: 'Modo teste', hint: 'Aprova o pedido automaticamente, sem cobrança real' },
@@ -60,7 +61,7 @@ export const CHECKOUT_OPTIONS = [
 
 const DEFAULT_CHECKOUT_METHOD = 'pix';
 const DEFAULT_ENABLED_METHODS = ['pix', 'cartao_credito'];
-const CIELO_METHODS = ['cartao_credito', 'boleto'];
+const CIELO_METHODS = ['cartao_credito', 'cartao_debito', 'boleto'];
 
 async function getPixCredentials() {
   const pixKey = ((await getSetting('pix_key')) || process.env.PIX_KEY || '').trim();
@@ -172,7 +173,6 @@ export async function getCheckoutConfig() {
 export async function getAvailablePaymentMethods({ pickup = false } = {}) {
   const enabled = await getEnabledPaymentMethodIds();
   const pixDiscountPercent = await getPixDiscountPercent();
-  const cieloConfig = await getCieloConfig();
   const methods = [];
 
   for (const methodId of enabled) {
@@ -193,7 +193,6 @@ export async function getAvailablePaymentMethods({ pickup = false } = {}) {
       isTestMode: providerInfo.isTestMode || false,
       pickup_only: Boolean(def.pickupOnly),
       pix_discount_percent: methodId === 'pix' ? pixDiscountPercent : 0,
-      max_installments: methodId === 'cartao_credito' ? cieloConfig.maxInstallments : 1,
     });
   }
 
