@@ -6,7 +6,7 @@ import { X } from 'lucide-react';
 const inputClass = 'w-full px-3 py-2.5 bg-background border border-border rounded-sm font-body text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring';
 const labelClass = 'block font-body text-xs text-muted-foreground tracking-wider uppercase mb-1.5';
 
-export default function CategoryFormModal({ category, onClose }) {
+export default function CategoryFormModal({ category, parentId, allCategories = [], onClose }) {
   const queryClient = useQueryClient();
   const isEditing = !!category;
 
@@ -15,10 +15,15 @@ export default function CategoryFormModal({ category, onClose }) {
     description: category?.description || '',
     sort_order: category?.sort_order ?? 0,
     active: category?.active ?? true,
+    parent_id: category?.parent_id || parentId || '',
   });
   const [submitError, setSubmitError] = useState('');
 
   const set = (field, value) => setForm((current) => ({ ...current, [field]: value }));
+
+  const parentOptions = allCategories.filter(
+    (c) => !c.parent_id && c.id !== category?.id
+  );
 
   const mutation = useMutation({
     mutationFn: (data) => (isEditing
@@ -27,6 +32,8 @@ export default function CategoryFormModal({ category, onClose }) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['categories'] });
       queryClient.invalidateQueries({ queryKey: ['categories-admin'] });
+      queryClient.invalidateQueries({ queryKey: ['categories-admin-flat'] });
+      queryClient.invalidateQueries({ queryKey: ['categories-flat'] });
       onClose();
     },
     onError: (err) => {
@@ -48,6 +55,7 @@ export default function CategoryFormModal({ category, onClose }) {
       description: form.description.trim() || null,
       sort_order: Number(form.sort_order) || 0,
       active: Boolean(form.active),
+      parent_id: form.parent_id || null,
     });
   };
 
@@ -57,7 +65,7 @@ export default function CategoryFormModal({ category, onClose }) {
       <div className="relative bg-card border border-border rounded-sm w-full max-w-lg shadow-xl">
         <div className="flex items-center justify-between px-6 py-5 border-b border-border">
           <h2 className="font-display text-xl tracking-wide text-foreground">
-            {isEditing ? 'Editar Categoria' : 'Nova Categoria'}
+            {isEditing ? 'Editar Categoria' : form.parent_id ? 'Nova Subcategoria' : 'Nova Categoria'}
           </h2>
           <button type="button" onClick={onClose} className="text-muted-foreground hover:text-foreground">
             <X className="w-5 h-5" />
@@ -66,13 +74,30 @@ export default function CategoryFormModal({ category, onClose }) {
 
         <form onSubmit={handleSubmit} className="px-6 py-6 space-y-5">
           <div>
+            <label className={labelClass}>Categoria pai (opcional)</label>
+            <select
+              className={inputClass}
+              value={form.parent_id}
+              onChange={(e) => set('parent_id', e.target.value)}
+            >
+              <option value="">Nenhuma (categoria raiz)</option>
+              {parentOptions.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+            <p className="font-body text-xs text-muted-foreground mt-1">
+              Se selecionada, esta será uma subcategoria.
+            </p>
+          </div>
+
+          <div>
             <label className={labelClass}>Nome *</label>
             <input
               required
               className={inputClass}
               value={form.name}
               onChange={(e) => set('name', e.target.value)}
-              placeholder="Ex: Decoração"
+              placeholder="Ex: Vasos"
             />
           </div>
 

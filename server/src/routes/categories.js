@@ -5,7 +5,7 @@ import { parseSort, rowToEntity, rowsToEntities } from '../utils/helpers.js';
 
 const router = Router();
 
-const ALLOWED_FIELDS = ['name', 'slug', 'description', 'sort_order', 'active'];
+const ALLOWED_FIELDS = ['name', 'slug', 'description', 'sort_order', 'active', 'parent_id'];
 
 function slugify(value) {
   return String(value || '')
@@ -37,9 +37,28 @@ async function buildUniqueSlug(name, excludeId = null) {
   }
 }
 
+function buildTree(flatList) {
+  const map = {};
+  const roots = [];
+
+  for (const item of flatList) {
+    map[item.id] = { ...item, children: [] };
+  }
+
+  for (const item of flatList) {
+    if (item.parent_id && map[item.parent_id]) {
+      map[item.parent_id].children.push(map[item.id]);
+    } else {
+      roots.push(map[item.id]);
+    }
+  }
+
+  return roots;
+}
+
 router.get('/', optionalAuth, async (req, res) => {
   try {
-    const { sort = 'sort_order', limit = '100', include_inactive } = req.query;
+    const { sort = 'sort_order', limit = '100', include_inactive, flat } = req.query;
     const isAdmin = req.user?.role === 'admin';
     const showAll = isAdmin && include_inactive === 'true';
     const { column, direction } = parseSort(sort);
@@ -52,9 +71,35 @@ router.get('/', optionalAuth, async (req, res) => {
       `SELECT * FROM categories ${where} ORDER BY ${column} ${direction}, name ASC LIMIT $1`,
       values
     );
-    res.json(rowsToEntities(result.rows));
+
+    const categories = rowsToEntities(result.rows);
+
+    if (flat === 'true') {
+      return res.json(categories);
+    }
+
+    res.json(buildTree(categories));
   } catch (err) {
     console.error('Erro ao listar categorias:', err);
+    res.status(500).json({ message: 'Erro ao listar categorias' });
+  }
+});
+
+router.get('/flat', optionalAuth, async (req, res) => {
+  try {
+    const { include_inactive } = req.query;
+    const isAdmin = req.user?.role === 'admin';
+    const showAll = isAdmin && include_inactive === 'true';
+
+    const conditions = showAll ? [] : ['active = true'];
+    const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+
+    const result = await pool.query(
+      `SELECT * FROM categories ${where} ORDER BY sort_order ASC, name ASC LIMIT 200`
+    );
+    res.json(rowsToEntities(result.rows));
+  } catch (err) {
+    console.error('Erro ao listar categorias (flat):', err);
     res.status(500).json({ message: 'Erro ao listar categorias' });
   }
 });
@@ -89,15 +134,25 @@ router.post('/', requireAuth, requireAdmin, async (req, res) => {
       ? slugify(req.body.slug)
       : await buildUniqueSlug(name);
 
+    const parentId = req.body.parent_id || null;
+
+    if (parentId) {
+      const parentCheck = await pool.query('SELECT id FROM categories WHERE id = $1', [parentId]);
+      if (parentCheck.rows.length === 0) {
+        return res.status(400).json({ message: 'Categoria pai não encontrada' });
+      }
+    }
+
     const result = await pool.query(
-      `INSERT INTO categories (name, slug, description, sort_order, active)
-       VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+      `INSERT INTO categories (name, slug, description, sort_order, active, parent_id)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
       [
         name,
         slug,
         req.body.description?.trim() || null,
         Number(req.body.sort_order) || 0,
         req.body.active !== false,
+        parentId,
       ]
     );
 
@@ -129,7 +184,12 @@ router.patch('/:id', requireAuth, requireAdmin, async (req, res) => {
       }
     }
 
-    // Se o slug mudar, atualiza os produtos que apontam para o slug antigo
+    if (data.parent_id === '') data.parent_id = null;
+
+    if (data.parent_id === req.params.id) {
+      return res.status(400).json({ message: 'Categoria não pode ser pai dela mesma' });
+    }
+
     const currentResult = await pool.query('SELECT slug FROM categories WHERE id = $1', [req.params.id]);
     if (currentResult.rows.length === 0) {
       return res.status(404).json({ message: 'Categoria não encontrada' });
@@ -190,6 +250,13 @@ router.delete('/:id', requireAuth, requireAdmin, async (req, res) => {
     if (usage.rows[0].count > 0) {
       return res.status(409).json({
         message: `Não é possível excluir: ${usage.rows[0].count} produto(s) usam esta categoria`,
+      });
+    }
+
+    const children = await pool.query('SELECT COUNT(*)::int AS count FROM categories WHERE parent_id = $1', [req.params.id]);
+    if (children.rows[0].count > 0) {
+      return res.status(409).json({
+        message: `Não é possível excluir: ${children.rows[0].count} subcategoria(s) vinculada(s)`,
       });
     }
 

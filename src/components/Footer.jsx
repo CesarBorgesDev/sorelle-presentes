@@ -49,6 +49,17 @@ export default function Footer() {
                   <Link to={`/categoria/${category.slug}`} className="font-body text-sm text-background/60 hover:text-background transition-colors">
                     {category.name}
                   </Link>
+                  {category.children?.length > 0 && (
+                    <ul className="ml-3 mt-2 space-y-2">
+                      {category.children.filter((c) => c.active).map((child) => (
+                        <li key={child.slug}>
+                          <Link to={`/categoria/${child.slug}`} className="font-body text-xs text-background/40 hover:text-background transition-colors">
+                            {child.name}
+                          </Link>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </li>
               ))}
             </ul>

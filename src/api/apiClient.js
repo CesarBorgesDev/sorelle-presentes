@@ -563,6 +563,12 @@ const categoriesApi = {
     return apiFetch(`/categories?${params}`);
   },
 
+  listFlat(includeInactive = false) {
+    const params = new URLSearchParams();
+    if (includeInactive) params.set('include_inactive', 'true');
+    return apiFetch(`/categories/flat?${params}`);
+  },
+
   create(data) {
     return apiFetch('/categories', {
       method: 'POST',

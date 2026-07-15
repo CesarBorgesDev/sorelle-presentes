@@ -18,14 +18,15 @@ export default function ProductFormModal({ product, onClose }) {
   const isEditing = !!product;
 
   const { data: categoriesData = [] } = useQuery({
-    queryKey: ['categories-admin'],
-    queryFn: () => api.categories.list(true),
+    queryKey: ['categories-admin-flat'],
+    queryFn: () => api.categories.listFlat(true),
   });
-  const categoryOptions = categoriesData.map((category) => ({
-    value: category.slug,
-    label: category.active ? category.name : `${category.name} (inativa)`,
-  }));
-  // Mantém a categoria do produto visível mesmo se ela não estiver cadastrada
+  const categoryOptions = categoriesData.map((category) => {
+    const parent = category.parent_id ? categoriesData.find((c) => c.id === category.parent_id) : null;
+    const prefix = parent ? `${parent.name} > ` : '';
+    const suffix = category.active ? '' : ' (inativa)';
+    return { value: category.slug, label: `${prefix}${category.name}${suffix}` };
+  });
   if (product?.category && !categoryOptions.some((option) => option.value === product.category)) {
     categoryOptions.push({ value: product.category, label: product.category.replace(/_/g, ' ') });
   }
