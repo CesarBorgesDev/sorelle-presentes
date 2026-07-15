@@ -164,6 +164,9 @@ ALTER TABLE orders ADD COLUMN IF NOT EXISTS boleto_url TEXT;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS boleto_digitable_line TEXT;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS invoice_pdf_url TEXT;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS invoice_xml_url TEXT;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS sipag_payment_id VARCHAR(64);
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS sipag_authorization_code VARCHAR(128);
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS payment_gateway VARCHAR(20);
 
 ALTER TABLE users ADD COLUMN IF NOT EXISTS full_name VARCHAR(255);
 ALTER TABLE users ADD COLUMN IF NOT EXISTS phone VARCHAR(50);
@@ -275,6 +278,10 @@ WHERE key = 'payment_methods_enabled' AND value = '["pix"]';
 -- Checkout Cielo: formato de notificação padrão POST (form-data)
 INSERT INTO app_settings (key, value) VALUES
   ('cielo_notification_method', 'post')
+ON CONFLICT (key) DO NOTHING;
+
+INSERT INTO app_settings (key, value) VALUES
+  ('payment_gateway', 'cielo')
 ON CONFLICT (key) DO NOTHING;
 
 -- Categoria de produto agora é validada pela tabela categories (constraint antiga removida)

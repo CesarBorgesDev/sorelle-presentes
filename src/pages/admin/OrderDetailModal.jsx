@@ -182,18 +182,25 @@ export default function OrderDetailModal({ order, onClose, onUpdated, onDeleted 
               </p>
             </div>
             <div>
-              <p className="font-body text-xs text-muted-foreground uppercase tracking-wider mb-1">Pedido Cielo</p>
+              <p className="font-body text-xs text-muted-foreground uppercase tracking-wider mb-1">Pedido gateway</p>
               <p className="font-mono text-xs text-foreground break-all">{order.gateway_order_number || '—'}</p>
             </div>
+            {order.payment_gateway === 'sipag' && (
+              <div className="md:col-span-2">
+                <p className="font-body text-xs text-muted-foreground uppercase tracking-wider mb-1">Transação SiPag</p>
+                <p className="font-mono text-xs text-foreground break-all">{order.sipag_payment_id || '—'}</p>
+              </div>
+            )}
             <div className="md:col-span-2">
               <label className="block font-body text-xs text-muted-foreground tracking-wider uppercase mb-2">
-                Autorização Cielo
+                {order.payment_gateway === 'sipag' ? 'Autorização SiPag' : 'Autorização Cielo'}
               </label>
               <input
                 className="w-full h-10 px-3 rounded-sm border border-border bg-background font-body text-sm font-mono"
-                value={cieloAuthorization}
+                value={order.payment_gateway === 'sipag' ? (order.sipag_authorization_code || cieloAuthorization) : cieloAuthorization}
                 onChange={(e) => setCieloAuthorization(e.target.value)}
-                placeholder="Código de autorização (ex.: 123456)"
+                placeholder="Código de autorização"
+                readOnly={order.payment_gateway === 'sipag'}
               />
             </div>
           </div>

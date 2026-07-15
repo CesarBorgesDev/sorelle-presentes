@@ -3,6 +3,7 @@ import { requireAuth, requireAdmin } from '../middleware/auth.js';
 import { getSetting, setSetting, maskToken } from '../services/settings.js';
 import { DEFAULT_IMAGE_MODEL } from '../services/imageGeneration.js';
 import { getCieloConfig, getCieloRequirements } from '../services/cieloConfig.js';
+import { getSipagConfig, getSipagRequirements, PAYMENT_GATEWAYS } from '../services/sipagConfig.js';
 import { getStorePickupConfig } from '../services/storePickup.js';
 import {
   CHECKOUT_OPTIONS,
@@ -10,6 +11,7 @@ import {
   getCheckoutConfig,
   getPixDiscountPercent,
   getEnabledPaymentMethodIds,
+  getPaymentGateway,
 } from '../services/paymentMethods.js';
 import { getCorreiosConfig } from '../services/correios.js';
 import { getRodonavesConfig } from '../services/rodonaves.js';
@@ -28,6 +30,8 @@ async function buildSettingsResponse(message) {
   const hfToken = await getSetting('huggingface_api_token');
   const stableHordeKey = await getSetting('stable_horde_api_key');
   const cieloConfig = await getCieloConfig();
+  const sipagConfig = await getSipagConfig();
+  const paymentGateway = await getPaymentGateway();
   const enabledPaymentMethods = await getEnabledPaymentMethodIds();
   const checkoutConfig = await getCheckoutConfig();
   const pixKey = await getSetting('pix_key');
@@ -53,6 +57,7 @@ async function buildSettingsResponse(message) {
       checkout_config: {
         available: checkoutConfig.available,
         provider: checkoutConfig.provider,
+        payment_gateway: paymentGateway,
         isTestMode: checkoutConfig.isTestMode,
         label: checkoutConfig.label,
       },
@@ -61,6 +66,8 @@ async function buildSettingsResponse(message) {
       pix_holder_name: pixHolderName || process.env.PIX_HOLDER_NAME || '',
       max_installments: cieloConfig.maxInstallments,
       pix_discount_percent: await getPixDiscountPercent(),
+      payment_gateway: paymentGateway,
+      payment_gateways: Object.values(PAYMENT_GATEWAYS),
     },
     correios: {
       origin_zip: correiosConfig.originZip,
@@ -114,6 +121,22 @@ async function buildSettingsResponse(message) {
       client_secret_masked: maskToken(cieloConfig.clientSecret),
       requirements: getCieloRequirements(cieloConfig),
     },
+    sipag: {
+      ...sipagConfig,
+      userPassword: undefined,
+      certPassword: undefined,
+      certPem: undefined,
+      certKey: undefined,
+      has_store_id: Boolean(sipagConfig.storeId),
+      has_user_id: Boolean(sipagConfig.userId),
+      has_user_password: Boolean(sipagConfig.userPassword),
+      has_cert_password: Boolean(sipagConfig.certPassword),
+      has_cert_pem: Boolean(sipagConfig.certPem),
+      has_cert_key: Boolean(sipagConfig.certKey),
+      store_id_masked: maskToken(sipagConfig.storeId),
+      user_id_masked: maskToken(sipagConfig.userId),
+      requirements: getSipagRequirements(sipagConfig),
+    },
   };
 }
 
@@ -151,6 +174,17 @@ router.put('/', requireAuth, requireAdmin, async (req, res) => {
       cielo_checkout_api_url,
       cielo_max_installments,
       cielo_notification_method,
+      payment_gateway,
+      sipag_store_id,
+      sipag_user_id,
+      sipag_user_password,
+      sipag_cert_password,
+      sipag_cert_pem,
+      sipag_cert_key,
+      sipag_soft_descriptor,
+      sipag_environment,
+      sipag_frontend_url,
+      sipag_api_url,
       payment_methods_enabled,
       checkout_payment_method,
       pix_key,
@@ -240,6 +274,56 @@ router.put('/', requireAuth, requireAdmin, async (req, res) => {
       if (method === 'post' || method === 'json') {
         await setSetting('cielo_notification_method', method);
       }
+    }
+
+    if (payment_gateway !== undefined && payment_gateway !== '') {
+      const gateway = String(payment_gateway).trim().toLowerCase();
+      if (PAYMENT_GATEWAYS[gateway]) {
+        await setSetting('payment_gateway', gateway);
+      }
+    }
+
+    if (sipag_store_id !== undefined && sipag_store_id !== '') {
+      await setSetting('sipag_store_id', sipag_store_id.trim());
+    }
+
+    if (sipag_user_id !== undefined && sipag_user_id !== '') {
+      await setSetting('sipag_user_id', sipag_user_id.trim());
+    }
+
+    if (sipag_user_password !== undefined && sipag_user_password !== '') {
+      await setSetting('sipag_user_password', sipag_user_password.trim());
+    }
+
+    if (sipag_cert_password !== undefined && sipag_cert_password !== '') {
+      await setSetting('sipag_cert_password', sipag_cert_password.trim());
+    }
+
+    if (sipag_cert_pem !== undefined && sipag_cert_pem !== '') {
+      await setSetting('sipag_cert_pem', sipag_cert_pem.trim());
+    }
+
+    if (sipag_cert_key !== undefined && sipag_cert_key !== '') {
+      await setSetting('sipag_cert_key', sipag_cert_key.trim());
+    }
+
+    if (sipag_soft_descriptor !== undefined) {
+      await setSetting('sipag_soft_descriptor', sipag_soft_descriptor.trim());
+    }
+
+    if (sipag_environment !== undefined && sipag_environment !== '') {
+      const env = String(sipag_environment).trim().toLowerCase();
+      if (env === 'test' || env === 'production') {
+        await setSetting('sipag_environment', env);
+      }
+    }
+
+    if (sipag_frontend_url !== undefined) {
+      await setSetting('sipag_frontend_url', sipag_frontend_url.trim());
+    }
+
+    if (sipag_api_url !== undefined && sipag_api_url !== '') {
+      await setSetting('sipag_api_url', sipag_api_url.trim());
     }
 
     if (checkout_payment_method !== undefined && checkout_payment_method !== '') {

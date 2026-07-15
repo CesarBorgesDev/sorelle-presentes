@@ -21,6 +21,8 @@ import {
 } from '../services/correios.js';
 import { normalizeAddressInput, validateAddressFields } from '../utils/address.js';
 import { applyCieloPaymentUpdate, refreshCieloOrderStatus } from '../services/cieloNotifications.js';
+import { createSipagPaymentUrl } from '../services/sipag.js';
+import { refreshSipagOrderStatus } from '../services/sipagNotifications.js';
 import { trackCorreiosPackage } from '../services/correiosTracking.js';
 import { normalizeProductQuantity } from '../utils/productStock.js';
 import { resolveVariantAvailability, decrementProductVariantStock } from '../utils/productVariants.js';
@@ -322,6 +324,53 @@ async function startCheckout(req, res) {
     });
   }
 
+  if (providerInfo.provider === 'sipag') {
+    const sipagConfig = providerInfo.sipagConfig;
+
+    let paymentResult;
+    try {
+      paymentResult = await createSipagPaymentUrl({
+        amount: order.total,
+        pageText: `Pedido Sorelle — ${customer.customer_name}`,
+        config: sipagConfig,
+      });
+    } catch (err) {
+      await pool.query(
+        `UPDATE orders SET status = 'cancelado', payment_status = 'cancelado', updated_date = NOW() WHERE id = $1`,
+        [order.id]
+      );
+      throw err;
+    }
+
+    const gatewayOrderNumber = paymentResult.orderId || paymentResult.transactionId || buildOrderNumber(order.id);
+
+    await pool.query(
+      `UPDATE orders
+       SET gateway_order_number = $1,
+           payment_gateway = 'sipag',
+           sipag_payment_id = $2,
+           updated_date = NOW()
+       WHERE id = $3`,
+      [gatewayOrderNumber, paymentResult.transactionId || null, order.id]
+    );
+
+    return res.json({
+      type: 'sipag',
+      checkout_url: paymentResult.paymentUrl,
+      order_id: order.id,
+      gateway_order_number: gatewayOrderNumber,
+      payment_method: paymentMethod,
+    });
+  }
+
+  if (providerInfo.provider !== 'cielo') {
+    await pool.query(
+      `UPDATE orders SET status = 'cancelado', payment_status = 'cancelado', updated_date = NOW() WHERE id = $1`,
+      [order.id]
+    );
+    throw new Error('Gateway de pagamento não configurado');
+  }
+
   const cieloConfig = providerInfo.cieloConfig;
   const returnUrl = `${cieloConfig.frontendUrl}/pagamento/retorno?pedido=${order.id}`;
   const correiosConfig = await getCorreiosConfig();
@@ -357,7 +406,9 @@ async function startCheckout(req, res) {
   const gatewayOrderNumber = buildOrderNumber(order.id);
 
   await pool.query(
-    'UPDATE orders SET gateway_order_number = $1, updated_date = NOW() WHERE id = $2',
+    `UPDATE orders
+     SET gateway_order_number = $1, payment_gateway = 'cielo', updated_date = NOW()
+     WHERE id = $2`,
     [gatewayOrderNumber, order.id]
   );
 
@@ -437,10 +488,11 @@ router.get('/meus-pedidos', requireAuth, async (req, res) => {
 router.get('/pedido/:id', requireAuth, async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT id, status, payment_status, payment_method, total, subtotal, wrapping_cost,
+      `SELECT id, status, payment_status, payment_method, payment_gateway, total, subtotal, wrapping_cost,
               shipping_cost, shipping_service_code, shipping_service_name, shipping_deadline_days,
               tracking_code, shipping_label_url, cielo_authorization_code, gateway_order_number,
-              cielo_payment_id, boleto_url, boleto_digitable_line,
+              cielo_payment_id, sipag_payment_id, sipag_authorization_code,
+              boleto_url, boleto_digitable_line,
               customer_name, customer_address, items, created_date, updated_date, shipped_at
        FROM orders WHERE id = $1 AND LOWER(customer_email) = LOWER($2)`,
       [req.params.id, req.user.email]
@@ -452,7 +504,11 @@ router.get('/pedido/:id', requireAuth, async (req, res) => {
 
     let order = result.rows[0];
     if (order.payment_status === 'aguardando_pagamento') {
-      order = await refreshCieloOrderStatus(pool, order);
+      if (order.payment_gateway === 'sipag') {
+        order = await refreshSipagOrderStatus(pool, order);
+      } else {
+        order = await refreshCieloOrderStatus(pool, order);
+      }
     }
 
     res.json(withInvoiceFlags(rowToEntity(order)));

@@ -1,24 +1,25 @@
 import { getSetting } from './settings.js';
 import { getCieloConfig } from './cieloConfig.js';
+import { getSipagConfig, getPaymentGateway, PAYMENT_GATEWAYS } from './sipagConfig.js';
 
 export const PAYMENT_METHOD_DEFS = {
   pix: {
     id: 'pix',
     label: 'PIX',
-    description: 'Pagamento instantâneo via Cielo',
+    description: 'Pagamento instantâneo via gateway',
     gateway: true,
     manualFallback: true,
   },
   cartao_credito: {
     id: 'cartao_credito',
     label: 'Cartão de crédito',
-    description: 'Parcelamento via Checkout Cielo',
+    description: 'Parcelamento no gateway de pagamento',
     gateway: true,
   },
   cartao_debito: {
     id: 'cartao_debito',
     label: 'Cartão de débito',
-    description: 'Débito online via Checkout Cielo',
+    description: 'Débito online no gateway de pagamento',
     gateway: true,
   },
   boleto: {
@@ -50,10 +51,10 @@ export const PAYMENT_METHOD_DEFS = {
 };
 
 export const CHECKOUT_OPTIONS = [
-  { id: 'pix', label: 'PIX', hint: 'Checkout Cielo (ou chave PIX manual)' },
-  { id: 'cartao_credito', label: 'Cartão de crédito', hint: 'Redireciona ao Checkout Cielo' },
-  { id: 'cartao_debito', label: 'Cartão de débito', hint: 'Débito online via Checkout Cielo' },
-  { id: 'boleto', label: 'Boleto bancário', hint: 'Redireciona ao Checkout Cielo' },
+  { id: 'pix', label: 'PIX', hint: 'Gateway (Cielo/SiPag) ou chave PIX manual' },
+  { id: 'cartao_credito', label: 'Cartão de crédito', hint: 'Redireciona ao gateway configurado' },
+  { id: 'cartao_debito', label: 'Cartão de débito', hint: 'Débito online no gateway configurado' },
+  { id: 'boleto', label: 'Boleto bancário', hint: 'Redireciona ao gateway configurado' },
   { id: 'dinheiro', label: 'Dinheiro na retirada', hint: 'Disponível apenas com retirada na loja' },
   { id: 'pagar_na_loja', label: 'Pagar na loja', hint: 'Cliente paga ao retirar o pedido' },
   { id: 'test', label: 'Modo teste', hint: 'Aprova o pedido automaticamente, sem cobrança real' },
@@ -61,12 +62,32 @@ export const CHECKOUT_OPTIONS = [
 
 const DEFAULT_CHECKOUT_METHOD = 'pix';
 const DEFAULT_ENABLED_METHODS = ['pix', 'cartao_credito'];
-const CIELO_METHODS = ['cartao_credito', 'cartao_debito', 'boleto'];
+const GATEWAY_METHODS = ['cartao_credito', 'cartao_debito', 'boleto'];
 
 async function getPixCredentials() {
   const pixKey = ((await getSetting('pix_key')) || process.env.PIX_KEY || '').trim();
   const pixHolder = ((await getSetting('pix_holder_name')) || process.env.PIX_HOLDER_NAME || 'Sorelle Presentes').trim();
   return { pixKey, pixHolder };
+}
+
+async function getActiveGatewayProvider() {
+  const preferred = await getPaymentGateway();
+  const cieloConfig = await getCieloConfig();
+  const sipagConfig = await getSipagConfig();
+
+  if (preferred === 'sipag' && sipagConfig.isReady) {
+    return { provider: 'sipag', sipagConfig, cieloConfig };
+  }
+  if (preferred === 'cielo' && cieloConfig.isReady) {
+    return { provider: 'cielo', cieloConfig, sipagConfig };
+  }
+  if (sipagConfig.isReady) {
+    return { provider: 'sipag', sipagConfig, cieloConfig };
+  }
+  if (cieloConfig.isReady) {
+    return { provider: 'cielo', cieloConfig, sipagConfig };
+  }
+  return null;
 }
 
 /** IDs habilitados pelo admin (fallback: método único legado). */
@@ -106,15 +127,15 @@ async function isMethodAvailable(methodId) {
   if (methodId === 'test') return true;
   if (methodId === 'dinheiro' || methodId === 'pagar_na_loja') return true;
 
-  const cieloConfig = await getCieloConfig();
+  const gateway = await getActiveGatewayProvider();
   const { pixKey } = await getPixCredentials();
 
   if (methodId === 'pix') {
-    return (def.gateway && cieloConfig.isReady) || (def.manualFallback && Boolean(pixKey));
+    return Boolean(gateway) || (def.manualFallback && Boolean(pixKey));
   }
 
-  if (CIELO_METHODS.includes(methodId)) {
-    return def.gateway && cieloConfig.isReady;
+  if (GATEWAY_METHODS.includes(methodId)) {
+    return Boolean(gateway);
   }
 
   return false;
@@ -124,7 +145,7 @@ async function resolveMethodProvider(methodId) {
   const def = PAYMENT_METHOD_DEFS[methodId];
   if (!def) return null;
 
-  const cieloConfig = await getCieloConfig();
+  const gateway = await getActiveGatewayProvider();
   const { pixKey, pixHolder } = await getPixCredentials();
 
   if (methodId === 'test') {
@@ -136,8 +157,8 @@ async function resolveMethodProvider(methodId) {
   }
 
   if (methodId === 'pix') {
-    if (cieloConfig.isReady) {
-      return { provider: 'cielo', isTestMode: false, cieloConfig };
+    if (gateway) {
+      return { provider: gateway.provider, isTestMode: false, ...gateway };
     }
     if (pixKey) {
       return { provider: 'manual_pix', isTestMode: false, pixKey, pixHolder };
@@ -145,8 +166,8 @@ async function resolveMethodProvider(methodId) {
     return null;
   }
 
-  if (CIELO_METHODS.includes(methodId) && cieloConfig.isReady) {
-    return { provider: 'cielo', isTestMode: false, cieloConfig };
+  if (GATEWAY_METHODS.includes(methodId) && gateway) {
+    return { provider: gateway.provider, isTestMode: false, ...gateway };
   }
 
   return null;
@@ -156,14 +177,17 @@ export async function getCheckoutConfig() {
   const methodId = await getCheckoutPaymentMethod();
   const def = PAYMENT_METHOD_DEFS[methodId];
   const providerInfo = await resolveMethodProvider(methodId);
+  const gateway = await getPaymentGateway();
 
   return {
     method: methodId,
     ...def,
     available: Boolean(providerInfo),
     provider: providerInfo?.provider || null,
+    payment_gateway: gateway,
     isTestMode: providerInfo?.isTestMode || false,
     cieloConfig: providerInfo?.cieloConfig || null,
+    sipagConfig: providerInfo?.sipagConfig || null,
     pixKey: providerInfo?.pixKey || null,
     pixHolder: providerInfo?.pixHolder || null,
   };
@@ -173,6 +197,7 @@ export async function getCheckoutConfig() {
 export async function getAvailablePaymentMethods({ pickup = false } = {}) {
   const enabled = await getEnabledPaymentMethodIds();
   const pixDiscountPercent = await getPixDiscountPercent();
+  const cieloConfig = await getCieloConfig();
   const methods = [];
 
   for (const methodId of enabled) {
@@ -193,6 +218,7 @@ export async function getAvailablePaymentMethods({ pickup = false } = {}) {
       isTestMode: providerInfo.isTestMode || false,
       pickup_only: Boolean(def.pickupOnly),
       pix_discount_percent: methodId === 'pix' ? pixDiscountPercent : 0,
+      max_installments: methodId === 'cartao_credito' ? cieloConfig.maxInstallments : undefined,
     });
   }
 
@@ -216,6 +242,7 @@ export async function getPublicPaymentConditions() {
     pix_discount_percent: pixDiscountPercent,
     checkout_method: await getCheckoutPaymentMethod(),
     payment_methods_enabled: enabledMethods,
+    payment_gateway: await getPaymentGateway(),
     shows_installments: maxInstallments >= 2 && enabledMethods.includes('cartao_credito'),
     shows_pix_discount: pixDiscountPercent > 0 && enabledMethods.includes('pix'),
   };
@@ -238,3 +265,5 @@ export async function resolvePaymentProvider(paymentMethod) {
 
   return providerInfo;
 }
+
+export { PAYMENT_GATEWAYS, getPaymentGateway };

@@ -15,6 +15,7 @@ const MODELS = [
 ];
 
 const CIELO_DOCS_URL = 'https://developercielo.github.io/manual/checkout-cielo';
+const SIPAG_DOCS_URL = 'https://www.sipag.com.br/servicos.html';
 
 function RequirementItem({ item }) {
   const Icon = item.done ? CheckCircle2 : item.manual ? AlertCircle : Circle;
@@ -54,6 +55,17 @@ export default function AdminSettings() {
   const [cieloCheckoutApiUrl, setCieloCheckoutApiUrl] = useState('');
   const [cieloMaxInstallments, setCieloMaxInstallments] = useState('12');
   const [cieloNotificationMethod, setCieloNotificationMethod] = useState('post');
+  const [paymentGateway, setPaymentGateway] = useState('cielo');
+  const [sipagStoreId, setSipagStoreId] = useState('');
+  const [sipagUserId, setSipagUserId] = useState('');
+  const [sipagUserPassword, setSipagUserPassword] = useState('');
+  const [sipagCertPassword, setSipagCertPassword] = useState('');
+  const [sipagCertPem, setSipagCertPem] = useState('');
+  const [sipagCertKey, setSipagCertKey] = useState('');
+  const [sipagSoftDescriptor, setSipagSoftDescriptor] = useState('');
+  const [sipagEnvironment, setSipagEnvironment] = useState('test');
+  const [sipagFrontendUrl, setSipagFrontendUrl] = useState('');
+  const [sipagApiUrl, setSipagApiUrl] = useState('');
   const [checkoutMethod, setCheckoutMethod] = useState('pix');
   const [enabledPaymentMethods, setEnabledPaymentMethods] = useState(['pix', 'cartao_credito']);
   const [pixKey, setPixKey] = useState('');
@@ -116,11 +128,18 @@ export default function AdminSettings() {
         : [data.payment.checkout_method || 'pix'];
       setEnabledPaymentMethods(enabled);
       setCheckoutMethod(data.payment.checkout_method || enabled[0] || 'pix');
+      setPaymentGateway(data.payment.payment_gateway || 'cielo');
       setPixHolderName(data.payment.pix_holder_name || '');
       setPixDiscountPercent(String(data.payment.pix_discount_percent ?? 0));
       if (data.payment.max_installments) {
         setCieloMaxInstallments(String(data.payment.max_installments));
       }
+    }
+    if (data?.sipag) {
+      setSipagSoftDescriptor(data.sipag.softDescriptor || 'SORELLE');
+      setSipagFrontendUrl(data.sipag.frontendUrl || '');
+      setSipagApiUrl(data.sipag.apiUrl || '');
+      setSipagEnvironment(data.sipag.environment || 'test');
     }
     if (data?.correios) {
       setCorreiosOriginZip(data.correios.origin_zip || '');
@@ -154,7 +173,7 @@ export default function AdminSettings() {
       setStorePickupInstructions(data.store_pickup.instructions || '');
       setStorePickupDeadlineDays(String(data.store_pickup.deadline_days || 3));
     }
-  }, [data?.image_model, data?.product_sort_order, data?.cielo, data?.payment, data?.correios, data?.rodonaves, data?.store_pickup]);
+  }, [data?.image_model, data?.product_sort_order, data?.cielo, data?.payment, data?.sipag, data?.correios, data?.rodonaves, data?.store_pickup]);
 
   const mutation = useMutation({
     mutationFn: (payload) => api.settings.update(payload),
@@ -166,6 +185,12 @@ export default function AdminSettings() {
       setCieloMerchantId('');
       setCieloClientId('');
       setCieloClientSecret('');
+      setSipagStoreId('');
+      setSipagUserId('');
+      setSipagUserPassword('');
+      setSipagCertPassword('');
+      setSipagCertPem('');
+      setSipagCertKey('');
       setPixKey('');
       setCorreiosPassword('');
       setCorreiosApiPassword('');
@@ -186,6 +211,11 @@ export default function AdminSettings() {
       cielo_checkout_api_url: cieloCheckoutApiUrl.trim(),
       cielo_max_installments: cieloMaxInstallments,
       cielo_notification_method: cieloNotificationMethod,
+      payment_gateway: paymentGateway,
+      sipag_soft_descriptor: sipagSoftDescriptor.trim(),
+      sipag_environment: sipagEnvironment,
+      sipag_frontend_url: sipagFrontendUrl.trim(),
+      sipag_api_url: sipagApiUrl.trim(),
       checkout_payment_method: enabledPaymentMethods[0] || checkoutMethod,
       payment_methods_enabled: enabledPaymentMethods,
       pix_holder_name: pixHolderName.trim(),
@@ -219,6 +249,12 @@ export default function AdminSettings() {
     if (cieloMerchantId.trim()) payload.cielo_merchant_id = cieloMerchantId.trim();
     if (cieloClientId.trim()) payload.cielo_client_id = cieloClientId.trim();
     if (cieloClientSecret.trim()) payload.cielo_client_secret = cieloClientSecret.trim();
+    if (sipagStoreId.trim()) payload.sipag_store_id = sipagStoreId.trim();
+    if (sipagUserId.trim()) payload.sipag_user_id = sipagUserId.trim();
+    if (sipagUserPassword.trim()) payload.sipag_user_password = sipagUserPassword.trim();
+    if (sipagCertPassword.trim()) payload.sipag_cert_password = sipagCertPassword.trim();
+    if (sipagCertPem.trim()) payload.sipag_cert_pem = sipagCertPem.trim();
+    if (sipagCertKey.trim()) payload.sipag_cert_key = sipagCertKey.trim();
     if (pixKey.trim()) payload.pix_key = pixKey.trim();
     if (correiosCompanyCode.trim()) payload.correios_company_code = correiosCompanyCode.trim();
     if (correiosPassword.trim()) payload.correios_password = correiosPassword.trim();
@@ -245,7 +281,9 @@ export default function AdminSettings() {
   const inputClass = 'w-full px-3 py-2.5 bg-background border border-border rounded-sm font-body text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring';
   const labelClass = 'block font-body text-xs text-muted-foreground tracking-wider uppercase mb-1.5';
   const cielo = data?.cielo;
+  const sipag = data?.sipag;
   const requirements = cielo?.requirements || [];
+  const sipagRequirements = sipag?.requirements || [];
   const autoDoneCount = requirements.filter((r) => r.done && !r.manual).length;
   const autoTotal = requirements.filter((r) => !r.manual).length;
 
@@ -281,6 +319,10 @@ export default function AdminSettings() {
               <TabsTrigger value="cielo" className="gap-1.5 font-body text-xs sm:text-sm px-3 py-2">
                 <CreditCard className="w-3.5 h-3.5" />
                 Cielo
+              </TabsTrigger>
+              <TabsTrigger value="sipag" className="gap-1.5 font-body text-xs sm:text-sm px-3 py-2">
+                <CreditCard className="w-3.5 h-3.5" />
+                SiPag
               </TabsTrigger>
               <TabsTrigger value="imagens" className="gap-1.5 font-body text-xs sm:text-sm px-3 py-2">
                 <Sparkles className="w-3.5 h-3.5" />
@@ -329,10 +371,29 @@ export default function AdminSettings() {
                   : 'bg-amber-500/10 text-amber-700 dark:text-amber-400'
               }`}>
                 {payment.checkout_config.available
-                  ? `${enabledPaymentMethods.length} forma(s) habilitada(s) para o cliente`
-                  : 'Checkout indisponível — configure Cielo ou chave PIX abaixo'}
+                  ? `${enabledPaymentMethods.length} forma(s) habilitada(s) — gateway: ${payment.payment_gateways?.find((g) => g.id === paymentGateway)?.label || paymentGateway}`
+                  : 'Checkout indisponível — configure Cielo, SiPag ou chave PIX abaixo'}
               </div>
             )}
+
+            <div>
+              <label className={labelClass}>Gateway de pagamento online</label>
+              <select
+                className={inputClass}
+                value={paymentGateway}
+                onChange={(e) => setPaymentGateway(e.target.value)}
+              >
+                {(payment?.payment_gateways || [
+                  { id: 'cielo', label: 'Cielo (Checkout Cielo)' },
+                  { id: 'sipag', label: 'SiPag (IPG Online / Fiserv)' },
+                ]).map((option) => (
+                  <option key={option.id} value={option.id}>{option.label}</option>
+                ))}
+              </select>
+              <p className="font-body text-xs text-muted-foreground mt-1">
+                Define qual adquirente processa cartão, PIX online, débito e boleto. Se o gateway escolhido não estiver configurado, o sistema tenta o outro.
+              </p>
+            </div>
 
             <div className="space-y-2">
               {checkoutOptions.map((option) => (
@@ -1090,6 +1151,134 @@ export default function AdminSettings() {
               <p>• <strong>Notificações</strong> — Cielo avisa o backend quando o pagamento muda de status</p>
               <p>• <strong>Controle Transacional</strong> — ClientID/Secret consultam status se a notificação falhar</p>
               <p>• <strong>Campos enviados</strong> — Cart, Customer, Shipping, Options.ReturnUrl e parcelas máximas</p>
+            </div>
+            </TabsContent>
+
+            <TabsContent value="sipag" className="space-y-6 mt-0 focus-visible:outline-none">
+              <div className="flex items-start gap-3">
+                <CreditCard className="w-5 h-5 text-primary mt-0.5 shrink-0" />
+                <div>
+                  <h2 className="font-display text-lg tracking-wide text-foreground">SiPag (IPG Online)</h2>
+                  <p className="font-body text-sm text-muted-foreground mt-1">
+                    Integração com a API IPG Online da SiPag (Fiserv/Sicoob). O cliente é redirecionado à página hospedada para pagar com cartão, PIX, débito ou boleto.
+                  </p>
+                  <a
+                    href={SIPAG_DOCS_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 font-body text-xs text-primary hover:underline mt-2"
+                  >
+                    Informações SiPag
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                </div>
+              </div>
+
+            {sipag && (
+              <div className={`flex items-center gap-2 px-3 py-2 rounded-sm text-sm font-body ${
+                sipag.isReady
+                  ? 'bg-green-500/10 text-green-700 dark:text-green-400'
+                  : 'bg-amber-500/10 text-amber-700 dark:text-amber-400'
+              }`}>
+                {sipag.isReady ? <CheckCircle2 className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
+                {sipag.isReady
+                  ? `SiPag pronta (${sipag.environmentLabel || 'Teste'})`
+                  : 'Configure Store ID, usuário API e certificados'}
+              </div>
+            )}
+
+            <div className="p-4 bg-secondary/50 rounded-sm border border-border">
+              <p className="font-body text-xs text-muted-foreground uppercase tracking-wider mb-3">
+                Requisitos da API
+              </p>
+              <ul className="space-y-3">
+                {sipagRequirements.map((item) => (
+                  <RequirementItem key={item.id} item={item} />
+                ))}
+              </ul>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label className={labelClass}>Store ID *</label>
+                {sipag?.has_store_id && (
+                  <p className="font-body text-xs text-muted-foreground mb-2">
+                    Atual: <span className="font-mono text-foreground">{sipag.store_id_masked}</span>
+                  </p>
+                )}
+                <input type="password" className={inputClass} value={sipagStoreId} onChange={(e) => setSipagStoreId(e.target.value)} placeholder="2724189910" autoComplete="off" />
+              </div>
+
+              <div>
+                <label className={labelClass}>User ID (API) *</label>
+                {sipag?.has_user_id && (
+                  <p className="font-body text-xs text-muted-foreground mb-2">
+                    Atual: <span className="font-mono text-foreground">{sipag.user_id_masked}</span>
+                  </p>
+                )}
+                <input type="password" className={inputClass} value={sipagUserId} onChange={(e) => setSipagUserId(e.target.value)} placeholder="WST279925._.1" autoComplete="off" />
+              </div>
+
+              <div>
+                <label className={labelClass}>Senha do usuário API *</label>
+                <input type="password" className={inputClass} value={sipagUserPassword} onChange={(e) => setSipagUserPassword(e.target.value)} placeholder={sipag?.has_user_password ? 'Senha salva — preencha para trocar' : 'Senha API'} autoComplete="new-password" />
+              </div>
+
+              <div>
+                <label className={labelClass}>Senha do certificado *</label>
+                <input type="password" className={inputClass} value={sipagCertPassword} onChange={(e) => setSipagCertPassword(e.target.value)} placeholder={sipag?.has_cert_password ? 'Senha salva — preencha para trocar' : 'Senha do .key'} autoComplete="new-password" />
+              </div>
+
+              <div className="sm:col-span-2">
+                <label className={labelClass}>Certificado cliente (.pem)</label>
+                {sipag?.has_cert_pem && (
+                  <p className="font-body text-xs text-muted-foreground mb-2">Certificado PEM já configurado. Cole novamente apenas para substituir.</p>
+                )}
+                <textarea rows={4} className={inputClass} value={sipagCertPem} onChange={(e) => setSipagCertPem(e.target.value)} placeholder="-----BEGIN CERTIFICATE-----&#10;...&#10;-----END CERTIFICATE-----" />
+              </div>
+
+              <div className="sm:col-span-2">
+                <label className={labelClass}>Chave privada (.key)</label>
+                {sipag?.has_cert_key && (
+                  <p className="font-body text-xs text-muted-foreground mb-2">Chave privada já configurada. Cole novamente apenas para substituir.</p>
+                )}
+                <textarea rows={4} className={inputClass} value={sipagCertKey} onChange={(e) => setSipagCertKey(e.target.value)} placeholder="-----BEGIN PRIVATE KEY-----&#10;...&#10;-----END PRIVATE KEY-----" />
+              </div>
+
+              <div>
+                <label className={labelClass}>Soft Descriptor</label>
+                <input type="text" className={inputClass} value={sipagSoftDescriptor} onChange={(e) => setSipagSoftDescriptor(e.target.value.slice(0, 16))} placeholder="SORELLE" maxLength={16} />
+              </div>
+
+              <div>
+                <label className={labelClass}>Ambiente</label>
+                <select className={inputClass} value={sipagEnvironment} onChange={(e) => setSipagEnvironment(e.target.value)}>
+                  <option value="test">Teste (test.ipg-online.com)</option>
+                  <option value="production">Produção (www2.ipg-online.com)</option>
+                </select>
+              </div>
+
+              <div className="sm:col-span-2">
+                <label className={labelClass}>URL do site (retorno)</label>
+                <input type="url" className={inputClass} value={sipagFrontendUrl} onChange={(e) => setSipagFrontendUrl(e.target.value)} placeholder="http://localhost:3000" />
+                <p className="font-body text-xs text-muted-foreground mt-1">
+                  Após pagar na página SiPag, o cliente pode voltar para:{' '}
+                  <span className="font-mono break-all">{sipag?.returnUrlExample || '—'}</span>
+                </p>
+              </div>
+
+              <div className="sm:col-span-2">
+                <label className={labelClass}>URL da API IPG (opcional)</label>
+                <input type="url" className={inputClass} value={sipagApiUrl} onChange={(e) => setSipagApiUrl(e.target.value)} placeholder={sipagEnvironment === 'production' ? 'https://www2.ipg-online.com/ipgapi/services' : 'https://test.ipg-online.com/ipgapi/services'} />
+              </div>
+            </div>
+
+            <div className="p-4 bg-secondary/30 rounded-sm border border-border font-body text-xs text-muted-foreground space-y-1">
+              <p className="text-foreground font-medium text-sm mb-2">Como funciona</p>
+              <p>• A loja cria um Payment URL via SOAP e redireciona o cliente à página hospedada SiPag</p>
+              <p>• Autenticação mTLS com certificado + Basic Auth (User ID e senha)</p>
+              <p>• O status é reconsultado automaticamente quando o cliente abre a página de retorno</p>
+              <p>• Solicite habilitação de e-commerce na cooperativa Sicoob / Central SiPag</p>
             </div>
             </TabsContent>
 

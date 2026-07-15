@@ -251,11 +251,12 @@ export default function Checkout() {
     cartao_debito: 'cartão de débito',
     boleto: 'boleto',
   };
-  const usesCieloCheckout = selectedPayment?.provider === 'cielo';
+  const usesGatewayCheckout = selectedPayment?.provider === 'cielo' || selectedPayment?.provider === 'sipag';
+  const gatewayLabel = selectedPayment?.provider === 'sipag' ? 'SiPag' : 'Cielo';
   const checkoutButtonLabel = isTestMode
     ? 'Finalizar pedido de teste'
-    : usesCieloCheckout
-      ? `Pagar com ${paymentMethodLabels[paymentMethod] || 'pagamento'} na Cielo`
+    : usesGatewayCheckout
+      ? `Pagar com ${paymentMethodLabels[paymentMethod] || 'pagamento'} na ${gatewayLabel}`
       : paymentMethod === 'pix'
         ? 'Pagar com PIX'
         : 'Finalizar compra';
