@@ -250,7 +250,6 @@ CREATE TABLE IF NOT EXISTS categories (
   name VARCHAR(255) NOT NULL,
   slug VARCHAR(255) UNIQUE NOT NULL,
   description TEXT,
-  parent_id UUID REFERENCES categories(id) ON DELETE SET NULL,
   sort_order INTEGER NOT NULL DEFAULT 0,
   active BOOLEAN NOT NULL DEFAULT TRUE,
   created_date TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -258,6 +257,9 @@ CREATE TABLE IF NOT EXISTS categories (
 );
 
 CREATE INDEX IF NOT EXISTS idx_categories_active_sort ON categories(active, sort_order);
+
+-- Subcategorias: coluna parent_id (bases novas e existentes)
+ALTER TABLE categories ADD COLUMN IF NOT EXISTS parent_id UUID REFERENCES categories(id) ON DELETE SET NULL;
 CREATE INDEX IF NOT EXISTS idx_categories_parent ON categories(parent_id);
 
 -- Seed das categorias originais (idempotente)
@@ -288,6 +290,3 @@ ON CONFLICT (key) DO NOTHING;
 
 -- Categoria de produto agora é validada pela tabela categories (constraint antiga removida)
 ALTER TABLE products DROP CONSTRAINT IF EXISTS products_category_check;
-
-ALTER TABLE categories ADD COLUMN IF NOT EXISTS parent_id UUID REFERENCES categories(id) ON DELETE SET NULL;
-CREATE INDEX IF NOT EXISTS idx_categories_parent ON categories(parent_id);
