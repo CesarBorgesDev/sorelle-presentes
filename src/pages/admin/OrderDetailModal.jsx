@@ -13,12 +13,12 @@ import {
   formatOrderDate,
   formatMoney,
 } from '@/lib/orderLabels';
-import { ExternalLink, Loader2, Printer, ScanBarcode, X } from 'lucide-react';
+import { ExternalLink, Loader2, Printer, ScanBarcode, Trash2, X } from 'lucide-react';
 
 const STATUS_OPTIONS = ['pendente', 'confirmado', 'em_preparo', 'enviado', 'entregue', 'cancelado'];
 const PAYMENT_STATUS_OPTIONS = ['aguardando_pagamento', 'pago', 'recusado', 'cancelado'];
 
-export default function OrderDetailModal({ order, onClose, onUpdated }) {
+export default function OrderDetailModal({ order, onClose, onUpdated, onDeleted }) {
   const queryClient = useQueryClient();
   const [trackingCode, setTrackingCode] = useState(order.tracking_code || '');
   const [paymentStatus, setPaymentStatus] = useState(order.payment_status || 'aguardando_pagamento');
@@ -49,6 +49,20 @@ export default function OrderDetailModal({ order, onClose, onUpdated }) {
       onUpdated?.(updated);
     },
   });
+
+  const deleteMutation = useMutation({
+    mutationFn: () => api.entities.Order.delete(order.id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['orders'] });
+      onDeleted?.();
+    },
+  });
+
+  const handleDelete = () => {
+    const label = order.customer_name || order.customer_email || 'este pedido';
+    if (!window.confirm(`Excluir o pedido de ${label}? Esta ação não pode ser desfeita.`)) return;
+    deleteMutation.mutate();
+  };
 
   const labelMutation = useMutation({
     mutationFn: () => api.orderShipping.generateLabel(order.id, { tracking_code: trackingCode }),
@@ -327,6 +341,25 @@ export default function OrderDetailModal({ order, onClose, onUpdated }) {
               <p className="font-body text-sm text-muted-foreground">{order.notes}</p>
             </div>
           )}
+
+          <div className="pt-4 border-t border-border flex flex-wrap items-center justify-between gap-3">
+            <button
+              type="button"
+              onClick={handleDelete}
+              disabled={deleteMutation.isPending}
+              className="inline-flex items-center gap-2 px-4 py-2.5 border border-destructive/40 text-destructive rounded-sm font-body text-sm hover:bg-destructive/10 disabled:opacity-50"
+            >
+              {deleteMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+              Excluir pedido
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2.5 border border-border rounded-sm font-body text-sm hover:bg-secondary"
+            >
+              Fechar
+            </button>
+          </div>
         </div>
       </div>
     </div>

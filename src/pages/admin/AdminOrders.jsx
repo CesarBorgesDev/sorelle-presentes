@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/api/apiClient';
-import { Search, ChevronDown, Plus } from 'lucide-react';
+import { Search, ChevronDown, Plus, Trash2 } from 'lucide-react';
 import {
   ORDER_STATUS_LABELS,
   ORDER_STATUS_COLORS,
@@ -29,6 +29,22 @@ export default function AdminOrders() {
     mutationFn: ({ id, status }) => api.entities.Order.update(id, { status }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['orders'] }),
   });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id) => api.entities.Order.delete(id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['orders'] }),
+  });
+
+  const handleDeleteOrder = (order, e) => {
+    e?.stopPropagation();
+    const label = order.customer_name || order.customer_email || 'este pedido';
+    if (!window.confirm(`Excluir o pedido de ${label}? Esta ação não pode ser desfeita.`)) return;
+    deleteMutation.mutate(order.id, {
+      onSuccess: () => {
+        if (detailOrder?.id === order.id) setDetailOrder(null);
+      },
+    });
+  };
 
   const filtered = orders.filter((o) => {
     const matchSearch = o.customer_name?.toLowerCase().includes(search.toLowerCase())
@@ -134,8 +150,25 @@ export default function AdminOrders() {
                         ))}
                       </select>
                     </td>
-                    <td className="px-6 py-4 text-right">
-                      <button type="button" className="font-body text-xs text-primary hover:opacity-70 tracking-wider">Ver</button>
+                    <td className="px-6 py-4 text-right" onClick={(e) => e.stopPropagation()}>
+                      <div className="inline-flex items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={() => setDetailOrder(order)}
+                          className="font-body text-xs text-primary hover:opacity-70 tracking-wider"
+                        >
+                          Ver
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => handleDeleteOrder(order, e)}
+                          disabled={deleteMutation.isPending}
+                          className="text-muted-foreground hover:text-destructive transition-colors disabled:opacity-50"
+                          title="Excluir pedido"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -159,6 +192,10 @@ export default function AdminOrders() {
           onClose={() => setDetailOrder(null)}
           onUpdated={(updated) => {
             setDetailOrder(updated);
+            queryClient.invalidateQueries({ queryKey: ['orders'] });
+          }}
+          onDeleted={() => {
+            setDetailOrder(null);
             queryClient.invalidateQueries({ queryKey: ['orders'] });
           }}
         />
