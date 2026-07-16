@@ -14,7 +14,8 @@ const MODELS = [
   { value: 'nanobanana', label: 'Nano Banana (requer token Pollinations)' },
 ];
 
-const CIELO_DOCS_URL = 'https://developercielo.github.io/manual/checkout-cielo';
+const CIELO_DOCS_URL = 'https://docs.cielo.com.br/ecommerce-cielo/page/explore-api';
+const CIELO_CHECKOUT_DOCS_URL = 'https://developercielo.github.io/manual/checkout-cielo';
 const SIPAG_DOCS_URL = 'https://www.sipag.com.br/servicos.html';
 
 function RequirementItem({ item }) {
@@ -55,6 +56,7 @@ export default function AdminSettings() {
   const [cieloCheckoutApiUrl, setCieloCheckoutApiUrl] = useState('');
   const [cieloMaxInstallments, setCieloMaxInstallments] = useState('12');
   const [cieloNotificationMethod, setCieloNotificationMethod] = useState('post');
+  const [cieloEnvironment, setCieloEnvironment] = useState('production');
   const [paymentGateway, setPaymentGateway] = useState('cielo');
   const [sipagStoreId, setSipagStoreId] = useState('');
   const [sipagUserId, setSipagUserId] = useState('');
@@ -121,6 +123,7 @@ export default function AdminSettings() {
       setCieloCheckoutApiUrl(data.cielo.checkoutApiUrl || '');
       setCieloMaxInstallments(String(data.cielo.maxInstallments || 12));
       setCieloNotificationMethod(data.cielo.notificationMethod || 'post');
+      setCieloEnvironment(data.cielo.environment || 'production');
     }
     if (data?.payment) {
       const enabled = Array.isArray(data.payment.payment_methods_enabled) && data.payment.payment_methods_enabled.length
@@ -211,6 +214,7 @@ export default function AdminSettings() {
       cielo_checkout_api_url: cieloCheckoutApiUrl.trim(),
       cielo_max_installments: cieloMaxInstallments,
       cielo_notification_method: cieloNotificationMethod,
+      cielo_environment: cieloEnvironment,
       payment_gateway: paymentGateway,
       sipag_soft_descriptor: sipagSoftDescriptor.trim(),
       sipag_environment: sipagEnvironment,
@@ -928,7 +932,16 @@ export default function AdminSettings() {
                     rel="noopener noreferrer"
                     className="inline-flex items-center gap-1 font-body text-xs text-primary hover:underline mt-2"
                   >
-                    Documentação oficial
+                    Referência da API Cielo
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                  <a
+                    href={CIELO_CHECKOUT_DOCS_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 font-body text-xs text-primary hover:underline mt-1 ml-3"
+                  >
+                    Manual Checkout Cielo
                     <ExternalLink className="w-3 h-3" />
                   </a>
                 </div>
@@ -942,7 +955,7 @@ export default function AdminSettings() {
               }`}>
                 {cielo.isReady ? <CheckCircle2 className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
                 {cielo.isReady
-                  ? 'Checkout Cielo pronto para pagamentos'
+                  ? `Checkout Cielo pronto — ${cielo.environmentLabel || 'Produção'}`
                   : 'Configure o MerchantId para habilitar pagamentos'}
                 {autoTotal > 0 && (
                   <span className="ml-auto text-xs opacity-80">
@@ -964,6 +977,33 @@ export default function AdminSettings() {
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2">
+              <div className="sm:col-span-2">
+                <label className={labelClass}>Ambiente</label>
+                <select
+                  className={inputClass}
+                  value={cieloEnvironment}
+                  onChange={(e) => setCieloEnvironment(e.target.value)}
+                >
+                  {(cielo?.environments || [
+                    { id: 'production', label: 'Produção' },
+                    { id: 'homologacao', label: 'Homologação' },
+                  ]).map((option) => (
+                    <option key={option.id} value={option.id}>{option.label}</option>
+                  ))}
+                </select>
+                <p className="font-body text-xs text-muted-foreground mt-1">
+                  {cielo?.environmentDescription || (
+                    cieloEnvironment === 'homologacao'
+                      ? 'Testes sem cobrança real. Ative o Modo Teste no painel Cielo.'
+                      : 'Transações reais. Desative o Modo Teste no painel Cielo.'
+                  )}
+                </p>
+                <p className="font-body text-xs text-muted-foreground mt-1">
+                  O Checkout Cielo usa os mesmos endpoints em produção e homologação.
+                  Em homologação, habilite <strong>Modo Teste</strong> em Configurações no site Cielo.
+                </p>
+              </div>
+
               <div className="sm:col-span-2">
                 <label className={labelClass}>
                   <span className="inline-flex items-center gap-1.5">
@@ -1140,7 +1180,9 @@ export default function AdminSettings() {
                 </p>
                 <p className="font-body text-xs text-muted-foreground mt-1">
                   No painel Cielo, habilite cartão, PIX, débito e/ou boleto em Configurações → Meios de pagamento.
-                  Para homologação sem cobrança real, ative o Modo Teste no site Cielo.
+                  {cieloEnvironment === 'homologacao'
+                    ? ' Em homologação, ative também o Modo Teste no painel Cielo.'
+                    : ' Em produção, confirme que o Modo Teste está desativado.'}
                 </p>
               </div>
             </div>

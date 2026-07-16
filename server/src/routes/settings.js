@@ -174,6 +174,7 @@ router.put('/', requireAuth, requireAdmin, async (req, res) => {
       cielo_checkout_api_url,
       cielo_max_installments,
       cielo_notification_method,
+      cielo_environment,
       payment_gateway,
       sipag_store_id,
       sipag_user_id,
@@ -273,6 +274,13 @@ router.put('/', requireAuth, requireAdmin, async (req, res) => {
       const method = String(cielo_notification_method).trim().toLowerCase();
       if (method === 'post' || method === 'json') {
         await setSetting('cielo_notification_method', method);
+      }
+    }
+
+    if (cielo_environment !== undefined && cielo_environment !== '') {
+      const env = String(cielo_environment).trim().toLowerCase();
+      if (env === 'production' || env === 'homologacao') {
+        await setSetting('cielo_environment', env);
       }
     }
 

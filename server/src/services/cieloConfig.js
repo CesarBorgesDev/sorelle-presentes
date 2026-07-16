@@ -5,6 +5,28 @@ const DEFAULT_TOKEN_URL = 'https://cieloecommerce.cielo.com.br/api/public/v2/tok
 const DEFAULT_TRANSACTIONAL_URL = 'https://cieloecommerce.cielo.com.br/api/public/v2/';
 const MERCHANT_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+/** Ambientes do Checkout Cielo (mesmos endpoints; homologação usa Modo Teste no painel). */
+export const CIELO_ENVIRONMENTS = {
+  production: {
+    id: 'production',
+    label: 'Produção',
+    description: 'Transações reais. Desative o Modo Teste no painel Cielo.',
+    checkoutApiUrl: DEFAULT_CHECKOUT_URL,
+    tokenUrl: DEFAULT_TOKEN_URL,
+    transactionalApiUrl: DEFAULT_TRANSACTIONAL_URL,
+  },
+  homologacao: {
+    id: 'homologacao',
+    label: 'Homologação',
+    description: 'Testes sem cobrança real. Ative o Modo Teste no painel Cielo.',
+    checkoutApiUrl: DEFAULT_CHECKOUT_URL,
+    tokenUrl: DEFAULT_TOKEN_URL,
+    transactionalApiUrl: DEFAULT_TRANSACTIONAL_URL,
+  },
+};
+
+const DEFAULT_ENVIRONMENT = 'production';
+
 export const CIELO_NOTIFICATION_METHODS = {
   post: {
     id: 'post',
@@ -36,6 +58,10 @@ function normalizeTransactionalApiUrl(url) {
 }
 
 export async function getCieloConfig() {
+  const rawEnvironment = ((await getSetting('cielo_environment')) || process.env.CIELO_ENVIRONMENT || DEFAULT_ENVIRONMENT).trim().toLowerCase();
+  const environment = CIELO_ENVIRONMENTS[rawEnvironment] ? rawEnvironment : DEFAULT_ENVIRONMENT;
+  const envDefaults = CIELO_ENVIRONMENTS[environment];
+
   const merchantId = ((await getSetting('cielo_merchant_id')) || process.env.CIELO_MERCHANT_ID || '').trim();
   const clientId = ((await getSetting('cielo_client_id')) || process.env.CIELO_CLIENT_ID || '').trim();
   const clientSecret = ((await getSetting('cielo_client_secret')) || process.env.CIELO_CLIENT_SECRET || '').trim();
@@ -43,19 +69,25 @@ export async function getCieloConfig() {
   const frontendUrl = ((await getSetting('cielo_frontend_url')) || process.env.FRONTEND_URL || process.env.CORS_ORIGIN || 'http://localhost:3000').replace(/\/$/, '');
   const backendPublicUrl = ((await getSetting('cielo_backend_public_url')) || process.env.APP_PUBLIC_URL || 'http://localhost:3001').replace(/\/$/, '');
   const checkoutApiUrl = normalizeCheckoutApiUrl(
-    (await getSetting('cielo_checkout_api_url')) || process.env.CIELO_CHECKOUT_URL || DEFAULT_CHECKOUT_URL
+    (await getSetting('cielo_checkout_api_url')) || process.env.CIELO_CHECKOUT_URL || envDefaults.checkoutApiUrl
   );
-  const tokenUrl = ((await getSetting('cielo_token_url')) || process.env.CIELO_TOKEN_URL || DEFAULT_TOKEN_URL).trim();
+  const tokenUrl = ((await getSetting('cielo_token_url')) || process.env.CIELO_TOKEN_URL || envDefaults.tokenUrl).trim();
   const transactionalApiUrl = normalizeTransactionalApiUrl(
-    (await getSetting('cielo_transactional_api_url')) || process.env.CIELO_TRANSACTIONAL_URL || DEFAULT_TRANSACTIONAL_URL
+    (await getSetting('cielo_transactional_api_url')) || process.env.CIELO_TRANSACTIONAL_URL || envDefaults.transactionalApiUrl
   );
   const maxInstallments = Number((await getSetting('cielo_max_installments')) || process.env.CIELO_MAX_INSTALLMENTS || 12);
   const notificationMethod = await getCieloNotificationMethod();
 
   const merchantIdValid = MERCHANT_ID_PATTERN.test(merchantId);
   const hasTransactionalCredentials = Boolean(clientId && clientSecret);
+  const isHomologacao = environment === 'homologacao';
 
   return {
+    environment,
+    environmentLabel: envDefaults.label,
+    environmentDescription: envDefaults.description,
+    isHomologacao,
+    environments: Object.values(CIELO_ENVIRONMENTS),
     merchantId,
     merchantIdValid,
     clientId,
@@ -138,10 +170,14 @@ export function getCieloRequirements(config) {
     },
     {
       id: 'test_mode',
-      label: 'Modo Teste ativado no site Cielo (para homologação)',
-      required: false,
+      label: config.isHomologacao
+        ? 'Modo Teste ativado no painel Cielo (obrigatório em homologação)'
+        : 'Modo Teste desativado no painel Cielo (produção)',
+      required: config.isHomologacao,
       done: false,
-      hint: 'Checkout Cielo → Configurações → Modo Teste',
+      hint: config.isHomologacao
+        ? 'Checkout Cielo → Configurações → habilite Modo Teste e salve'
+        : 'Em produção, confirme que o Modo Teste está desativado no painel Cielo',
       manual: true,
     },
     {

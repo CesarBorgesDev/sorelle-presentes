@@ -288,5 +288,9 @@ INSERT INTO app_settings (key, value) VALUES
   ('payment_gateway', 'cielo')
 ON CONFLICT (key) DO NOTHING;
 
+INSERT INTO app_settings (key, value) VALUES
+  ('cielo_environment', 'production')
+ON CONFLICT (key) DO NOTHING;
+
 -- Categoria de produto agora é validada pela tabela categories (constraint antiga removida)
 ALTER TABLE products DROP CONSTRAINT IF EXISTS products_category_check;
