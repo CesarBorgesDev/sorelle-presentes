@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/api/apiClient';
 import { DEFAULT_HOME_BANNERS } from '@/lib/homeBannersDefaults';
+import { groupProductsByParentCategory, useCategoriesFlat } from '@/hooks/useCategories';
 import HeroSection from '../components/HeroSection';
 import FeaturedProducts from '../components/FeaturedProducts';
 import CategoryBanner from '../components/CategoryBanner';
@@ -15,21 +16,24 @@ export default function Home() {
     staleTime: 60_000,
   });
 
-  const { data: products = [] } = useQuery({
-    queryKey: ['products'],
+  const { data: products = [], isLoading: isLoadingProducts } = useQuery({
+    queryKey: ['products', 'public-home'],
     queryFn: () => api.entities.Product.list('-created_date', 50),
+    staleTime: 60_000,
+    retry: 2,
   });
 
-  const productsByCategory = products.reduce((acc, product) => {
-    if (!acc[product.category]) {
-      acc[product.category] = [];
-    }
-    acc[product.category].push(product);
-    return acc;
-  }, {});
+  const { data: flatCategories = [] } = useCategoriesFlat();
+
+  const productsByCategory = useMemo(
+    () => groupProductsByParentCategory(products, flatCategories),
+    [products, flatCategories]
+  );
 
   const casaFeatured = banners.casaFeatured || DEFAULT_HOME_BANNERS.casaFeatured;
   const sections = banners.sections?.length ? banners.sections : DEFAULT_HOME_BANNERS.sections;
+
+  const hasVisibleProducts = Object.values(productsByCategory).some((items) => items.length > 0);
 
   return (
     <div>
@@ -56,6 +60,15 @@ export default function Home() {
           />
         </React.Fragment>
       ))}
+
+      {!isLoadingProducts && !hasVisibleProducts && products.length > 0 && (
+        <FeaturedProducts
+          products={products}
+          title="Nossa Coleção"
+          subtitle="Destaques"
+          link="/busca"
+        />
+      )}
 
       <BrandsCarousel />
       <WhatsAppGroupBanner />
