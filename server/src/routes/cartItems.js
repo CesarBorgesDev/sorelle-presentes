@@ -3,7 +3,11 @@ import pool from '../config/db.js';
 import { requireAuth } from '../middleware/auth.js';
 import { rowToEntity, rowsToEntities } from '../utils/helpers.js';
 import { normalizeProductQuantity } from '../utils/productStock.js';
-import { resolveVariantAvailability } from '../utils/productVariants.js';
+import {
+  resolveVariantAvailability,
+  resolveVariantPrice,
+  getVariantImages,
+} from '../utils/productVariants.js';
 
 const router = Router();
 
@@ -11,7 +15,7 @@ router.use(requireAuth);
 
 async function loadProductStock(productId) {
   const result = await pool.query(
-    'SELECT id, name, quantity, in_stock, image_url, price, variants FROM products WHERE id = $1',
+    'SELECT id, name, quantity, in_stock, image_url, images, price, original_price, variants FROM products WHERE id = $1',
     [productId]
   );
   return result.rows[0] || null;
@@ -78,6 +82,13 @@ router.post('/', async (req, res) => {
       variantSize
     );
 
+    const pricing = resolveVariantPrice(product, variantColor, variantSize);
+    const variantImages = getVariantImages(product, variantColor, variantSize);
+    const productImage = data.product_image
+      || variantImages[0]
+      || product.image_url
+      || null;
+
     const result = await pool.query(
       `INSERT INTO cart_items (user_id, product_id, product_name, product_image, price, quantity, wrapping, variant_color, variant_size)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
@@ -85,8 +96,8 @@ router.post('/', async (req, res) => {
         req.user.id,
         data.product_id,
         data.product_name || product.name,
-        data.product_image || product.image_url || null,
-        data.price ?? product.price,
+        productImage,
+        pricing.price,
         requestedQuantity,
         data.wrapping || 'none',
         variantColor,
@@ -115,19 +126,21 @@ router.patch('/:id', async (req, res) => {
       ? normalizeProductQuantity(req.body.quantity)
       : item.quantity;
 
-    await validateCartQuantity(
+    const product = await validateCartQuantity(
       item.product_id,
       nextQuantity,
       item.variant_color,
       item.variant_size
     );
 
+    const pricing = resolveVariantPrice(product, item.variant_color, item.variant_size);
+
     const result = await pool.query(
       `UPDATE cart_items
-       SET quantity = $1, updated_date = NOW()
-       WHERE id = $2 AND user_id = $3
+       SET quantity = $1, price = $2, updated_date = NOW()
+       WHERE id = $3 AND user_id = $4
        RETURNING *`,
-      [nextQuantity, req.params.id, req.user.id]
+      [nextQuantity, pricing.price, req.params.id, req.user.id]
     );
 
     res.json(rowToEntity(result.rows[0]));

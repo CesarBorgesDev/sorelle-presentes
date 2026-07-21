@@ -15,11 +15,12 @@ import ImageLightbox from '@/components/ImageLightbox';
 import {
   buildVariantLabel,
   ensureVariantStockMatrix,
-  getColorImages,
+  getVariantImages,
   getVariantStock,
   getSizeSpecification,
   hasProductVariants,
   resolveVariantAvailability,
+  resolveVariantPrice,
   usesSizeStock,
 } from '@/lib/productVariants';
 import {
@@ -90,6 +91,7 @@ export default function ProductDetail() {
   const available = availability.available;
   const stockQuantity = availability.quantity;
   const maxQuantity = available ? stockQuantity : 0;
+  const variantPricing = resolveVariantPrice(product, selectedColorId, selectedSize);
 
   useEffect(() => {
     if (!product) return;
@@ -120,7 +122,7 @@ export default function ProductDetail() {
 
   useEffect(() => {
     setActiveImage(0);
-  }, [selectedColorId]);
+  }, [selectedColorId, selectedSize]);
 
   useEffect(() => {
     if (maxQuantity > 0 && quantity > maxQuantity) {
@@ -167,13 +169,14 @@ export default function ProductDetail() {
 
     const variantLabel = buildVariantLabel(selectedColor?.name, selectedSize);
     const displayName = variantLabel ? `${product.name} - ${variantLabel}` : product.name;
-    const displayImage = getColorImages(product, selectedColorId)[0] || product.image_url;
+    const displayImage = getVariantImages(product, selectedColorId, selectedSize)[0] || product.image_url;
+    const pricing = resolveVariantPrice(product, selectedColorId, selectedSize);
 
     addToCartMutation.mutate({
       product_id: product.id,
       product_name: displayName,
       product_image: displayImage,
-      price: product.price,
+      price: pricing.price,
       quantity,
       variant_color: selectedColorId || null,
       variant_size: selectedSize || null,
@@ -203,7 +206,7 @@ export default function ProductDetail() {
     );
   }
 
-  const allImages = getColorImages(product, selectedColorId).map(resolveMediaUrl);
+  const allImages = getVariantImages(product, selectedColorId, selectedSize).map(resolveMediaUrl);
 
   const thumbnailButtonClass = (isActive) => (
     `rounded-sm overflow-hidden border-2 transition-all ${
@@ -334,7 +337,10 @@ export default function ProductDetail() {
               {product.name}
             </h1>
 
-            <ProductPaymentConditions price={product.price} originalPrice={product.original_price} />
+            <ProductPaymentConditions
+              price={variantPricing.price}
+              originalPrice={variantPricing.original_price}
+            />
 
             {variants.colors.length > 0 && (
               <div className="mb-6">

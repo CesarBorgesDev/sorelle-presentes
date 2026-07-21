@@ -2,9 +2,16 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { isProductAvailable } from '@/lib/productStock';
 import ProductImage from '@/components/ProductImage';
+import { getVariantPriceRange } from '@/lib/productVariants';
+
+function formatMoney(value) {
+  return `R$ ${Number(value || 0).toFixed(2).replace('.', ',')}`;
+}
 
 export default function ProductListRow({ product, className = '' }) {
-  const discount = product.original_price
+  const priceRange = getVariantPriceRange(product);
+  const displayPrice = priceRange.fromLabel ? priceRange.min : product.price;
+  const discount = !priceRange.fromLabel && product.original_price
     ? Math.round((1 - product.price / product.original_price) * 100)
     : 0;
 
@@ -43,13 +50,16 @@ export default function ProductListRow({ product, className = '' }) {
             {product.description}
           </p>
         )}
-        <div className="flex items-center gap-2 mt-auto">
+        <div className="flex items-center gap-2 mt-auto flex-wrap">
+          {priceRange.fromLabel && (
+            <span className="font-body text-xs text-muted-foreground">A partir de</span>
+          )}
           <span className="font-body text-sm font-medium text-foreground">
-            R$ {product.price?.toFixed(2).replace('.', ',')}
+            {formatMoney(displayPrice)}
           </span>
-          {product.original_price && (
+          {!priceRange.fromLabel && product.original_price && (
             <span className="font-body text-xs text-muted-foreground line-through">
-              R$ {product.original_price?.toFixed(2).replace('.', ',')}
+              {formatMoney(product.original_price)}
             </span>
           )}
           {!isProductAvailable(product) && (

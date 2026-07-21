@@ -58,6 +58,7 @@ export default function ProductFormModal({ product, onClose }) {
     sizes: [],
     stock: [],
     size_specifications: {},
+    size_images: {},
     ...(product?.variants || {}),
   }));
   const [internalCodeError, setInternalCodeError] = useState('');
