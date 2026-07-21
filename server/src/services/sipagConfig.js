@@ -7,6 +7,7 @@ const DEFAULT_PRODUCTION_API_URL = 'https://www2.ipg-online.com/ipgapi/services'
 export const PAYMENT_GATEWAYS = {
   cielo: { id: 'cielo', label: 'Cielo (Checkout Cielo)' },
   sipag: { id: 'sipag', label: 'SiPag (IPG Online / Fiserv)' },
+  mercado_pago: { id: 'mercado_pago', label: 'Mercado Pago (Checkout Pro)' },
 };
 
 const DEFAULT_GATEWAY = 'cielo';

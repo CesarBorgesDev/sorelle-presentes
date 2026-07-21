@@ -1,6 +1,7 @@
 import { getSetting } from './settings.js';
 import { getCieloConfig } from './cieloConfig.js';
 import { getSipagConfig, getPaymentGateway, PAYMENT_GATEWAYS } from './sipagConfig.js';
+import { getMercadoPagoConfig } from './mercadoPagoConfig.js';
 
 export const PAYMENT_METHOD_DEFS = {
   pix: {
@@ -51,7 +52,7 @@ export const PAYMENT_METHOD_DEFS = {
 };
 
 export const CHECKOUT_OPTIONS = [
-  { id: 'pix', label: 'PIX', hint: 'Gateway (Cielo/SiPag) ou chave PIX manual' },
+  { id: 'pix', label: 'PIX', hint: 'Gateway (Cielo/SiPag/Mercado Pago) ou chave PIX manual' },
   { id: 'cartao_credito', label: 'Cartão de crédito', hint: 'Redireciona ao gateway configurado' },
   { id: 'cartao_debito', label: 'Cartão de débito', hint: 'Débito online no gateway configurado' },
   { id: 'boleto', label: 'Boleto bancário', hint: 'Redireciona ao gateway configurado' },
@@ -74,18 +75,25 @@ async function getActiveGatewayProvider() {
   const preferred = await getPaymentGateway();
   const cieloConfig = await getCieloConfig();
   const sipagConfig = await getSipagConfig();
+  const mercadoPagoConfig = await getMercadoPagoConfig();
 
+  if (preferred === 'mercado_pago' && mercadoPagoConfig.isReady) {
+    return { provider: 'mercado_pago', mercadoPagoConfig, cieloConfig, sipagConfig };
+  }
   if (preferred === 'sipag' && sipagConfig.isReady) {
-    return { provider: 'sipag', sipagConfig, cieloConfig };
+    return { provider: 'sipag', sipagConfig, cieloConfig, mercadoPagoConfig };
   }
   if (preferred === 'cielo' && cieloConfig.isReady) {
-    return { provider: 'cielo', cieloConfig, sipagConfig };
+    return { provider: 'cielo', cieloConfig, sipagConfig, mercadoPagoConfig };
+  }
+  if (mercadoPagoConfig.isReady) {
+    return { provider: 'mercado_pago', mercadoPagoConfig, cieloConfig, sipagConfig };
   }
   if (sipagConfig.isReady) {
-    return { provider: 'sipag', sipagConfig, cieloConfig };
+    return { provider: 'sipag', sipagConfig, cieloConfig, mercadoPagoConfig };
   }
   if (cieloConfig.isReady) {
-    return { provider: 'cielo', cieloConfig, sipagConfig };
+    return { provider: 'cielo', cieloConfig, sipagConfig, mercadoPagoConfig };
   }
   return null;
 }
@@ -188,6 +196,7 @@ export async function getCheckoutConfig() {
     isTestMode: providerInfo?.isTestMode || false,
     cieloConfig: providerInfo?.cieloConfig || null,
     sipagConfig: providerInfo?.sipagConfig || null,
+    mercadoPagoConfig: providerInfo?.mercadoPagoConfig || null,
     pixKey: providerInfo?.pixKey || null,
     pixHolder: providerInfo?.pixHolder || null,
   };

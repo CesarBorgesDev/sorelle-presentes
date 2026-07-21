@@ -4,6 +4,7 @@ import { getSetting, setSetting, maskToken } from '../services/settings.js';
 import { DEFAULT_IMAGE_MODEL } from '../services/imageGeneration.js';
 import { getCieloConfig, getCieloRequirements } from '../services/cieloConfig.js';
 import { getSipagConfig, getSipagRequirements, PAYMENT_GATEWAYS } from '../services/sipagConfig.js';
+import { getMercadoPagoConfig, getMercadoPagoRequirements } from '../services/mercadoPagoConfig.js';
 import { getStorePickupConfig } from '../services/storePickup.js';
 import {
   CHECKOUT_OPTIONS,
@@ -31,6 +32,7 @@ async function buildSettingsResponse(message) {
   const stableHordeKey = await getSetting('stable_horde_api_key');
   const cieloConfig = await getCieloConfig();
   const sipagConfig = await getSipagConfig();
+  const mercadoPagoConfig = await getMercadoPagoConfig();
   const paymentGateway = await getPaymentGateway();
   const enabledPaymentMethods = await getEnabledPaymentMethodIds();
   const checkoutConfig = await getCheckoutConfig();
@@ -137,6 +139,17 @@ async function buildSettingsResponse(message) {
       user_id_masked: maskToken(sipagConfig.userId),
       requirements: getSipagRequirements(sipagConfig),
     },
+    mercado_pago: {
+      ...mercadoPagoConfig,
+      accessToken: undefined,
+      webhookSecret: undefined,
+      has_access_token: Boolean(mercadoPagoConfig.accessToken),
+      has_public_key: Boolean(mercadoPagoConfig.publicKey),
+      has_webhook_secret: Boolean(mercadoPagoConfig.webhookSecret),
+      access_token_masked: maskToken(mercadoPagoConfig.accessToken),
+      public_key_masked: maskToken(mercadoPagoConfig.publicKey),
+      requirements: getMercadoPagoRequirements(mercadoPagoConfig),
+    },
   };
 }
 
@@ -186,6 +199,12 @@ router.put('/', requireAuth, requireAdmin, async (req, res) => {
       sipag_environment,
       sipag_frontend_url,
       sipag_api_url,
+      mercado_pago_access_token,
+      mercado_pago_public_key,
+      mercado_pago_webhook_secret,
+      mercado_pago_environment,
+      mercado_pago_frontend_url,
+      mercado_pago_backend_public_url,
       payment_methods_enabled,
       checkout_payment_method,
       pix_key,
@@ -332,6 +351,33 @@ router.put('/', requireAuth, requireAdmin, async (req, res) => {
 
     if (sipag_api_url !== undefined && sipag_api_url !== '') {
       await setSetting('sipag_api_url', sipag_api_url.trim());
+    }
+
+    if (mercado_pago_access_token !== undefined && mercado_pago_access_token !== '') {
+      await setSetting('mercado_pago_access_token', mercado_pago_access_token.trim());
+    }
+
+    if (mercado_pago_public_key !== undefined && mercado_pago_public_key !== '') {
+      await setSetting('mercado_pago_public_key', mercado_pago_public_key.trim());
+    }
+
+    if (mercado_pago_webhook_secret !== undefined && mercado_pago_webhook_secret !== '') {
+      await setSetting('mercado_pago_webhook_secret', mercado_pago_webhook_secret.trim());
+    }
+
+    if (mercado_pago_environment !== undefined && mercado_pago_environment !== '') {
+      const env = String(mercado_pago_environment).trim().toLowerCase();
+      if (env === 'test' || env === 'production') {
+        await setSetting('mercado_pago_environment', env);
+      }
+    }
+
+    if (mercado_pago_frontend_url !== undefined) {
+      await setSetting('mercado_pago_frontend_url', mercado_pago_frontend_url.trim());
+    }
+
+    if (mercado_pago_backend_public_url !== undefined) {
+      await setSetting('mercado_pago_backend_public_url', mercado_pago_backend_public_url.trim());
     }
 
     if (checkout_payment_method !== undefined && checkout_payment_method !== '') {

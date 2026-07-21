@@ -23,6 +23,11 @@ import { normalizeAddressInput, validateAddressFields } from '../utils/address.j
 import { applyCieloPaymentUpdate, refreshCieloOrderStatus } from '../services/cieloNotifications.js';
 import { createSipagPaymentUrl } from '../services/sipag.js';
 import { refreshSipagOrderStatus } from '../services/sipagNotifications.js';
+import { createMercadoPagoPreference } from '../services/mercadoPago.js';
+import {
+  handleMercadoPagoWebhook,
+  refreshMercadoPagoOrderStatus,
+} from '../services/mercadoPagoNotifications.js';
 import { trackCorreiosPackage } from '../services/correiosTracking.js';
 import { normalizeProductQuantity } from '../utils/productStock.js';
 import { resolveVariantAvailability, decrementProductVariantStock } from '../utils/productVariants.js';
@@ -363,6 +368,47 @@ async function startCheckout(req, res) {
     });
   }
 
+  if (providerInfo.provider === 'mercado_pago') {
+    const mercadoPagoConfig = providerInfo.mercadoPagoConfig;
+
+    let preferenceResult;
+    try {
+      preferenceResult = await createMercadoPagoPreference({
+        order,
+        customer,
+        paymentMethod,
+        config: mercadoPagoConfig,
+      });
+    } catch (err) {
+      await pool.query(
+        `UPDATE orders SET status = 'cancelado', payment_status = 'cancelado', updated_date = NOW() WHERE id = $1`,
+        [order.id]
+      );
+      throw err;
+    }
+
+    const gatewayOrderNumber = preferenceResult.preferenceId || buildOrderNumber(order.id);
+
+    await pool.query(
+      `UPDATE orders
+       SET gateway_order_number = $1,
+           payment_gateway = 'mercado_pago',
+           mercado_pago_preference_id = $2,
+           updated_date = NOW()
+       WHERE id = $3`,
+      [gatewayOrderNumber, preferenceResult.preferenceId || null, order.id]
+    );
+
+    return res.json({
+      type: 'mercado_pago',
+      checkout_url: preferenceResult.checkoutUrl,
+      order_id: order.id,
+      gateway_order_number: gatewayOrderNumber,
+      preference_id: preferenceResult.preferenceId,
+      payment_method: paymentMethod,
+    });
+  }
+
   if (providerInfo.provider !== 'cielo') {
     await pool.query(
       `UPDATE orders SET status = 'cancelado', payment_status = 'cancelado', updated_date = NOW() WHERE id = $1`,
@@ -492,6 +538,7 @@ router.get('/pedido/:id', requireAuth, async (req, res) => {
               shipping_cost, shipping_service_code, shipping_service_name, shipping_deadline_days,
               tracking_code, shipping_label_url, cielo_authorization_code, gateway_order_number,
               cielo_payment_id, sipag_payment_id, sipag_authorization_code,
+              mercado_pago_preference_id, mercado_pago_payment_id,
               boleto_url, boleto_digitable_line,
               customer_name, customer_address, items, created_date, updated_date, shipped_at
        FROM orders WHERE id = $1 AND LOWER(customer_email) = LOWER($2)`,
@@ -506,6 +553,8 @@ router.get('/pedido/:id', requireAuth, async (req, res) => {
     if (order.payment_status === 'aguardando_pagamento') {
       if (order.payment_gateway === 'sipag') {
         order = await refreshSipagOrderStatus(pool, order);
+      } else if (order.payment_gateway === 'mercado_pago') {
+        order = await refreshMercadoPagoOrderStatus(pool, order);
       } else {
         order = await refreshCieloOrderStatus(pool, order);
       }
@@ -589,7 +638,7 @@ router.get('/pedido/:id/pix', requireAuth, async (req, res) => {
 
     const providerInfo = await resolvePaymentProvider('pix');
     if (providerInfo.provider !== 'manual_pix') {
-      return res.status(400).json({ message: 'PIX deste pedido é processado na página da Cielo' });
+      return res.status(400).json({ message: 'PIX deste pedido é processado no gateway de pagamento' });
     }
 
     res.json({
@@ -623,5 +672,28 @@ router.post('/cielo/notificacao', (req, res) => handleCieloWebhook(req, res, 'no
 
 /** Notificação de mudança de status (POST form-data). */
 router.post('/cielo/mudanca-status', (req, res) => handleCieloWebhook(req, res, 'mudança de status'));
+
+/**
+ * Webhook Mercado Pago (Checkout Pro).
+ * Cadastre no painel: {APP_PUBLIC_URL}/api/checkout/mercado-pago/webhook
+ */
+router.post('/mercado-pago/webhook', async (req, res) => {
+  try {
+    const result = await handleMercadoPagoWebhook(pool, {
+      body: req.body,
+      query: req.query,
+      headers: req.headers,
+    });
+    res.status(200).json(result);
+  } catch (err) {
+    console.error('[MercadoPago] Erro no webhook:', err);
+    res.status(err.status || 500).json({ message: err.message || 'Erro ao processar webhook' });
+  }
+});
+
+/** Alguns ambientes MP usam GET para validar a URL do webhook. */
+router.get('/mercado-pago/webhook', (_req, res) => {
+  res.status(200).json({ ok: true });
+});
 
 export default router;

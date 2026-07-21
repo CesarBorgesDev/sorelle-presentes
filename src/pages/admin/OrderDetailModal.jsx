@@ -191,16 +191,38 @@ export default function OrderDetailModal({ order, onClose, onUpdated, onDeleted 
                 <p className="font-mono text-xs text-foreground break-all">{order.sipag_payment_id || '—'}</p>
               </div>
             )}
+            {order.payment_gateway === 'mercado_pago' && (
+              <>
+                <div>
+                  <p className="font-body text-xs text-muted-foreground uppercase tracking-wider mb-1">Preference MP</p>
+                  <p className="font-mono text-xs text-foreground break-all">{order.mercado_pago_preference_id || '—'}</p>
+                </div>
+                <div>
+                  <p className="font-body text-xs text-muted-foreground uppercase tracking-wider mb-1">Pagamento MP</p>
+                  <p className="font-mono text-xs text-foreground break-all">{order.mercado_pago_payment_id || '—'}</p>
+                </div>
+              </>
+            )}
             <div className="md:col-span-2">
               <label className="block font-body text-xs text-muted-foreground tracking-wider uppercase mb-2">
-                {order.payment_gateway === 'sipag' ? 'Autorização SiPag' : 'Autorização Cielo'}
+                {order.payment_gateway === 'sipag'
+                  ? 'Autorização SiPag'
+                  : order.payment_gateway === 'mercado_pago'
+                    ? 'ID pagamento Mercado Pago'
+                    : 'Autorização Cielo'}
               </label>
               <input
                 className="w-full h-10 px-3 rounded-sm border border-border bg-background font-body text-sm font-mono"
-                value={order.payment_gateway === 'sipag' ? (order.sipag_authorization_code || cieloAuthorization) : cieloAuthorization}
+                value={
+                  order.payment_gateway === 'sipag'
+                    ? (order.sipag_authorization_code || cieloAuthorization)
+                    : order.payment_gateway === 'mercado_pago'
+                      ? (order.mercado_pago_payment_id || '')
+                      : cieloAuthorization
+                }
                 onChange={(e) => setCieloAuthorization(e.target.value)}
                 placeholder="Código de autorização"
-                readOnly={order.payment_gateway === 'sipag'}
+                readOnly={order.payment_gateway === 'sipag' || order.payment_gateway === 'mercado_pago'}
               />
             </div>
           </div>

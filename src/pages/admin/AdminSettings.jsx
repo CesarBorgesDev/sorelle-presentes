@@ -17,6 +17,7 @@ const MODELS = [
 const CIELO_DOCS_URL = 'https://docs.cielo.com.br/ecommerce-cielo/page/explore-api';
 const CIELO_CHECKOUT_DOCS_URL = 'https://developercielo.github.io/manual/checkout-cielo';
 const SIPAG_DOCS_URL = 'https://www.sipag.com.br/servicos.html';
+const MERCADO_PAGO_DOCS_URL = 'https://www.mercadopago.com.br/developers/pt/docs/checkout-pro/landing';
 
 function RequirementItem({ item }) {
   const Icon = item.done ? CheckCircle2 : item.manual ? AlertCircle : Circle;
@@ -68,6 +69,12 @@ export default function AdminSettings() {
   const [sipagEnvironment, setSipagEnvironment] = useState('test');
   const [sipagFrontendUrl, setSipagFrontendUrl] = useState('');
   const [sipagApiUrl, setSipagApiUrl] = useState('');
+  const [mpAccessToken, setMpAccessToken] = useState('');
+  const [mpPublicKey, setMpPublicKey] = useState('');
+  const [mpWebhookSecret, setMpWebhookSecret] = useState('');
+  const [mpEnvironment, setMpEnvironment] = useState('test');
+  const [mpFrontendUrl, setMpFrontendUrl] = useState('');
+  const [mpBackendUrl, setMpBackendUrl] = useState('');
   const [checkoutMethod, setCheckoutMethod] = useState('pix');
   const [enabledPaymentMethods, setEnabledPaymentMethods] = useState(['pix', 'cartao_credito']);
   const [pixKey, setPixKey] = useState('');
@@ -144,6 +151,11 @@ export default function AdminSettings() {
       setSipagApiUrl(data.sipag.apiUrl || '');
       setSipagEnvironment(data.sipag.environment || 'test');
     }
+    if (data?.mercado_pago) {
+      setMpEnvironment(data.mercado_pago.environment || 'test');
+      setMpFrontendUrl(data.mercado_pago.frontendUrl || '');
+      setMpBackendUrl(data.mercado_pago.backendPublicUrl || '');
+    }
     if (data?.correios) {
       setCorreiosOriginZip(data.correios.origin_zip || '');
       setCorreiosSenderName(data.correios.sender_name || '');
@@ -176,7 +188,7 @@ export default function AdminSettings() {
       setStorePickupInstructions(data.store_pickup.instructions || '');
       setStorePickupDeadlineDays(String(data.store_pickup.deadline_days || 3));
     }
-  }, [data?.image_model, data?.product_sort_order, data?.cielo, data?.payment, data?.sipag, data?.correios, data?.rodonaves, data?.store_pickup]);
+  }, [data?.image_model, data?.product_sort_order, data?.cielo, data?.payment, data?.sipag, data?.mercado_pago, data?.correios, data?.rodonaves, data?.store_pickup]);
 
   const mutation = useMutation({
     mutationFn: (payload) => api.settings.update(payload),
@@ -194,6 +206,9 @@ export default function AdminSettings() {
       setSipagCertPassword('');
       setSipagCertPem('');
       setSipagCertKey('');
+      setMpAccessToken('');
+      setMpPublicKey('');
+      setMpWebhookSecret('');
       setPixKey('');
       setCorreiosPassword('');
       setCorreiosApiPassword('');
@@ -220,6 +235,9 @@ export default function AdminSettings() {
       sipag_environment: sipagEnvironment,
       sipag_frontend_url: sipagFrontendUrl.trim(),
       sipag_api_url: sipagApiUrl.trim(),
+      mercado_pago_environment: mpEnvironment,
+      mercado_pago_frontend_url: mpFrontendUrl.trim(),
+      mercado_pago_backend_public_url: mpBackendUrl.trim(),
       checkout_payment_method: enabledPaymentMethods[0] || checkoutMethod,
       payment_methods_enabled: enabledPaymentMethods,
       pix_holder_name: pixHolderName.trim(),
@@ -259,6 +277,9 @@ export default function AdminSettings() {
     if (sipagCertPassword.trim()) payload.sipag_cert_password = sipagCertPassword.trim();
     if (sipagCertPem.trim()) payload.sipag_cert_pem = sipagCertPem.trim();
     if (sipagCertKey.trim()) payload.sipag_cert_key = sipagCertKey.trim();
+    if (mpAccessToken.trim()) payload.mercado_pago_access_token = mpAccessToken.trim();
+    if (mpPublicKey.trim()) payload.mercado_pago_public_key = mpPublicKey.trim();
+    if (mpWebhookSecret.trim()) payload.mercado_pago_webhook_secret = mpWebhookSecret.trim();
     if (pixKey.trim()) payload.pix_key = pixKey.trim();
     if (correiosCompanyCode.trim()) payload.correios_company_code = correiosCompanyCode.trim();
     if (correiosPassword.trim()) payload.correios_password = correiosPassword.trim();
@@ -286,8 +307,10 @@ export default function AdminSettings() {
   const labelClass = 'block font-body text-xs text-muted-foreground tracking-wider uppercase mb-1.5';
   const cielo = data?.cielo;
   const sipag = data?.sipag;
+  const mercadoPago = data?.mercado_pago;
   const requirements = cielo?.requirements || [];
   const sipagRequirements = sipag?.requirements || [];
+  const mpRequirements = mercadoPago?.requirements || [];
   const autoDoneCount = requirements.filter((r) => r.done && !r.manual).length;
   const autoTotal = requirements.filter((r) => !r.manual).length;
 
@@ -299,7 +322,7 @@ export default function AdminSettings() {
           <h1 className="font-display text-2xl tracking-wide text-foreground">Configurações</h1>
         </div>
         <p className="font-body text-sm text-muted-foreground">
-          Pagamentos, frete, Cielo e geração de imagens.
+          Pagamentos, frete, gateways e geração de imagens.
         </p>
       </div>
 
@@ -327,6 +350,10 @@ export default function AdminSettings() {
               <TabsTrigger value="sipag" className="gap-1.5 font-body text-xs sm:text-sm px-3 py-2">
                 <CreditCard className="w-3.5 h-3.5" />
                 SiPag
+              </TabsTrigger>
+              <TabsTrigger value="mercado_pago" className="gap-1.5 font-body text-xs sm:text-sm px-3 py-2">
+                <CreditCard className="w-3.5 h-3.5" />
+                Mercado Pago
               </TabsTrigger>
               <TabsTrigger value="imagens" className="gap-1.5 font-body text-xs sm:text-sm px-3 py-2">
                 <Sparkles className="w-3.5 h-3.5" />
@@ -376,7 +403,7 @@ export default function AdminSettings() {
               }`}>
                 {payment.checkout_config.available
                   ? `${enabledPaymentMethods.length} forma(s) habilitada(s) — gateway: ${payment.payment_gateways?.find((g) => g.id === paymentGateway)?.label || paymentGateway}`
-                  : 'Checkout indisponível — configure Cielo, SiPag ou chave PIX abaixo'}
+                  : 'Checkout indisponível — configure Cielo, SiPag, Mercado Pago ou chave PIX abaixo'}
               </div>
             )}
 
@@ -390,12 +417,13 @@ export default function AdminSettings() {
                 {(payment?.payment_gateways || [
                   { id: 'cielo', label: 'Cielo (Checkout Cielo)' },
                   { id: 'sipag', label: 'SiPag (IPG Online / Fiserv)' },
+                  { id: 'mercado_pago', label: 'Mercado Pago (Checkout Pro)' },
                 ]).map((option) => (
                   <option key={option.id} value={option.id}>{option.label}</option>
                 ))}
               </select>
               <p className="font-body text-xs text-muted-foreground mt-1">
-                Define qual adquirente processa cartão, PIX online, débito e boleto. Se o gateway escolhido não estiver configurado, o sistema tenta o outro.
+                Define qual adquirente processa cartão, PIX online, débito e boleto. Se o gateway escolhido não estiver configurado, o sistema tenta outro disponível.
               </p>
             </div>
 
@@ -1322,6 +1350,152 @@ export default function AdminSettings() {
               <p>• O status é reconsultado automaticamente quando o cliente abre a página de retorno</p>
               <p>• Solicite habilitação de e-commerce na cooperativa Sicoob / Central SiPag</p>
             </div>
+            </TabsContent>
+
+            <TabsContent value="mercado_pago" className="space-y-6 mt-0 focus-visible:outline-none">
+              <div className="flex items-start gap-3">
+                <CreditCard className="w-5 h-5 text-primary mt-0.5 shrink-0" />
+                <div>
+                  <h2 className="font-display text-lg tracking-wide text-foreground">Mercado Pago (Checkout Pro)</h2>
+                  <p className="font-body text-sm text-muted-foreground mt-1">
+                    O cliente é redirecionado à página do Mercado Pago para pagar com Pix, cartão, débito ou boleto.
+                  </p>
+                  <a
+                    href={MERCADO_PAGO_DOCS_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 font-body text-xs text-primary hover:underline mt-2"
+                  >
+                    Documentação Checkout Pro
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                </div>
+              </div>
+
+              {mercadoPago && (
+                <div className={`flex items-center gap-2 px-3 py-2 rounded-sm text-sm font-body ${
+                  mercadoPago.isReady
+                    ? 'bg-green-500/10 text-green-700 dark:text-green-400'
+                    : 'bg-amber-500/10 text-amber-700 dark:text-amber-400'
+                }`}>
+                  {mercadoPago.isReady ? <CheckCircle2 className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
+                  {mercadoPago.isReady
+                    ? `Mercado Pago pronto (${mercadoPago.environmentLabel || 'Teste'})`
+                    : 'Configure o Access Token para ativar'}
+                </div>
+              )}
+
+              <div className="p-4 bg-secondary/50 rounded-sm border border-border">
+                <p className="font-body text-xs text-muted-foreground uppercase tracking-wider mb-3">
+                  Requisitos da API
+                </p>
+                <ul className="space-y-3">
+                  {mpRequirements.map((item) => (
+                    <RequirementItem key={item.id} item={item} />
+                  ))}
+                </ul>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="sm:col-span-2">
+                  <label className={labelClass}>Access Token *</label>
+                  {mercadoPago?.has_access_token && (
+                    <p className="font-body text-xs text-muted-foreground mb-2">
+                      Atual: <span className="font-mono text-foreground">{mercadoPago.access_token_masked}</span>
+                    </p>
+                  )}
+                  <input
+                    type="password"
+                    className={inputClass}
+                    value={mpAccessToken}
+                    onChange={(e) => setMpAccessToken(e.target.value)}
+                    placeholder={mercadoPago?.has_access_token ? 'Token salvo — preencha para trocar' : 'TEST-... ou APP_USR-...'}
+                    autoComplete="new-password"
+                  />
+                </div>
+
+                <div className="sm:col-span-2">
+                  <label className={labelClass}>Public Key (opcional)</label>
+                  {mercadoPago?.has_public_key && (
+                    <p className="font-body text-xs text-muted-foreground mb-2">
+                      Atual: <span className="font-mono text-foreground">{mercadoPago.public_key_masked}</span>
+                    </p>
+                  )}
+                  <input
+                    type="password"
+                    className={inputClass}
+                    value={mpPublicKey}
+                    onChange={(e) => setMpPublicKey(e.target.value)}
+                    placeholder={mercadoPago?.has_public_key ? 'Chave salva — preencha para trocar' : 'TEST-... ou APP_USR-...'}
+                    autoComplete="off"
+                  />
+                </div>
+
+                <div>
+                  <label className={labelClass}>Ambiente</label>
+                  <select
+                    className={inputClass}
+                    value={mpEnvironment}
+                    onChange={(e) => setMpEnvironment(e.target.value)}
+                  >
+                    <option value="test">Teste (sandbox)</option>
+                    <option value="production">Produção</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className={labelClass}>Webhook Secret (recomendado)</label>
+                  <input
+                    type="password"
+                    className={inputClass}
+                    value={mpWebhookSecret}
+                    onChange={(e) => setMpWebhookSecret(e.target.value)}
+                    placeholder={mercadoPago?.has_webhook_secret ? 'Secret salvo — preencha para trocar' : 'Chave secreta do webhook'}
+                    autoComplete="new-password"
+                  />
+                </div>
+
+                <div className="sm:col-span-2">
+                  <label className={labelClass}>URL do site (retorno)</label>
+                  <input
+                    type="url"
+                    className={inputClass}
+                    value={mpFrontendUrl}
+                    onChange={(e) => setMpFrontendUrl(e.target.value)}
+                    placeholder="http://localhost:3000"
+                  />
+                  <p className="font-body text-xs text-muted-foreground mt-1">
+                    Após pagar, o cliente volta para:{' '}
+                    <span className="font-mono break-all">{mercadoPago?.returnUrlExample || '—'}</span>
+                  </p>
+                </div>
+
+                <div className="sm:col-span-2">
+                  <label className={labelClass}>URL pública do backend (webhooks)</label>
+                  <input
+                    type="url"
+                    className={inputClass}
+                    value={mpBackendUrl}
+                    onChange={(e) => setMpBackendUrl(e.target.value)}
+                    placeholder="http://localhost:3001"
+                  />
+                  <p className="font-body text-xs text-muted-foreground mt-1">
+                    <strong>URL do webhook</strong>:{' '}
+                    <span className="font-mono break-all">{mercadoPago?.webhookUrl || '—'}</span>
+                  </p>
+                  <p className="font-body text-xs text-muted-foreground mt-1">
+                    Cadastre esta URL no painel Mercado Pago em Webhooks → Notificações de pagamento.
+                  </p>
+                </div>
+              </div>
+
+              <div className="p-4 bg-secondary/30 rounded-sm border border-border font-body text-xs text-muted-foreground space-y-1">
+                <p className="text-foreground font-medium text-sm mb-2">Como funciona</p>
+                <p>• A loja cria uma Preference e redireciona o cliente ao Checkout Pro</p>
+                <p>• O Mercado Pago notifica o backend via webhook quando o pagamento muda de status</p>
+                <p>• Na página de retorno, o status é reconsultado automaticamente se ainda estiver pendente</p>
+                <p>• Em <strong>Checkout</strong>, selecione Mercado Pago como gateway de pagamento online</p>
+              </div>
             </TabsContent>
 
             <TabsContent value="imagens" className="space-y-6 mt-0 focus-visible:outline-none">
