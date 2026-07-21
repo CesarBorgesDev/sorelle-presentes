@@ -5,7 +5,10 @@ import { buildInitialProductImages, buildProductImagePayload } from '@/lib/produ
 import ProductImagesEditor from './ProductImagesEditor';
 import ProductVariantsEditor from './ProductVariantsEditor';
 import { ensureVariantStockMatrix, getTotalSizeStock, usesSizeStock } from '@/lib/productVariants';
-import { X } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  X, Package, ImageIcon, Layers, FileText, Truck,
+} from 'lucide-react';
 
 function parseOptionalNumber(value) {
   if (value === '' || value === null || value === undefined) return null;
@@ -64,6 +67,7 @@ export default function ProductFormModal({ product, onClose }) {
   const [internalCodeError, setInternalCodeError] = useState('');
   const [checkingInternalCode, setCheckingInternalCode] = useState(false);
   const [submitError, setSubmitError] = useState('');
+  const [activeTab, setActiveTab] = useState('geral');
 
   const set = (field, value) => {
     setForm((f) => ({ ...f, [field]: value }));
@@ -117,6 +121,7 @@ export default function ProductFormModal({ product, onClose }) {
       setSubmitError(err.message || 'Erro ao salvar produto');
       if (err.status === 409) {
         setInternalCodeError(err.message || 'Este código interno já existe.');
+        setActiveTab('geral');
       }
     },
   });
@@ -124,6 +129,12 @@ export default function ProductFormModal({ product, onClose }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSubmitError('');
+
+    if (!form.name?.trim() || !form.category || !form.price) {
+      setActiveTab('geral');
+      setSubmitError('Preencha nome, categoria e preço na aba Geral.');
+      return;
+    }
 
     const trimmedCode = form.internal_code.trim();
     if (trimmedCode) {
@@ -135,10 +146,12 @@ export default function ProductFormModal({ product, onClose }) {
               ? `Código já usado por "${result.conflict.name}" (${result.conflict.internal_code}).`
               : 'Este código interno já existe.'
           );
+          setActiveTab('geral');
           return;
         }
       } catch (err) {
         setSubmitError(err.message || 'Erro ao validar código interno');
+        setActiveTab('geral');
         return;
       }
     }
@@ -169,159 +182,232 @@ export default function ProductFormModal({ product, onClose }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative bg-card border border-border rounded-sm w-full max-w-2xl max-h-[90vh] overflow-auto shadow-xl">
-        <div className="flex items-center justify-between px-6 py-5 border-b border-border sticky top-0 bg-card z-10">
+      <div className="relative bg-card border border-border rounded-sm w-full max-w-3xl max-h-[90vh] flex flex-col shadow-xl">
+        <div className="flex items-center justify-between px-6 py-5 border-b border-border shrink-0">
           <h2 className="font-display text-xl tracking-wide text-foreground">
             {isEditing ? 'Editar Produto' : 'Novo Produto'}
           </h2>
-          <button onClick={onClose} className="text-muted-foreground hover:text-foreground transition-colors">
+          <button type="button" onClick={onClose} className="text-muted-foreground hover:text-foreground transition-colors">
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="px-6 py-6 space-y-5">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            <div className="md:col-span-2">
-              <label className={labelClass}>Nome do Produto *</label>
-              <input required className={inputClass} value={form.name} onChange={(e) => set('name', e.target.value)} placeholder="Ex: Vaso Orgânico em Cerâmica" />
+        <form onSubmit={handleSubmit} className="flex flex-col min-h-0 flex-1">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col min-h-0 flex-1">
+            <div className="px-6 pt-4 shrink-0">
+              <TabsList className="w-full h-auto flex flex-wrap justify-start gap-1 p-1 bg-secondary/60">
+                <TabsTrigger value="geral" className="gap-1.5 font-body text-xs sm:text-sm px-3 py-2">
+                  <Package className="w-3.5 h-3.5" />
+                  Geral
+                </TabsTrigger>
+                <TabsTrigger value="imagens" className="gap-1.5 font-body text-xs sm:text-sm px-3 py-2">
+                  <ImageIcon className="w-3.5 h-3.5" />
+                  Imagens
+                </TabsTrigger>
+                <TabsTrigger value="grade" className="gap-1.5 font-body text-xs sm:text-sm px-3 py-2">
+                  <Layers className="w-3.5 h-3.5" />
+                  Grade
+                </TabsTrigger>
+                <TabsTrigger value="detalhes" className="gap-1.5 font-body text-xs sm:text-sm px-3 py-2">
+                  <FileText className="w-3.5 h-3.5" />
+                  Detalhes
+                </TabsTrigger>
+                <TabsTrigger value="frete" className="gap-1.5 font-body text-xs sm:text-sm px-3 py-2">
+                  <Truck className="w-3.5 h-3.5" />
+                  Frete
+                </TabsTrigger>
+              </TabsList>
             </div>
 
-            <div>
-              <label className={labelClass}>Categoria *</label>
-              <select required className={inputClass} value={form.category} onChange={(e) => set('category', e.target.value)}>
-                <option value="" disabled>Selecione...</option>
-                {categoryOptions.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
-              </select>
+            <div className="flex-1 overflow-y-auto px-6 py-5 min-h-0">
+              <TabsContent value="geral" className="mt-0 space-y-5 focus-visible:outline-none">
+                <div>
+                  <h3 className="font-display text-sm tracking-wider text-foreground">Informações básicas</h3>
+                  <p className="font-body text-xs text-muted-foreground mt-1">
+                    Nome, categoria, preços e estoque do produto.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  <div className="md:col-span-2">
+                    <label className={labelClass}>Nome do Produto *</label>
+                    <input required className={inputClass} value={form.name} onChange={(e) => set('name', e.target.value)} placeholder="Ex: Vaso Orgânico em Cerâmica" />
+                  </div>
+
+                  <div>
+                    <label className={labelClass}>Categoria *</label>
+                    <select required className={inputClass} value={form.category} onChange={(e) => set('category', e.target.value)}>
+                      <option value="" disabled>Selecione...</option>
+                      {categoryOptions.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className={labelClass}>Subcategoria</label>
+                    <input className={inputClass} value={form.subcategory} onChange={(e) => set('subcategory', e.target.value)} placeholder="Ex: Vasos, Velas..." />
+                  </div>
+
+                  <div>
+                    <label className={labelClass}>Preço (R$) *</label>
+                    <input required type="number" step="0.01" min="0" className={inputClass} value={form.price} onChange={(e) => set('price', e.target.value)} placeholder="199,90" />
+                  </div>
+
+                  <div>
+                    <label className={labelClass}>Preço Original (R$)</label>
+                    <input type="number" step="0.01" min="0" className={inputClass} value={form.original_price} onChange={(e) => set('original_price', e.target.value)} placeholder="Deixe vazio se não houver desconto" />
+                  </div>
+
+                  <div>
+                    <label className={labelClass}>Código interno</label>
+                    <input
+                      className={`${inputClass} ${internalCodeError ? 'border-destructive focus:ring-destructive' : ''}`}
+                      value={form.internal_code}
+                      onChange={(e) => set('internal_code', e.target.value)}
+                      placeholder="Ex: SOR-001"
+                      autoComplete="off"
+                    />
+                    {checkingInternalCode && (
+                      <p className="font-body text-xs text-muted-foreground mt-1">Verificando código...</p>
+                    )}
+                    {internalCodeError && (
+                      <p className="font-body text-xs text-destructive mt-1">{internalCodeError}</p>
+                    )}
+                    {!internalCodeError && !checkingInternalCode && form.internal_code.trim() && (
+                      <p className="font-body text-xs text-emerald-700 mt-1">Código disponível</p>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className={labelClass}>Quantidade em estoque{hasSizeGrid ? ' (total)' : ' *'}</label>
+                    <input
+                      required={!hasSizeGrid}
+                      readOnly={hasSizeGrid}
+                      type="number"
+                      min="0"
+                      step="1"
+                      className={`${inputClass} ${hasSizeGrid ? 'bg-secondary/50 cursor-not-allowed' : ''}`}
+                      value={hasSizeGrid ? (computedStockTotal ?? 0) : form.quantity}
+                      onChange={(e) => set('quantity', e.target.value)}
+                      placeholder="0"
+                    />
+                    <p className="font-body text-xs text-muted-foreground mt-1">
+                      {hasSizeGrid
+                        ? 'Com grade de tamanhos, o estoque é controlado na aba Grade.'
+                        : 'Com quantidade zero, o produto fica indisponível para venda.'}
+                    </p>
+                  </div>
+
+                  <div className="md:col-span-2 flex items-center gap-3 pt-1">
+                    <input type="checkbox" id="featured" checked={form.featured} onChange={(e) => set('featured', e.target.checked)} className="w-4 h-4 rounded" />
+                    <label htmlFor="featured" className="font-body text-sm text-foreground">Produto em destaque</label>
+                  </div>
+                </div>
+              </TabsContent>
+
+              <TabsContent value="imagens" className="mt-0 space-y-5 focus-visible:outline-none">
+                <div>
+                  <h3 className="font-display text-sm tracking-wider text-foreground">Galeria do produto</h3>
+                  <p className="font-body text-xs text-muted-foreground mt-1">
+                    Fotos principais exibidas na loja. Fotos por cor ou tamanho ficam na aba Grade.
+                  </p>
+                </div>
+                <ProductImagesEditor
+                  images={productImages}
+                  onChange={setProductImages}
+                  productName={form.name}
+                  productCategory={selectedCategory?.label || form.category}
+                  productMaterials={form.materials}
+                />
+              </TabsContent>
+
+              <TabsContent value="grade" className="mt-0 space-y-5 focus-visible:outline-none">
+                <div>
+                  <h3 className="font-display text-sm tracking-wider text-foreground">Cores, tamanhos e preços</h3>
+                  <p className="font-body text-xs text-muted-foreground mt-1">
+                    Cadastre modelos com foto, fotos por tamanho e preços diferentes na grade.
+                  </p>
+                </div>
+                <ProductVariantsEditor variants={variants} onChange={setVariants} />
+              </TabsContent>
+
+              <TabsContent value="detalhes" className="mt-0 space-y-5 focus-visible:outline-none">
+                <div>
+                  <h3 className="font-display text-sm tracking-wider text-foreground">Conteúdo e especificações</h3>
+                  <p className="font-body text-xs text-muted-foreground mt-1">
+                    Textos exibidos na página do produto.
+                  </p>
+                </div>
+
+                <div className="space-y-5">
+                  <div>
+                    <label className={labelClass}>Descrição</label>
+                    <textarea rows={3} className={inputClass} value={form.description} onChange={(e) => set('description', e.target.value)} placeholder="Descrição detalhada do produto..." />
+                  </div>
+
+                  <div>
+                    <label className={labelClass}>Especificações do produto</label>
+                    <textarea rows={3} className={inputClass} value={form.product_specifications} onChange={(e) => set('product_specifications', e.target.value)} placeholder="Detalhes, composição, acabamento..." />
+                  </div>
+
+                  <div>
+                    <label className={labelClass}>Tecnologia</label>
+                    <textarea rows={3} className={inputClass} value={form.technology} onChange={(e) => set('technology', e.target.value)} placeholder="Tecnologias, diferenciais e inovações do produto..." />
+                  </div>
+
+                  <div>
+                    <label className={labelClass}>Cuidados</label>
+                    <textarea rows={3} className={inputClass} value={form.care_instructions} onChange={(e) => set('care_instructions', e.target.value)} placeholder="Instruções de lavagem, conservação e uso..." />
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <div>
+                      <label className={labelClass}>Materiais</label>
+                      <input className={inputClass} value={form.materials} onChange={(e) => set('materials', e.target.value)} placeholder="Ex: Cerâmica artesanal" />
+                    </div>
+
+                    <div>
+                      <label className={labelClass}>Dimensões (texto)</label>
+                      <input className={inputClass} value={form.dimensions} onChange={(e) => set('dimensions', e.target.value)} placeholder="Ex: 22cm x 15cm" />
+                    </div>
+                  </div>
+                </div>
+              </TabsContent>
+
+              <TabsContent value="frete" className="mt-0 space-y-5 focus-visible:outline-none">
+                <div>
+                  <h3 className="font-display text-sm tracking-wider text-foreground">Dimensões para frete</h3>
+                  <p className="font-body text-xs text-muted-foreground mt-1">
+                    Usados no cálculo de frete Correios. Padrão: 0,3 kg e 20×15×10 cm se não informado.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                  <div>
+                    <label className={labelClass}>Peso (kg)</label>
+                    <input type="number" step="0.01" min="0" className={inputClass} value={form.weight_kg} onChange={(e) => set('weight_kg', e.target.value)} placeholder="0.3" />
+                  </div>
+                  <div>
+                    <label className={labelClass}>Comp. (cm)</label>
+                    <input type="number" step="0.1" min="0" className={inputClass} value={form.length_cm} onChange={(e) => set('length_cm', e.target.value)} placeholder="20" />
+                  </div>
+                  <div>
+                    <label className={labelClass}>Larg. (cm)</label>
+                    <input type="number" step="0.1" min="0" className={inputClass} value={form.width_cm} onChange={(e) => set('width_cm', e.target.value)} placeholder="15" />
+                  </div>
+                  <div>
+                    <label className={labelClass}>Alt. (cm)</label>
+                    <input type="number" step="0.1" min="0" className={inputClass} value={form.height_cm} onChange={(e) => set('height_cm', e.target.value)} placeholder="10" />
+                  </div>
+                </div>
+              </TabsContent>
             </div>
-
-            <div>
-              <label className={labelClass}>Subcategoria</label>
-              <input className={inputClass} value={form.subcategory} onChange={(e) => set('subcategory', e.target.value)} placeholder="Ex: Vasos, Velas..." />
-            </div>
-
-            <div>
-              <label className={labelClass}>Preço (R$) *</label>
-              <input required type="number" step="0.01" min="0" className={inputClass} value={form.price} onChange={(e) => set('price', e.target.value)} placeholder="199,90" />
-            </div>
-
-            <div>
-              <label className={labelClass}>Preço Original (R$)</label>
-              <input type="number" step="0.01" min="0" className={inputClass} value={form.original_price} onChange={(e) => set('original_price', e.target.value)} placeholder="Deixe vazio se não houver desconto" />
-            </div>
-
-            <div>
-              <label className={labelClass}>Código interno</label>
-              <input
-                className={`${inputClass} ${internalCodeError ? 'border-destructive focus:ring-destructive' : ''}`}
-                value={form.internal_code}
-                onChange={(e) => set('internal_code', e.target.value)}
-                placeholder="Ex: SOR-001"
-                autoComplete="off"
-              />
-              {checkingInternalCode && (
-                <p className="font-body text-xs text-muted-foreground mt-1">Verificando código...</p>
-              )}
-              {internalCodeError && (
-                <p className="font-body text-xs text-destructive mt-1">{internalCodeError}</p>
-              )}
-              {!internalCodeError && !checkingInternalCode && form.internal_code.trim() && (
-                <p className="font-body text-xs text-emerald-700 mt-1">Código disponível</p>
-              )}
-            </div>
-
-            <div>
-              <label className={labelClass}>Quantidade em estoque{hasSizeGrid ? ' (total)' : ' *'}</label>
-              <input
-                required={!hasSizeGrid}
-                readOnly={hasSizeGrid}
-                type="number"
-                min="0"
-                step="1"
-                className={`${inputClass} ${hasSizeGrid ? 'bg-secondary/50 cursor-not-allowed' : ''}`}
-                value={hasSizeGrid ? (computedStockTotal ?? 0) : form.quantity}
-                onChange={(e) => set('quantity', e.target.value)}
-                placeholder="0"
-              />
-              <p className="font-body text-xs text-muted-foreground mt-1">
-                {hasSizeGrid
-                  ? 'Com grade de tamanhos, o estoque é controlado por tamanho na seção abaixo.'
-                  : 'Com quantidade zero, o produto fica indisponível para venda.'}
-              </p>
-            </div>
-
-            <ProductImagesEditor
-              images={productImages}
-              onChange={setProductImages}
-              productName={form.name}
-              productCategory={selectedCategory?.label || form.category}
-              productMaterials={form.materials}
-            />
-
-            <ProductVariantsEditor variants={variants} onChange={setVariants} />
-
-            <div className="md:col-span-2">
-              <label className={labelClass}>Descrição</label>
-              <textarea rows={3} className={inputClass} value={form.description} onChange={(e) => set('description', e.target.value)} placeholder="Descrição detalhada do produto..." />
-            </div>
-
-            <div className="md:col-span-2">
-              <label className={labelClass}>Especificações do produto</label>
-              <textarea rows={3} className={inputClass} value={form.product_specifications} onChange={(e) => set('product_specifications', e.target.value)} placeholder="Detalhes, composição, acabamento..." />
-            </div>
-
-            <div className="md:col-span-2">
-              <label className={labelClass}>Tecnologia</label>
-              <textarea rows={3} className={inputClass} value={form.technology} onChange={(e) => set('technology', e.target.value)} placeholder="Tecnologias, diferenciais e inovações do produto..." />
-            </div>
-
-            <div className="md:col-span-2">
-              <label className={labelClass}>Cuidados</label>
-              <textarea rows={3} className={inputClass} value={form.care_instructions} onChange={(e) => set('care_instructions', e.target.value)} placeholder="Instruções de lavagem, conservação e uso..." />
-            </div>
-
-            <div>
-              <label className={labelClass}>Materiais</label>
-              <input className={inputClass} value={form.materials} onChange={(e) => set('materials', e.target.value)} placeholder="Ex: Cerâmica artesanal" />
-            </div>
-
-            <div>
-              <label className={labelClass}>Dimensões (texto)</label>
-              <input className={inputClass} value={form.dimensions} onChange={(e) => set('dimensions', e.target.value)} placeholder="Ex: 22cm x 15cm" />
-            </div>
-
-            <div className="md:col-span-2 grid grid-cols-2 sm:grid-cols-4 gap-4">
-              <div>
-                <label className={labelClass}>Peso (kg)</label>
-                <input type="number" step="0.01" min="0" className={inputClass} value={form.weight_kg} onChange={(e) => set('weight_kg', e.target.value)} placeholder="0.3" />
-              </div>
-              <div>
-                <label className={labelClass}>Comp. (cm)</label>
-                <input type="number" step="0.1" min="0" className={inputClass} value={form.length_cm} onChange={(e) => set('length_cm', e.target.value)} placeholder="20" />
-              </div>
-              <div>
-                <label className={labelClass}>Larg. (cm)</label>
-                <input type="number" step="0.1" min="0" className={inputClass} value={form.width_cm} onChange={(e) => set('width_cm', e.target.value)} placeholder="15" />
-              </div>
-              <div>
-                <label className={labelClass}>Alt. (cm)</label>
-                <input type="number" step="0.1" min="0" className={inputClass} value={form.height_cm} onChange={(e) => set('height_cm', e.target.value)} placeholder="10" />
-              </div>
-            </div>
-            <p className="md:col-span-2 font-body text-xs text-muted-foreground -mt-2">
-              Usados no cálculo de frete Correios. Padrão: 0,3 kg e 20×15×10 cm se não informado.
-            </p>
-
-            <div className="flex items-center gap-3">
-              <input type="checkbox" id="featured" checked={form.featured} onChange={(e) => set('featured', e.target.checked)} className="w-4 h-4 rounded" />
-              <label htmlFor="featured" className="font-body text-sm text-foreground">Produto em destaque</label>
-            </div>
-          </div>
+          </Tabs>
 
           {submitError && !internalCodeError && (
-            <p className="font-body text-sm text-destructive">{submitError}</p>
+            <p className="px-6 font-body text-sm text-destructive shrink-0">{submitError}</p>
           )}
 
-          <div className="flex items-center justify-end gap-3 pt-4 border-t border-border">
+          <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-border shrink-0 bg-card">
             <button type="button" onClick={onClose} className="px-5 py-2.5 font-body text-sm text-muted-foreground hover:text-foreground tracking-wider transition-colors">
               Cancelar
             </button>

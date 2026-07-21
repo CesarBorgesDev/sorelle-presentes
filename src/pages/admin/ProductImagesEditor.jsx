@@ -167,7 +167,7 @@ export default function ProductImagesEditor({
   const inputClass = 'w-full px-3 py-2.5 bg-background border border-border rounded-sm font-body text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring';
 
   return (
-    <div className="md:col-span-2 space-y-4 p-4 border border-border rounded-sm bg-secondary/30">
+    <div className="space-y-4 p-4 border border-border rounded-sm bg-secondary/30">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
         <div>
           <p className="font-body text-sm font-medium text-foreground">Fotos do produto</p>

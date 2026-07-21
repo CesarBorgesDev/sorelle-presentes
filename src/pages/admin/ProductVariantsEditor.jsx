@@ -286,9 +286,9 @@ export default function ProductVariantsEditor({ variants, onChange }) {
   };
 
   return (
-    <div className="md:col-span-2 space-y-6 border border-border rounded-sm p-4 bg-secondary/20">
+    <div className="space-y-6 border border-border rounded-sm p-4 bg-secondary/20">
       <div>
-        <h3 className="font-display text-sm tracking-wider text-foreground mb-1">Cores, tamanhos e grade</h3>
+        <h3 className="font-display text-sm tracking-wider text-foreground mb-1">Cores e tamanhos</h3>
         <p className="font-body text-xs text-muted-foreground">
           Cadastre cores/modelos com fotos, fotos por tamanho e preços diferentes na grade de estoque.
           Preço vazio usa o preço base do produto.
