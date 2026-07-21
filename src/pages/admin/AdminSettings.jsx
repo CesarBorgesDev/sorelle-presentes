@@ -4,9 +4,11 @@ import { api } from '@/api/apiClient';
 import {
   Settings, Key, Sparkles, Loader2, CheckCircle2,
   CreditCard, Circle, ExternalLink, AlertCircle, Truck, ShoppingBag, Store,
+  Plus, Trash2,
 } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { PRODUCT_SORT_OPTIONS } from '@/hooks/useProductSort';
+import { DEFAULT_INSTALLMENT_SCALE, normalizeInstallmentScale } from '@/lib/installmentScale';
 
 const MODELS = [
   { value: 'flux', label: 'Flux (fallback texto — gratuito)' },
@@ -80,6 +82,9 @@ export default function AdminSettings() {
   const [pixKey, setPixKey] = useState('');
   const [pixHolderName, setPixHolderName] = useState('');
   const [pixDiscountPercent, setPixDiscountPercent] = useState('0');
+  const [installmentScale, setInstallmentScale] = useState(() => (
+    DEFAULT_INSTALLMENT_SCALE.map((tier) => ({ ...tier }))
+  ));
   const [correiosOriginZip, setCorreiosOriginZip] = useState('');
   const [correiosCompanyCode, setCorreiosCompanyCode] = useState('');
   const [correiosPassword, setCorreiosPassword] = useState('');
@@ -143,6 +148,9 @@ export default function AdminSettings() {
       setPixDiscountPercent(String(data.payment.pix_discount_percent ?? 0));
       if (data.payment.max_installments) {
         setCieloMaxInstallments(String(data.payment.max_installments));
+      }
+      if (Array.isArray(data.payment.installment_scale)) {
+        setInstallmentScale(normalizeInstallmentScale(data.payment.installment_scale));
       }
     }
     if (data?.sipag) {
@@ -242,6 +250,7 @@ export default function AdminSettings() {
       payment_methods_enabled: enabledPaymentMethods,
       pix_holder_name: pixHolderName.trim(),
       pix_discount_percent: pixDiscountPercent,
+      installment_scale: normalizeInstallmentScale(installmentScale),
       correios_origin_zip: correiosOriginZip.replace(/\D/g, ''),
       correios_sender_name: correiosSenderName.trim(),
       correios_sender_street: correiosSenderStreet.trim(),
@@ -508,13 +517,99 @@ export default function AdminSettings() {
               <div>
                 <h3 className="font-display text-base tracking-wide text-foreground">Condições na loja</h3>
                 <p className="font-body text-xs text-muted-foreground mt-1">
-                  Exibidas na página do produto e usadas no checkout (desconto PIX).
+                  Escala de parcelamento por valor, teto do gateway e desconto PIX.
                 </p>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between gap-3 mb-2">
+                  <label className={labelClass}>Escala de parcelamento</label>
+                  <button
+                    type="button"
+                    onClick={() => setInstallmentScale((prev) => {
+                      const nextMin = Math.max(0, ...(prev.map((t) => Number(t.min_amount) || 0))) + 100;
+                      return normalizeInstallmentScale([
+                        ...prev,
+                        { min_amount: nextMin, installments: 10 },
+                      ]);
+                    })}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-border rounded-sm font-body text-xs hover:bg-secondary transition-colors"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> Faixa
+                  </button>
+                </div>
+                <p className="font-body text-xs text-muted-foreground mb-3">
+                  Ex.: a partir de R$ 600 → 10x; abaixo → 5x. A faixa com maior valor mínimo que o pedido atingir define as parcelas.
+                </p>
+                <div className="space-y-2">
+                  {normalizeInstallmentScale(installmentScale).map((tier, index) => (
+                    <div
+                      key={`${tier.min_amount}-${index}`}
+                      className="grid grid-cols-[1fr_1fr_auto] gap-2 items-end p-3 border border-border rounded-sm bg-background"
+                    >
+                      <div>
+                        <label className={labelClass}>A partir de (R$)</label>
+                        <input
+                          type="number"
+                          min={0}
+                          step={0.01}
+                          className={inputClass}
+                          value={tier.min_amount}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            setInstallmentScale((prev) => {
+                              const next = [...normalizeInstallmentScale(prev)];
+                              next[index] = {
+                                ...next[index],
+                                min_amount: value === '' ? 0 : Number(value),
+                              };
+                              return next;
+                            });
+                          }}
+                        />
+                      </div>
+                      <div>
+                        <label className={labelClass}>Parcelas</label>
+                        <input
+                          type="number"
+                          min={1}
+                          max={12}
+                          className={inputClass}
+                          value={tier.installments}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            setInstallmentScale((prev) => {
+                              const next = [...normalizeInstallmentScale(prev)];
+                              next[index] = {
+                                ...next[index],
+                                installments: value === '' ? 1 : Number(value),
+                              };
+                              return next;
+                            });
+                          }}
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        disabled={normalizeInstallmentScale(installmentScale).length <= 1}
+                        onClick={() => setInstallmentScale((prev) => {
+                          const current = normalizeInstallmentScale(prev);
+                          if (current.length <= 1) return current;
+                          return normalizeInstallmentScale(current.filter((_, i) => i !== index));
+                        })}
+                        className="p-2.5 text-muted-foreground hover:text-destructive disabled:opacity-40 transition-colors"
+                        title="Remover faixa"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
               </div>
 
               <div className="grid sm:grid-cols-2 gap-4">
                 <div>
-                  <label className={labelClass}>Parcelas no cartão (máximo)</label>
+                  <label className={labelClass}>Teto de parcelas (gateway)</label>
                   <input
                     type="number"
                     min={1}
@@ -524,7 +619,7 @@ export default function AdminSettings() {
                     onChange={(e) => setCieloMaxInstallments(e.target.value)}
                   />
                   <p className="font-body text-xs text-muted-foreground mt-1">
-                    Até 12x. Também enviado ao checkout Cielo.
+                    Limite absoluto enviado à Cielo/Mercado Pago (máx. 12). A escala não ultrapassa este teto.
                   </p>
                 </div>
 

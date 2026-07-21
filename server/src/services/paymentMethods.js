@@ -2,6 +2,7 @@ import { getSetting } from './settings.js';
 import { getCieloConfig } from './cieloConfig.js';
 import { getSipagConfig, getPaymentGateway, PAYMENT_GATEWAYS } from './sipagConfig.js';
 import { getMercadoPagoConfig } from './mercadoPagoConfig.js';
+import { getInstallmentScale, resolveMaxInstallments } from './installmentScale.js';
 
 export const PAYMENT_METHOD_DEFS = {
   pix: {
@@ -244,17 +245,26 @@ export async function getPublicPaymentConditions() {
   const cieloConfig = await getCieloConfig();
   const enabledMethods = await getEnabledPaymentMethodIds();
   const pixDiscountPercent = await getPixDiscountPercent();
-  const maxInstallments = cieloConfig.maxInstallments;
+  const installmentScale = await getInstallmentScale();
+  const absoluteMax = cieloConfig.maxInstallments;
 
   return {
-    max_installments: maxInstallments,
+    max_installments: absoluteMax,
+    installment_scale: installmentScale,
     pix_discount_percent: pixDiscountPercent,
     checkout_method: await getCheckoutPaymentMethod(),
     payment_methods_enabled: enabledMethods,
     payment_gateway: await getPaymentGateway(),
-    shows_installments: maxInstallments >= 2 && enabledMethods.includes('cartao_credito'),
+    shows_installments: absoluteMax >= 2 && enabledMethods.includes('cartao_credito'),
     shows_pix_discount: pixDiscountPercent > 0 && enabledMethods.includes('pix'),
   };
+}
+
+/** Máximo de parcelas para um valor (escala + teto do gateway). */
+export async function getMaxInstallmentsForAmount(amount) {
+  const cieloConfig = await getCieloConfig();
+  const scale = await getInstallmentScale();
+  return resolveMaxInstallments(amount, scale, cieloConfig.maxInstallments);
 }
 
 export async function resolvePaymentProvider(paymentMethod) {

@@ -14,6 +14,7 @@ import {
   getEnabledPaymentMethodIds,
   getPaymentGateway,
 } from '../services/paymentMethods.js';
+import { getInstallmentScale, parseInstallmentScale } from '../services/installmentScale.js';
 import { getCorreiosConfig } from '../services/correios.js';
 import { getRodonavesConfig } from '../services/rodonaves.js';
 
@@ -67,6 +68,7 @@ async function buildSettingsResponse(message) {
       has_pix_key: Boolean(pixKey || process.env.PIX_KEY),
       pix_holder_name: pixHolderName || process.env.PIX_HOLDER_NAME || '',
       max_installments: cieloConfig.maxInstallments,
+      installment_scale: await getInstallmentScale(),
       pix_discount_percent: await getPixDiscountPercent(),
       payment_gateway: paymentGateway,
       payment_gateways: Object.values(PAYMENT_GATEWAYS),
@@ -210,6 +212,7 @@ router.put('/', requireAuth, requireAdmin, async (req, res) => {
       pix_key,
       pix_holder_name,
       pix_discount_percent,
+      installment_scale,
       correios_origin_zip,
       correios_company_code,
       correios_password,
@@ -402,6 +405,11 @@ router.put('/', requireAuth, requireAdmin, async (req, res) => {
     if (pix_discount_percent !== undefined && pix_discount_percent !== '') {
       const discount = Math.min(100, Math.max(0, Number(pix_discount_percent) || 0));
       await setSetting('pix_discount_percent', String(discount));
+    }
+
+    if (installment_scale !== undefined) {
+      const tiers = parseInstallmentScale(installment_scale);
+      await setSetting('installment_scale', JSON.stringify(tiers));
     }
 
     if (correios_origin_zip !== undefined) {

@@ -7,6 +7,7 @@ import {
   getCheckoutPaymentMethod,
   getPixDiscountPercent,
   getPublicPaymentConditions,
+  getMaxInstallmentsForAmount,
 } from '../services/paymentMethods.js';
 import { rowToEntity, rowsToEntities } from '../utils/helpers.js';
 import {
@@ -370,6 +371,7 @@ async function startCheckout(req, res) {
 
   if (providerInfo.provider === 'mercado_pago') {
     const mercadoPagoConfig = providerInfo.mercadoPagoConfig;
+    const maxInstallments = await getMaxInstallmentsForAmount(order.total);
 
     let preferenceResult;
     try {
@@ -377,6 +379,7 @@ async function startCheckout(req, res) {
         order,
         customer,
         paymentMethod,
+        maxInstallments,
         config: mercadoPagoConfig,
       });
     } catch (err) {
@@ -420,6 +423,7 @@ async function startCheckout(req, res) {
   const cieloConfig = providerInfo.cieloConfig;
   const returnUrl = `${cieloConfig.frontendUrl}/pagamento/retorno?pedido=${order.id}`;
   const correiosConfig = await getCorreiosConfig();
+  const maxInstallments = await getMaxInstallmentsForAmount(order.total);
 
   let checkoutUrl;
   try {
@@ -427,7 +431,7 @@ async function startCheckout(req, res) {
       order,
       customer,
       returnUrl,
-      config: cieloConfig,
+      config: { ...cieloConfig, maxInstallments },
       isPickup,
       originZipCode: correiosConfig.originZip,
       shipping: {

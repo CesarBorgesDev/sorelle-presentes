@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { CreditCard, QrCode } from 'lucide-react';
 import { api } from '@/api/apiClient';
 import { formatMoney } from '@/lib/orderLabels';
+import { resolveMaxInstallments } from '@/lib/installmentScale';
 
 function calcPixPrice(price, discountPercent) {
   if (!discountPercent || discountPercent <= 0) return null;
@@ -23,8 +24,16 @@ export default function ProductPaymentConditions({ price, originalPrice }) {
 
   if (!price) return null;
 
-  const installmentValue = conditions?.shows_installments
-    ? calcInstallmentValue(price, conditions.max_installments)
+  const maxInstallments = conditions?.shows_installments
+    ? resolveMaxInstallments(
+      price,
+      conditions.installment_scale,
+      conditions.max_installments || 12
+    )
+    : 1;
+
+  const installmentValue = conditions?.shows_installments && maxInstallments >= 2
+    ? calcInstallmentValue(price, maxInstallments)
     : null;
   const pixPrice = conditions?.shows_pix_discount
     ? calcPixPrice(price, conditions.pix_discount_percent)
@@ -37,7 +46,7 @@ export default function ProductPaymentConditions({ price, originalPrice }) {
       {installmentValue != null ? (
         <div className="mb-4">
           <p className="font-body text-2xl lg:text-3xl font-medium text-foreground leading-tight">
-            Em até {conditions.max_installments}x de{' '}
+            Em até {maxInstallments}x de{' '}
             <span className="text-primary">{formatMoney(installmentValue)}</span>
           </p>
           <p className="font-body text-sm text-muted-foreground mt-1">

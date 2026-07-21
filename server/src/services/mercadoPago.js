@@ -4,7 +4,7 @@ function onlyDigits(value) {
   return String(value || '').replace(/\D/g, '');
 }
 
-function buildPreferencePaymentMethods(paymentMethod) {
+function buildPreferencePaymentMethods(paymentMethod, maxInstallments) {
   // Exclui tipos não escolhidos pelo cliente no checkout, quando possível.
   const excluded = [];
 
@@ -34,7 +34,15 @@ function buildPreferencePaymentMethods(paymentMethod) {
     );
   }
 
-  return excluded.length > 0 ? { excluded_payment_types: excluded } : undefined;
+  const result = {};
+  if (excluded.length > 0) {
+    result.excluded_payment_types = excluded;
+  }
+  if (maxInstallments && maxInstallments >= 1) {
+    result.installments = Math.min(12, Math.max(1, Number(maxInstallments) || 1));
+  }
+
+  return Object.keys(result).length > 0 ? result : undefined;
 }
 
 function mapPaymentStatus(mpStatus) {
@@ -89,6 +97,7 @@ export async function createMercadoPagoPreference({
   order,
   customer,
   paymentMethod,
+  maxInstallments,
   config: configOverride,
 }) {
   const config = configOverride || await getMercadoPagoConfig();
@@ -172,7 +181,7 @@ export async function createMercadoPagoPreference({
     },
   };
 
-  const paymentMethods = buildPreferencePaymentMethods(paymentMethod);
+  const paymentMethods = buildPreferencePaymentMethods(paymentMethod, maxInstallments);
   if (paymentMethods) {
     payload.payment_methods = paymentMethods;
   }
