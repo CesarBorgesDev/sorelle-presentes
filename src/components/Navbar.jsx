@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { ShoppingBag, Menu, X, Search, User, ChevronDown } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useCategories } from '@/hooks/useCategories';
@@ -133,7 +133,9 @@ function MobileSubMenu({ category }) {
 export default function Navbar({ cartCount = 0, onCartClick }) {
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   const location = useLocation();
+  const navigate = useNavigate();
   const isHome = location.pathname === '/';
 
   const { data: categories = [] } = useCategories();
@@ -153,13 +155,26 @@ export default function Navbar({ cartCount = 0, onCartClick }) {
     : 'bg-transparent';
 
   const textColor = scrolled || !isHome ? 'text-foreground' : 'text-white';
+  const searchBorder = scrolled || !isHome ? 'border-border' : 'border-white/40';
+  const searchPlaceholder = scrolled || !isHome ? 'placeholder:text-muted-foreground' : 'placeholder:text-white/60';
+
+  const handleSearchSubmit = (event) => {
+    event.preventDefault();
+    const trimmed = searchQuery.trim();
+    if (trimmed) {
+      navigate(`/busca?q=${encodeURIComponent(trimmed)}`);
+    } else {
+      navigate('/busca');
+    }
+    setMenuOpen(false);
+  };
 
   return (
     <>
       <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 ${navBg}`}>
         <div className="max-w-7xl mx-auto px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16 lg:h-20">
-            <Link to="/" className={`font-display text-xl lg:text-2xl tracking-widest uppercase transition-colors ${textColor}`}>
+          <div className="flex items-center justify-between h-16 lg:h-20 gap-4">
+            <Link to="/" className={`font-display text-xl lg:text-2xl tracking-widest uppercase transition-colors shrink-0 ${textColor}`}>
               Sorelle
             </Link>
 
@@ -169,10 +184,32 @@ export default function Navbar({ cartCount = 0, onCartClick }) {
               ))}
             </div>
 
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-3 sm:gap-4 ml-auto">
+              <form
+                onSubmit={handleSearchSubmit}
+                className={`hidden sm:flex items-center w-[200px] h-9 rounded-sm border ${searchBorder} bg-background/10 backdrop-blur-sm`}
+                role="search"
+              >
+                <input
+                  type="search"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Buscar..."
+                  aria-label="Buscar produtos"
+                  className={`flex-1 min-w-0 h-full bg-transparent px-3 font-body text-xs ${textColor} ${searchPlaceholder} outline-none`}
+                />
+                <button
+                  type="submit"
+                  className={`shrink-0 px-2.5 h-full transition-opacity hover:opacity-60 ${textColor}`}
+                  aria-label="Buscar"
+                >
+                  <Search className="w-3.5 h-3.5" />
+                </button>
+              </form>
+
               <Link
                 to="/busca"
-                className={`hidden lg:block transition-colors ${textColor} hover:opacity-60`}
+                className={`sm:hidden transition-colors ${textColor} hover:opacity-60`}
                 title="Buscar produtos"
                 aria-label="Buscar produtos"
               >
@@ -216,16 +253,31 @@ export default function Navbar({ cartCount = 0, onCartClick }) {
             exit={{ opacity: 0, y: -20 }}
             className="fixed inset-0 z-40 bg-background pt-20"
           >
-            <div className="flex flex-col items-center gap-8 pt-12">
+            <div className="flex flex-col items-center gap-8 pt-12 px-6">
+              <form
+                onSubmit={handleSearchSubmit}
+                className="flex items-center w-[200px] h-10 rounded-sm border border-border bg-secondary/40"
+                role="search"
+              >
+                <input
+                  type="search"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Buscar..."
+                  aria-label="Buscar produtos"
+                  className="flex-1 min-w-0 h-full bg-transparent px-3 font-body text-sm text-foreground placeholder:text-muted-foreground outline-none"
+                />
+                <button
+                  type="submit"
+                  className="shrink-0 px-3 h-full text-foreground hover:opacity-60"
+                  aria-label="Buscar"
+                >
+                  <Search className="w-4 h-4" />
+                </button>
+              </form>
               {categories.map((category) => (
                 <MobileSubMenu key={category.id} category={category} />
               ))}
-              <Link
-                to="/busca"
-                className="font-display text-2xl tracking-widest uppercase text-foreground hover:text-primary transition-colors"
-              >
-                Buscar
-              </Link>
               <Link
                 to="/conta"
                 className="font-display text-2xl tracking-widest uppercase text-foreground hover:text-primary transition-colors"
