@@ -182,15 +182,17 @@ export default function Navbar({ cartCount = 0, onCartClick }) {
     <>
       <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 ${navBg}`}>
         <div className="max-w-7xl mx-auto px-6 lg:px-8">
-          <div className="relative flex items-center justify-end h-16 lg:h-20 gap-4">
+          <div className="grid grid-cols-[1fr_auto_1fr] items-center h-16 lg:h-20 gap-2">
+            <div aria-hidden="true" />
+
             <Link
               to="/"
-              className={`absolute left-1/2 -translate-x-1/2 font-display text-xl lg:text-2xl tracking-widest uppercase transition-colors shrink-0 ${textColor}`}
+              className={`justify-self-center font-display text-xl lg:text-2xl tracking-widest uppercase transition-colors shrink-0 ${textColor}`}
             >
               Sorelle
             </Link>
 
-            <div className="flex items-center gap-3 sm:gap-4">
+            <div className="flex items-center justify-end gap-3 sm:gap-4 min-w-0">
               <form
                 onSubmit={handleSearchSubmit}
                 className={`hidden sm:flex items-center w-[200px] h-9 rounded-sm border ${searchBorder} bg-background/10 backdrop-blur-sm`}
