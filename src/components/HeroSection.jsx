@@ -50,31 +50,21 @@ export default function HeroSection({ config }) {
 
       <div className="relative z-10 h-full flex flex-col justify-end pb-16 lg:pb-24 px-6 lg:px-16">
         <div className="max-w-3xl">
-          <motion.h1
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2, duration: 0.8 }}
-            className="font-display text-white text-4xl md:text-6xl lg:text-7xl tracking-widest leading-tight"
-          >
-            {hero.brandTitle}
-          </motion.h1>
-
           <AnimatePresence mode="wait">
             <motion.div
               key={`${activeIndex}-${title}-${subtitle}`}
-              initial={{ opacity: 0, y: 16 }}
+              initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.45, ease: 'easeOut' }}
-              className="mt-3 md:mt-4"
+              transition={{ duration: 0.5, ease: 'easeOut' }}
             >
               {title && (
-                <p className="font-body text-white text-lg md:text-xl lg:text-2xl tracking-wide font-light opacity-90">
+                <h1 className="font-display text-white text-4xl md:text-6xl lg:text-7xl tracking-widest leading-tight">
                   {title}
-                </p>
+                </h1>
               )}
               {subtitle && (
-                <p className="font-body text-white/75 text-sm md:text-base tracking-wide mt-2 max-w-xl">
+                <p className="font-body text-white/75 text-sm md:text-base lg:text-lg tracking-wide mt-3 md:mt-4 max-w-xl">
                   {subtitle}
                 </p>
               )}
