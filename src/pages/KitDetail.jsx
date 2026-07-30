@@ -67,7 +67,7 @@ export default function KitDetail() {
 
   if (isLoading) {
     return (
-      <div className="pt-20 lg:pt-24 px-6 lg:px-16">
+      <div className="pt-20 lg:pt-32 px-6 lg:px-16">
         <div className="max-w-5xl mx-auto py-12 space-y-6 animate-pulse">
           <div className="h-4 bg-secondary rounded w-32" />
           <div className="h-10 bg-secondary rounded w-64" />
@@ -84,7 +84,7 @@ export default function KitDetail() {
 
   if (isError || !kit) {
     return (
-      <div className="pt-20 lg:pt-24 text-center py-32 px-6">
+      <div className="pt-20 lg:pt-32 text-center py-32 px-6">
         <p className="font-body text-muted-foreground mb-6">Kit não encontrado.</p>
         <Link to="/" className="font-body text-sm text-foreground underline underline-offset-4">
           Voltar para a loja
@@ -96,7 +96,7 @@ export default function KitDetail() {
   const hasDiscount = kit.discount_amount != null && kit.discount_amount > 0;
 
   return (
-    <div className="pt-20 lg:pt-24">
+    <div className="pt-20 lg:pt-32">
       <div className="max-w-5xl mx-auto px-6 lg:px-16 py-8 lg:py-12">
         <Link
           to={kit.anchor_product ? `/produto/${kit.anchor_product.id}` : '/'}

@@ -431,7 +431,7 @@ export default function Account() {
   const displayName = profile?.full_name || user?.full_name;
 
   return (
-    <div className="max-w-3xl mx-auto px-4 py-10 lg:py-14">
+    <div className="max-w-3xl mx-auto px-4 pt-24 lg:pt-32 pb-10 lg:pb-14">
       <div className="mb-8">
         <h1 className="font-display text-3xl tracking-wide mb-1">Minha conta</h1>
         <p className="font-body text-sm text-muted-foreground">

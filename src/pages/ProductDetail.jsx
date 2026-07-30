@@ -185,7 +185,7 @@ export default function ProductDetail() {
 
   if (isLoading) {
     return (
-      <div className="pt-20 lg:pt-24 px-6 lg:px-16">
+      <div className="pt-20 lg:pt-32 px-6 lg:px-16">
         <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-12 py-12">
           <div className="aspect-[4/5] bg-secondary rounded-sm animate-pulse" />
           <div className="space-y-4 py-8">
@@ -200,7 +200,7 @@ export default function ProductDetail() {
 
   if (!product) {
     return (
-      <div className="pt-20 lg:pt-24 text-center py-32">
+      <div className="pt-20 lg:pt-32 text-center py-32">
         <p className="font-body text-muted-foreground">Produto não encontrado.</p>
       </div>
     );
@@ -215,7 +215,7 @@ export default function ProductDetail() {
   );
 
   return (
-    <div className="pt-20 lg:pt-24">
+    <div className="pt-20 lg:pt-32">
       <div className="max-w-7xl mx-auto px-6 lg:px-16 py-8 lg:py-12">
         <Link
           to={`/categoria/${product.category}`}

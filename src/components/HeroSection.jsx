@@ -1,7 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowRight } from 'lucide-react';
 import { resolveMediaUrl } from '@/lib/resolveMediaUrl';
 import { DEFAULT_HOME_BANNERS } from '@/lib/homeBannersDefaults';
 
@@ -51,7 +49,7 @@ export default function HeroSection({ config }) {
       </AnimatePresence>
 
       <div className="relative z-10 h-full flex flex-col justify-end pb-16 lg:pb-24 px-6 lg:px-16">
-        <div className="mb-12 lg:mb-16 max-w-3xl">
+        <div className="max-w-3xl">
           <motion.h1
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
@@ -82,35 +80,6 @@ export default function HeroSection({ config }) {
               )}
             </motion.div>
           </AnimatePresence>
-        </div>
-
-        <div className="flex flex-wrap gap-6 lg:gap-10 max-w-5xl w-full">
-          {slides.map((cat, index) => (
-            <Link
-              key={cat.key}
-              to={cat.path}
-              onMouseEnter={() => setActiveIndex(index)}
-              onFocus={() => setActiveIndex(index)}
-              className="group"
-            >
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.5 + index * 0.1, duration: 0.6 }}
-                className={`whitespace-nowrap flex items-center gap-2 lg:border-0 lg:px-0 lg:py-0 lg:bg-transparent lg:backdrop-blur-none border rounded-sm px-5 py-4 transition-all duration-500
-                  ${activeIndex === index ? 'border-white/60 bg-white/20 backdrop-blur-sm' : 'border-white/30 hover:bg-white/10 hover:border-white/50'}`}
-              >
-                <span className={`font-display text-white text-sm lg:text-base tracking-widest uppercase block transition-opacity duration-300 ${
-                  activeIndex === index ? 'opacity-100' : 'opacity-80 group-hover:opacity-100'
-                }`}>
-                  {cat.label}
-                </span>
-                <ArrowRight className={`w-4 h-4 text-white transition-all duration-300 ${
-                  activeIndex === index ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-2'
-                }`} />
-              </motion.div>
-            </Link>
-          ))}
         </div>
       </div>
     </section>

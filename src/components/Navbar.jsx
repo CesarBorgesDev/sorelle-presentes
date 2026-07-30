@@ -173,18 +173,15 @@ export default function Navbar({ cartCount = 0, onCartClick }) {
     <>
       <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 ${navBg}`}>
         <div className="max-w-7xl mx-auto px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16 lg:h-20 gap-4">
-            <Link to="/" className={`font-display text-xl lg:text-2xl tracking-widest uppercase transition-colors shrink-0 ${textColor}`}>
+          <div className="relative flex items-center justify-end h-16 lg:h-20 gap-4">
+            <Link
+              to="/"
+              className={`absolute left-1/2 -translate-x-1/2 font-display text-xl lg:text-2xl tracking-widest uppercase transition-colors shrink-0 ${textColor}`}
+            >
               Sorelle
             </Link>
 
-            <div className={`hidden lg:flex items-center gap-10 ${textColor}`}>
-              {categories.map((category) => (
-                <DesktopDropdown key={category.id} category={category} />
-              ))}
-            </div>
-
-            <div className="flex items-center gap-3 sm:gap-4 ml-auto">
+            <div className="flex items-center gap-3 sm:gap-4">
               <form
                 onSubmit={handleSearchSubmit}
                 className={`hidden sm:flex items-center w-[200px] h-9 rounded-sm border ${searchBorder} bg-background/10 backdrop-blur-sm`}
@@ -242,6 +239,12 @@ export default function Navbar({ cartCount = 0, onCartClick }) {
               </button>
             </div>
           </div>
+
+          <div className={`hidden lg:flex items-center justify-center gap-10 pb-4 ${textColor}`}>
+            {categories.map((category) => (
+              <DesktopDropdown key={category.id} category={category} />
+            ))}
+          </div>
         </div>
       </nav>
 
@@ -251,7 +254,7 @@ export default function Navbar({ cartCount = 0, onCartClick }) {
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
-            className="fixed inset-0 z-40 bg-background pt-20"
+            className="fixed inset-0 z-40 bg-background pt-16"
           >
             <div className="flex flex-col items-center gap-8 pt-12 px-6">
               <form

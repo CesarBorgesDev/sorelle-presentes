@@ -37,7 +37,7 @@ export default function InstitutionalPage({ pageSlug }) {
   }
 
   return (
-    <div className="pt-20 lg:pt-24 pb-20 lg:pb-28">
+    <div className="pt-20 lg:pt-32 pb-20 lg:pb-28">
       <motion.div
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
