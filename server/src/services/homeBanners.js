@@ -7,32 +7,32 @@ const DEFAULT_HERO_SLIDES = [
     key: 'casa',
     label: 'Casa',
     path: '/categoria/casa',
-    phrase: 'Para o lar que inspira',
-    tagline: 'Presentes e peças que transformam ambientes',
+    title: 'Para o lar que inspira',
+    subtitle: 'Presentes e peças que transformam ambientes',
     image: 'https://media.api.com/images/public/6a21b15344a3800af2fdb9ef/940205071_generated_f3e2d298.png',
   },
   {
     key: 'decoracao',
     label: 'Decoração',
     path: '/categoria/decoracao',
-    phrase: 'Arte em cada detalhe',
-    tagline: 'Peças artesanais e escultóricas com história',
+    title: 'Arte em cada detalhe',
+    subtitle: 'Peças artesanais e escultóricas com história',
     image: 'https://media.api.com/images/public/6a21b15344a3800af2fdb9ef/215deeae0_generated_c3aec0c4.png',
   },
   {
     key: 'fragancias',
     label: 'Fragrâncias',
     path: '/categoria/fragancias',
-    phrase: 'Aromas que envolvem',
-    tagline: 'Essências para tornar cada momento memorável',
+    title: 'Aromas que envolvem',
+    subtitle: 'Essências para tornar cada momento memorável',
     image: 'https://media.api.com/images/public/6a21b15344a3800af2fdb9ef/d954b3d6c_generated_61731479.png',
   },
   {
     key: 'cama_mesa_banho',
     label: 'Cama, Mesa & Banho',
     path: '/categoria/cama_mesa_banho',
-    phrase: 'Conforto e textura',
-    tagline: 'Tecidos nobres para o dia a dia',
+    title: 'Conforto e textura',
+    subtitle: 'Tecidos nobres para o dia a dia',
     image: 'https://media.api.com/images/public/6a21b15344a3800af2fdb9ef/0fe8f6fa0_generated_0f6146fd.png',
   },
 ];
@@ -43,6 +43,7 @@ const DEFAULT_SECTIONS = [
     categoryKey: 'decoracao',
     banner: {
       title: 'Decoração',
+      subtitle: 'Coleção',
       description: 'Peças artesanais e escultóricas que contam histórias únicas.',
       image: 'https://media.api.com/images/public/6a21b15344a3800af2fdb9ef/215deeae0_generated_c3aec0c4.png',
       reverse: false,
@@ -58,6 +59,7 @@ const DEFAULT_SECTIONS = [
     categoryKey: 'fragancias',
     banner: {
       title: 'Fragrâncias',
+      subtitle: 'Coleção',
       description: 'Aromas que envolvem cada ambiente em uma experiência sensorial.',
       image: 'https://media.api.com/images/public/6a21b15344a3800af2fdb9ef/d954b3d6c_generated_61731479.png',
       reverse: true,
@@ -73,6 +75,7 @@ const DEFAULT_SECTIONS = [
     categoryKey: 'cama_mesa_banho',
     banner: {
       title: 'Cama, Mesa & Banho',
+      subtitle: 'Coleção',
       description: 'Tecidos nobres e texturas que acariciam os sentidos.',
       image: 'https://media.api.com/images/public/6a21b15344a3800af2fdb9ef/0fe8f6fa0_generated_0f6146fd.png',
       reverse: false,
@@ -101,12 +104,19 @@ export const DEFAULT_HOME_BANNERS = {
 };
 
 function sanitizeSlide(slide, fallback) {
+  const title = String(
+    slide?.title ?? slide?.phrase ?? fallback?.title ?? fallback?.phrase ?? ''
+  ).trim();
+  const subtitle = String(
+    slide?.subtitle ?? slide?.tagline ?? fallback?.subtitle ?? fallback?.tagline ?? ''
+  ).trim();
+
   return {
     key: String(slide?.key || fallback?.key || '').trim() || fallback.key,
     label: String(slide?.label || fallback?.label || '').trim() || fallback.label,
     path: String(slide?.path || fallback?.path || '').trim() || fallback.path,
-    phrase: String(slide?.phrase ?? fallback?.phrase ?? '').trim(),
-    tagline: String(slide?.tagline ?? fallback?.tagline ?? '').trim(),
+    title,
+    subtitle,
     image: String(slide?.image || fallback?.image || '').trim() || fallback.image,
   };
 }
@@ -117,6 +127,11 @@ function sanitizeSection(section, fallback) {
     categoryKey: String(section?.categoryKey || fallback?.categoryKey || '').trim() || fallback.categoryKey,
     banner: {
       title: String(section?.banner?.title || fallback?.banner?.title || '').trim(),
+      subtitle: String(
+        section?.banner?.subtitle
+        ?? fallback?.banner?.subtitle
+        ?? 'Coleção'
+      ).trim(),
       description: String(section?.banner?.description || fallback?.banner?.description || '').trim(),
       image: String(section?.banner?.image || fallback?.banner?.image || '').trim(),
       reverse: Boolean(section?.banner?.reverse ?? fallback?.banner?.reverse),

@@ -66,7 +66,7 @@ function SectionBannerCard({ section, index, total, onChange, onMoveUp, onMoveDo
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block font-body text-xs text-muted-foreground tracking-wider uppercase mb-2">
-                Título do banner
+                Título
               </label>
               <input
                 className="w-full h-10 px-3 rounded-sm border border-border bg-background font-body text-sm"
@@ -79,14 +79,29 @@ function SectionBannerCard({ section, index, total, onChange, onMoveUp, onMoveDo
             </div>
             <div>
               <label className="block font-body text-xs text-muted-foreground tracking-wider uppercase mb-2">
-                Categoria
+                Subtítulo
               </label>
               <input
-                className="w-full h-10 px-3 rounded-sm border border-border bg-secondary font-body text-sm"
-                value={section.categoryKey}
-                readOnly
+                className="w-full h-10 px-3 rounded-sm border border-border bg-background font-body text-sm"
+                value={section.banner.subtitle || ''}
+                onChange={(e) => onChange({
+                  ...section,
+                  banner: { ...section.banner, subtitle: e.target.value },
+                })}
+                placeholder="Ex: Coleção"
               />
             </div>
+          </div>
+
+          <div>
+            <label className="block font-body text-xs text-muted-foreground tracking-wider uppercase mb-2">
+              Categoria
+            </label>
+            <input
+              className="w-full h-10 px-3 rounded-sm border border-border bg-secondary font-body text-sm"
+              value={section.categoryKey}
+              readOnly
+            />
           </div>
 
           <div>
@@ -193,7 +208,7 @@ export default function HomeBannersEditor() {
         <div>
           <h2 className="font-display text-xl tracking-wide text-foreground mb-1">Banner inicial</h2>
           <p className="font-body text-sm text-muted-foreground">
-            Defina a marca e frases dinâmicas por slide. As frases mudam junto com a imagem ao passar o mouse nas categorias.
+            Defina a marca e, em cada slide, um título e um subtítulo. Eles mudam junto com a imagem ao passar o mouse nas categorias.
           </p>
         </div>
 
@@ -238,23 +253,23 @@ export default function HomeBannersEditor() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block font-body text-xs text-muted-foreground tracking-wider uppercase mb-2">
-                    Frase do slide
+                    Título
                   </label>
                   <input
                     className="w-full h-10 px-3 rounded-sm border border-border bg-background font-body text-sm"
-                    value={slide.phrase || ''}
-                    onChange={(e) => updateSlide(index, { phrase: e.target.value })}
+                    value={slide.title || slide.phrase || ''}
+                    onChange={(e) => updateSlide(index, { title: e.target.value })}
                     placeholder="Ex: Para o lar que inspira"
                   />
                 </div>
                 <div>
                   <label className="block font-body text-xs text-muted-foreground tracking-wider uppercase mb-2">
-                    Complemento
+                    Subtítulo
                   </label>
                   <input
                     className="w-full h-10 px-3 rounded-sm border border-border bg-background font-body text-sm"
-                    value={slide.tagline || ''}
-                    onChange={(e) => updateSlide(index, { tagline: e.target.value })}
+                    value={slide.subtitle || slide.tagline || ''}
+                    onChange={(e) => updateSlide(index, { subtitle: e.target.value })}
                     placeholder="Ex: Presentes e peças que transformam ambientes"
                   />
                 </div>
@@ -264,7 +279,7 @@ export default function HomeBannersEditor() {
                 label={`Imagem — ${slide.label}`}
                 value={slide.image}
                 onChange={(image) => updateSlide(index, { image })}
-                hint="Esta imagem e as frases aparecem quando o visitante passa o mouse sobre a categoria."
+                hint="Esta imagem, o título e o subtítulo aparecem quando o visitante passa o mouse sobre a categoria."
               />
             </div>
           ))}

@@ -19,8 +19,16 @@ export default function HeroSection({ config }) {
   }, [slides.length]);
 
   const activeSlide = slides[activeIndex] || {};
-  const phrase = (activeSlide.phrase || '').trim() || hero.brandSubtitle || '';
-  const tagline = (activeSlide.tagline || '').trim();
+  const title = (
+    activeSlide.title
+    || activeSlide.phrase
+    || ''
+  ).trim() || hero.brandSubtitle || '';
+  const subtitle = (
+    activeSlide.subtitle
+    || activeSlide.tagline
+    || ''
+  ).trim();
 
   return (
     <section className="relative h-screen w-full overflow-hidden">
@@ -55,21 +63,21 @@ export default function HeroSection({ config }) {
 
           <AnimatePresence mode="wait">
             <motion.div
-              key={`${activeIndex}-${phrase}-${tagline}`}
+              key={`${activeIndex}-${title}-${subtitle}`}
               initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -8 }}
               transition={{ duration: 0.45, ease: 'easeOut' }}
               className="mt-3 md:mt-4"
             >
-              {phrase && (
+              {title && (
                 <p className="font-body text-white text-lg md:text-xl lg:text-2xl tracking-wide font-light opacity-90">
-                  {phrase}
+                  {title}
                 </p>
               )}
-              {tagline && (
+              {subtitle && (
                 <p className="font-body text-white/75 text-sm md:text-base tracking-wide mt-2 max-w-xl">
-                  {tagline}
+                  {subtitle}
                 </p>
               )}
             </motion.div>

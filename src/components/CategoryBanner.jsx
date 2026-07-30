@@ -34,15 +34,19 @@ export default function CategoryBanner({ categoryKey, banner, reverse = false })
           className={`flex items-center px-8 lg:px-16 py-12 lg:py-0 ${layoutReverse ? 'lg:order-1' : 'lg:order-2'}`}
         >
           <div className="max-w-md">
-            <p className="text-xs tracking-[0.3em] uppercase text-muted-foreground font-body mb-4">
-              Coleção
-            </p>
+            {(banner.subtitle || '').trim() && (
+              <p className="text-xs tracking-[0.3em] uppercase text-muted-foreground font-body mb-4">
+                {banner.subtitle}
+              </p>
+            )}
             <h2 className="font-display text-3xl lg:text-5xl tracking-wider text-foreground mb-6">
               {banner.title}
             </h2>
-            <p className="font-body text-base text-muted-foreground leading-relaxed mb-8">
-              {banner.description}
-            </p>
+            {banner.description && (
+              <p className="font-body text-base text-muted-foreground leading-relaxed mb-8">
+                {banner.description}
+              </p>
+            )}
             <Link
               to={`/categoria/${categoryKey}`}
               className="inline-flex items-center gap-3 bg-foreground text-background px-8 py-3.5 rounded-sm font-body text-sm tracking-wider uppercase hover:opacity-80 transition-opacity"
