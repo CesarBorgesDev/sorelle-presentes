@@ -150,6 +150,15 @@ export default function Navbar({ cartCount = 0, onCartClick }) {
     setMenuOpen(false);
   }, [location]);
 
+  useEffect(() => {
+    if (!menuOpen) return undefined;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [menuOpen]);
+
   const navBg = scrolled || !isHome
     ? 'bg-background/95 backdrop-blur-md border-b border-border'
     : 'bg-transparent';
@@ -254,9 +263,9 @@ export default function Navbar({ cartCount = 0, onCartClick }) {
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
-            className="fixed inset-0 z-40 bg-background pt-16"
+            className="fixed inset-0 z-40 bg-background pt-16 overflow-y-auto overscroll-contain"
           >
-            <div className="flex flex-col items-center gap-8 pt-12 px-6">
+            <div className="flex flex-col items-center gap-8 pt-12 px-6 pb-12">
               <form
                 onSubmit={handleSearchSubmit}
                 className="flex items-center w-[200px] h-10 rounded-sm border border-border bg-secondary/40"
