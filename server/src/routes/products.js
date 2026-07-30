@@ -82,6 +82,16 @@ router.get('/internal-code/check', requireAuth, requireAdmin, async (req, res) =
   }
 });
 
+router.get('/count', optionalAuth, async (_req, res) => {
+  try {
+    const result = await pool.query('SELECT COUNT(*)::int AS count FROM products');
+    res.json({ count: result.rows[0].count });
+  } catch (err) {
+    console.error('Erro ao contar produtos:', err);
+    res.status(500).json({ message: 'Erro ao contar produtos' });
+  }
+});
+
 router.get('/:id', optionalAuth, async (req, res) => {
   try {
     const result = await pool.query('SELECT * FROM products WHERE id = $1', [req.params.id]);

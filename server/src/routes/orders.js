@@ -43,6 +43,27 @@ router.get('/', async (req, res) => {
   }
 });
 
+router.get('/stats', async (_req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT
+        COUNT(*)::int AS total,
+        COUNT(*) FILTER (WHERE status = 'pendente')::int AS pending,
+        COALESCE(SUM(total) FILTER (WHERE status <> 'cancelado'), 0)::float AS revenue
+      FROM orders
+    `);
+    const row = result.rows[0] || { total: 0, pending: 0, revenue: 0 };
+    res.json({
+      total: row.total || 0,
+      pending: row.pending || 0,
+      revenue: Number(row.revenue) || 0,
+    });
+  } catch (err) {
+    console.error('Erro ao buscar estatísticas de pedidos:', err);
+    res.status(500).json({ message: 'Erro ao buscar estatísticas' });
+  }
+});
+
 router.post('/:id/etiqueta', async (req, res) => {
   try {
     const order = await loadOrderOr404(req.params.id, res);

@@ -112,6 +112,7 @@ export default function ProductFormModal({ product, onClose }) {
       : api.entities.Product.create(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['products'] });
+      queryClient.invalidateQueries({ queryKey: ['products-count'] });
       if (isEditing) {
         queryClient.invalidateQueries({ queryKey: ['product', product.id] });
       }

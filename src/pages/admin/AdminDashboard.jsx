@@ -14,20 +14,32 @@ const statusColors = {
 };
 
 export default function AdminDashboard() {
-  const { data: products = [] } = useQuery({ queryKey: ['products'], queryFn: () => api.entities.Product.list() });
-  const { data: orders = [] } = useQuery({ queryKey: ['orders'], queryFn: () => api.entities.Order.list('-created_date', 50) });
+  const { data: productCountData } = useQuery({
+    queryKey: ['products-count'],
+    queryFn: () => api.products.count(),
+  });
 
-  const totalRevenue = orders.filter(o => o.status !== 'cancelado').reduce((s, o) => s + (o.total || 0), 0);
-  const pendingOrders = orders.filter(o => o.status === 'pendente').length;
+  const { data: orderStats } = useQuery({
+    queryKey: ['orders-stats'],
+    queryFn: () => api.orders.stats(),
+  });
+
+  const { data: recentOrders = [] } = useQuery({
+    queryKey: ['orders-recent'],
+    queryFn: () => api.entities.Order.list('-created_date', 5),
+  });
+
+  const productCount = productCountData?.count ?? 0;
+  const totalOrders = orderStats?.total ?? 0;
+  const pendingOrders = orderStats?.pending ?? 0;
+  const totalRevenue = orderStats?.revenue ?? 0;
 
   const stats = [
-    { label: 'Produtos Cadastrados', value: products.length, icon: Package, color: 'text-primary' },
-    { label: 'Total de Pedidos', value: orders.length, icon: ShoppingBag, color: 'text-blue-600' },
-    { label: 'Receita Total', value: `R$ ${totalRevenue.toFixed(2).replace('.', ',')}`, icon: TrendingUp, color: 'text-green-600' },
+    { label: 'Produtos Cadastrados', value: productCount, icon: Package, color: 'text-primary' },
+    { label: 'Total de Pedidos', value: totalOrders, icon: ShoppingBag, color: 'text-blue-600' },
+    { label: 'Receita Total', value: `R$ ${Number(totalRevenue).toFixed(2).replace('.', ',')}`, icon: TrendingUp, color: 'text-green-600' },
     { label: 'Pedidos Pendentes', value: pendingOrders, icon: Clock, color: 'text-yellow-600' },
   ];
-
-  const recentOrders = orders.slice(0, 5);
 
   return (
     <div>
@@ -36,7 +48,6 @@ export default function AdminDashboard() {
         <p className="font-body text-muted-foreground mt-1">Visão geral da loja Sorelle</p>
       </div>
 
-      {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         {stats.map(({ label, value, icon: Icon, color }) => (
           <div key={label} className="bg-card border border-border rounded-sm p-5">
@@ -49,7 +60,6 @@ export default function AdminDashboard() {
         ))}
       </div>
 
-      {/* Recent Orders */}
       <div className="bg-card border border-border rounded-sm">
         <div className="flex items-center justify-between px-6 py-4 border-b border-border">
           <h2 className="font-display text-lg tracking-wide text-foreground">Pedidos Recentes</h2>
@@ -61,7 +71,7 @@ export default function AdminDashboard() {
           </div>
         ) : (
           <div className="divide-y divide-border">
-            {recentOrders.map(order => (
+            {recentOrders.map((order) => (
               <div key={order.id} className="flex items-center justify-between px-6 py-4">
                 <div>
                   <p className="font-body text-sm text-foreground font-medium">{order.customer_name}</p>

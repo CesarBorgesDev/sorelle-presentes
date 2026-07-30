@@ -16,12 +16,20 @@ export default function AdminProducts() {
 
   const { data: products = [], isLoading } = useQuery({
     queryKey: ['products'],
-    queryFn: () => api.entities.Product.list('-created_date'),
+    queryFn: () => api.entities.Product.list('-created_date', 5000),
+  });
+
+  const { data: productCountData } = useQuery({
+    queryKey: ['products-count'],
+    queryFn: () => api.products.count(),
   });
 
   const deleteMutation = useMutation({
     mutationFn: (id) => api.entities.Product.delete(id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['products'] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+      queryClient.invalidateQueries({ queryKey: ['products-count'] });
+    },
   });
 
   const filtered = products.filter(p =>
@@ -57,7 +65,9 @@ export default function AdminProducts() {
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="font-display text-3xl tracking-wider text-foreground">Produtos</h1>
-          <p className="font-body text-muted-foreground mt-1">{products.length} produtos cadastrados</p>
+          <p className="font-body text-muted-foreground mt-1">
+            {productCountData?.count ?? products.length} produtos cadastrados
+          </p>
         </div>
         <button
           onClick={handleNew}

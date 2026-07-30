@@ -519,6 +519,15 @@ const productsApi = {
     if (excludeId) params.set('exclude_id', excludeId);
     return apiFetch(`/products/internal-code/check?${params}`);
   },
+  count() {
+    return apiFetch('/products/count');
+  },
+};
+
+const ordersApi = {
+  stats() {
+    return apiFetch('/orders/stats');
+  },
 };
 
 const productKitsApi = {
@@ -599,6 +608,7 @@ export const api = {
   shipping,
   account,
   products: productsApi,
+  orders: ordersApi,
   productKits: productKitsApi,
   brands: brandsApi,
   categories: categoriesApi,
