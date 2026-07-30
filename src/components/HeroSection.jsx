@@ -18,6 +18,10 @@ export default function HeroSection({ config }) {
     return () => clearInterval(interval);
   }, [slides.length]);
 
+  const activeSlide = slides[activeIndex] || {};
+  const phrase = (activeSlide.phrase || '').trim() || hero.brandSubtitle || '';
+  const tagline = (activeSlide.tagline || '').trim();
+
   return (
     <section className="relative h-screen w-full overflow-hidden">
       <AnimatePresence mode="sync">
@@ -30,8 +34,8 @@ export default function HeroSection({ config }) {
           className="absolute inset-0"
         >
           <img
-            src={resolveMediaUrl(slides[activeIndex]?.image)}
-            alt={slides[activeIndex]?.label || 'Sorelle'}
+            src={resolveMediaUrl(activeSlide.image)}
+            alt={activeSlide.label || 'Sorelle'}
             className="w-full h-full object-cover"
           />
           <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-black/20 to-black/60" />
@@ -39,19 +43,38 @@ export default function HeroSection({ config }) {
       </AnimatePresence>
 
       <div className="relative z-10 h-full flex flex-col justify-end pb-16 lg:pb-24 px-6 lg:px-16">
-        <motion.div
-          initial={{ opacity: 0, y: 30 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3, duration: 0.8 }}
-          className="mb-12 lg:mb-16"
-        >
-          <h1 className="font-display text-white text-4xl md:text-6xl lg:text-7xl tracking-widest leading-tight">
+        <div className="mb-12 lg:mb-16 max-w-3xl">
+          <motion.h1
+            initial={{ opacity: 0, y: 30 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2, duration: 0.8 }}
+            className="font-display text-white text-4xl md:text-6xl lg:text-7xl tracking-widest leading-tight"
+          >
             {hero.brandTitle}
-            <span className="block text-lg md:text-xl lg:text-2xl tracking-widest opacity-80 mt-2 font-body font-light">
-              {hero.brandSubtitle}
-            </span>
-          </h1>
-        </motion.div>
+          </motion.h1>
+
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={`${activeIndex}-${phrase}-${tagline}`}
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.45, ease: 'easeOut' }}
+              className="mt-3 md:mt-4"
+            >
+              {phrase && (
+                <p className="font-body text-white text-lg md:text-xl lg:text-2xl tracking-wide font-light opacity-90">
+                  {phrase}
+                </p>
+              )}
+              {tagline && (
+                <p className="font-body text-white/75 text-sm md:text-base tracking-wide mt-2 max-w-xl">
+                  {tagline}
+                </p>
+              )}
+            </motion.div>
+          </AnimatePresence>
+        </div>
 
         <div className="flex flex-wrap gap-6 lg:gap-10 max-w-5xl w-full">
           {slides.map((cat, index) => (

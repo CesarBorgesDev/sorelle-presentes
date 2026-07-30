@@ -193,7 +193,7 @@ export default function HomeBannersEditor() {
         <div>
           <h2 className="font-display text-xl tracking-wide text-foreground mb-1">Banner inicial</h2>
           <p className="font-body text-sm text-muted-foreground">
-            As imagens do topo da página inicial alternam ao passar o mouse nas categorias.
+            Defina a marca e frases dinâmicas por slide. As frases mudam junto com a imagem ao passar o mouse nas categorias.
           </p>
         </div>
 
@@ -213,7 +213,7 @@ export default function HomeBannersEditor() {
           </div>
           <div>
             <label className="block font-body text-xs text-muted-foreground tracking-wider uppercase mb-2">
-              Subtítulo
+              Frase padrão (fallback)
             </label>
             <input
               className="w-full h-10 px-3 rounded-sm border border-border bg-background font-body text-sm"
@@ -222,6 +222,7 @@ export default function HomeBannersEditor() {
                 ...current,
                 hero: { ...current.hero, brandSubtitle: e.target.value },
               }))}
+              placeholder="Usada se o slide não tiver frase"
             />
           </div>
         </div>
@@ -233,11 +234,37 @@ export default function HomeBannersEditor() {
                 <ImageIcon className="w-4 h-4 text-primary" />
                 <h3 className="font-display text-lg tracking-wide">{slide.label}</h3>
               </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block font-body text-xs text-muted-foreground tracking-wider uppercase mb-2">
+                    Frase do slide
+                  </label>
+                  <input
+                    className="w-full h-10 px-3 rounded-sm border border-border bg-background font-body text-sm"
+                    value={slide.phrase || ''}
+                    onChange={(e) => updateSlide(index, { phrase: e.target.value })}
+                    placeholder="Ex: Para o lar que inspira"
+                  />
+                </div>
+                <div>
+                  <label className="block font-body text-xs text-muted-foreground tracking-wider uppercase mb-2">
+                    Complemento
+                  </label>
+                  <input
+                    className="w-full h-10 px-3 rounded-sm border border-border bg-background font-body text-sm"
+                    value={slide.tagline || ''}
+                    onChange={(e) => updateSlide(index, { tagline: e.target.value })}
+                    placeholder="Ex: Presentes e peças que transformam ambientes"
+                  />
+                </div>
+              </div>
+
               <BannerImageField
                 label={`Imagem — ${slide.label}`}
                 value={slide.image}
                 onChange={(image) => updateSlide(index, { image })}
-                hint="Esta imagem aparece quando o visitante passa o mouse sobre a categoria correspondente."
+                hint="Esta imagem e as frases aparecem quando o visitante passa o mouse sobre a categoria."
               />
             </div>
           ))}
