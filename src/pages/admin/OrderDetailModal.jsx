@@ -93,7 +93,12 @@ export default function OrderDetailModal({ order, onClose, onUpdated, onDeleted 
   const trackingCodeMutation = useMutation({
     mutationFn: () => api.orderShipping.generateTrackingCode(order.id),
     onSuccess: (result) => {
-      setTrackingCode(result.tracking_code || '');
+      const code = result.tracking_code || '';
+      setTrackingCode(code);
+      if (!code) {
+        setTrackingCodeError('A API respondeu sem código de rastreio. Tente novamente ou verifique o CWS.');
+        return;
+      }
       setTrackingCodeError('');
       if (result.label_url) {
         setLabelUrl(result.label_url);
@@ -104,7 +109,7 @@ export default function OrderDetailModal({ order, onClose, onUpdated, onDeleted 
       }
     },
     onError: (err) => {
-      setTrackingCodeError(err.message || 'Erro ao gerar código Correios');
+      setTrackingCodeError(err?.body?.message || err.message || 'Erro ao gerar código Correios');
     },
   });
 
