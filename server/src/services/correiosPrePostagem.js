@@ -1,6 +1,11 @@
 import pool from '../config/db.js';
 import { toCieloAddress } from '../utils/address.js';
-import { buildPackageFromProducts, CARRIER_SERVICE, getCorreiosConfig } from './correios.js';
+import {
+  buildPackageFromProducts,
+  CARRIER_SERVICE,
+  fetchAddressByCep,
+  getCorreiosConfig,
+} from './correios.js';
 import { getCorreiosApiBase, getCorreiosApiToken } from './correiosAuth.js';
 import { getSetting } from './settings.js';
 import { normalizeTrackingCode } from './correiosTracking.js';
@@ -54,15 +59,40 @@ async function getSenderConfig() {
     (await getSetting('correios_sender_phone')) || process.env.CORREIOS_SENDER_PHONE || ''
   );
 
+  const zip = onlyDigits(correios.originZip).slice(0, 8);
+  let street = truncate((await getSetting('correios_sender_street')) || process.env.CORREIOS_SENDER_STREET || '', 50);
+  let number = truncate((await getSetting('correios_sender_number')) || process.env.CORREIOS_SENDER_NUMBER || 'S/N', 6);
+  let complement = truncate((await getSetting('correios_sender_complement')) || process.env.CORREIOS_SENDER_COMPLEMENT || '', 30);
+  let district = truncate((await getSetting('correios_sender_district')) || process.env.CORREIOS_SENDER_DISTRICT || '', 30);
+  let city = truncate((await getSetting('correios_sender_city')) || process.env.CORREIOS_SENDER_CITY || '', 30);
+  let state = truncate((await getSetting('correios_sender_state')) || process.env.CORREIOS_SENDER_STATE || '', 2).toUpperCase();
+
+  // Completa campos vazios pelo CEP de origem (ViaCEP) — evita falha quando só o CEP foi configurado
+  if (zip.length === 8 && (!street || !city || !district || !state)) {
+    try {
+      const fromCep = await fetchAddressByCep(zip);
+      if (!street && fromCep.street) street = truncate(fromCep.street, 50);
+      if (!district && fromCep.district) district = truncate(fromCep.district, 30);
+      if (!city && fromCep.city) city = truncate(fromCep.city, 30);
+      if (!state && fromCep.state) state = truncate(fromCep.state, 2).toUpperCase();
+    } catch (err) {
+      console.warn('[Correios] ViaCEP do remetente indisponível:', err.message);
+    }
+  }
+
+  if (!district) district = 'Centro';
+  if (!state) state = 'SP';
+  if (!number) number = 'S/N';
+
   return {
     name: truncate((await getSetting('correios_sender_name')) || process.env.CORREIOS_SENDER_NAME || 'Sorelle Presentes', 50),
-    street: truncate((await getSetting('correios_sender_street')) || process.env.CORREIOS_SENDER_STREET || '', 50),
-    number: truncate((await getSetting('correios_sender_number')) || process.env.CORREIOS_SENDER_NUMBER || 'S/N', 6),
-    complement: truncate((await getSetting('correios_sender_complement')) || process.env.CORREIOS_SENDER_COMPLEMENT || '', 30),
-    district: truncate((await getSetting('correios_sender_district')) || process.env.CORREIOS_SENDER_DISTRICT || 'Centro', 30),
-    city: truncate((await getSetting('correios_sender_city')) || process.env.CORREIOS_SENDER_CITY || '', 30),
-    state: truncate((await getSetting('correios_sender_state')) || process.env.CORREIOS_SENDER_STATE || 'SP', 2).toUpperCase(),
-    zip: onlyDigits(correios.originZip).slice(0, 8),
+    street,
+    number,
+    complement,
+    district,
+    city,
+    state,
+    zip,
     email: truncate((await getSetting('correios_sender_email')) || process.env.CORREIOS_SENDER_EMAIL || 'contato@sorellepresentes.com.br', 255),
     cnpj: onlyDigits((await getSetting('correios_sender_cnpj')) || process.env.CORREIOS_SENDER_CNPJ || ''),
     phone,
@@ -122,11 +152,17 @@ function validatePrePostagemSetup({ sender, recipient, order, config }) {
     missing.push('cartão de postagem ou número do contrato em Configurações → Frete');
   }
 
-  if (!sender.name || sender.name.length < 3) missing.push('nome do remetente');
-  if (!sender.street) missing.push('logradouro do remetente');
-  if (!sender.city) missing.push('cidade do remetente');
-  if (!sender.state) missing.push('UF do remetente');
-  if (sender.zip.length !== 8) missing.push('CEP de origem válido');
+  if (!sender.name || sender.name.length < 3) {
+    missing.push('nome do remetente (Configurações → Frete → Remetente)');
+  }
+  if (!sender.street) {
+    missing.push('logradouro do remetente (aba Remetente — o endereço da retirada na loja não é usado aqui)');
+  }
+  if (!sender.city) {
+    missing.push('cidade do remetente (aba Remetente)');
+  }
+  if (!sender.state) missing.push('UF do remetente (aba Remetente)');
+  if (sender.zip.length !== 8) missing.push('CEP de origem válido (aba Correios)');
 
   if (!order.customer_name) missing.push('nome do destinatário');
   if (!recipient.street) missing.push('endereço do destinatário');

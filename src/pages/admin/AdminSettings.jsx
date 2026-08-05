@@ -105,6 +105,8 @@ export default function AdminSettings() {
   const [correiosTestMode, setCorreiosTestMode] = useState('auto');
   const [correiosTestZip, setCorreiosTestZip] = useState('01310100');
   const [correiosTestResult, setCorreiosTestResult] = useState(null);
+  const [fillingSenderFromCep, setFillingSenderFromCep] = useState(false);
+  const [senderCepMessage, setSenderCepMessage] = useState('');
   const [carrierEnabled, setCarrierEnabled] = useState(false);
   const [carrierName, setCarrierName] = useState('Transportadora');
   const [carrierPrice, setCarrierPrice] = useState('');
@@ -967,12 +969,47 @@ export default function AdminSettings() {
                 </TabsContent>
 
                 <TabsContent value="remetente" className="space-y-4 mt-0 focus-visible:outline-none">
-                  <div>
-                    <h3 className="font-display text-base tracking-wide text-foreground">Remetente (etiqueta)</h3>
-                    <p className="font-body text-sm text-muted-foreground mt-1">
-                      Dados enviados na pré-postagem e impressos na etiqueta.
-                    </p>
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <h3 className="font-display text-base tracking-wide text-foreground">Remetente (etiqueta)</h3>
+                      <p className="font-body text-sm text-muted-foreground mt-1">
+                        Obrigatório para gerar código Correios. Não usa o endereço da aba Retirada — preencha logradouro e cidade aqui (ou pelo CEP de origem) e salve.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={fillingSenderFromCep || correiosOriginZip.replace(/\D/g, '').length !== 8}
+                      onClick={async () => {
+                        setSenderCepMessage('');
+                        setFillingSenderFromCep(true);
+                        try {
+                          const addr = await api.shipping.lookupCep(correiosOriginZip);
+                          if (addr.street) setCorreiosSenderStreet(addr.street);
+                          if (addr.district) setCorreiosSenderDistrict(addr.district);
+                          if (addr.city) setCorreiosSenderCity(addr.city);
+                          if (addr.state) setCorreiosSenderState(addr.state);
+                          setSenderCepMessage(
+                            addr.street
+                              ? 'Endereço preenchido pelo CEP. Confira o número e salve.'
+                              : 'Cidade/UF preenchidos. Informe o logradouro manualmente (CEP genérico) e salve.'
+                          );
+                        } catch (err) {
+                          setSenderCepMessage(err.message || 'Não foi possível consultar o CEP.');
+                        } finally {
+                          setFillingSenderFromCep(false);
+                        }
+                      }}
+                      className="shrink-0 inline-flex items-center justify-center gap-2 px-3 py-2 rounded-sm border border-border bg-secondary/40 font-body text-xs sm:text-sm hover:bg-secondary disabled:opacity-60"
+                    >
+                      {fillingSenderFromCep ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : null}
+                      Preencher pelo CEP de origem
+                    </button>
                   </div>
+                  {senderCepMessage && (
+                    <p className="font-body text-xs text-muted-foreground">{senderCepMessage}</p>
+                  )}
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div className="sm:col-span-2">
                       <label className={labelClass}>Nome do remetente</label>
@@ -985,7 +1022,7 @@ export default function AdminSettings() {
                       />
                     </div>
                     <div className="sm:col-span-2">
-                      <label className={labelClass}>Logradouro</label>
+                      <label className={labelClass}>Logradouro *</label>
                       <input
                         type="text"
                         className={inputClass}
@@ -1033,7 +1070,7 @@ export default function AdminSettings() {
                       />
                     </div>
                     <div>
-                      <label className={labelClass}>Cidade</label>
+                      <label className={labelClass}>Cidade *</label>
                       <input
                         type="text"
                         className={inputClass}
@@ -1042,7 +1079,7 @@ export default function AdminSettings() {
                       />
                     </div>
                     <div>
-                      <label className={labelClass}>UF</label>
+                      <label className={labelClass}>UF *</label>
                       <input
                         type="text"
                         className={inputClass}
