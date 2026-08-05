@@ -376,87 +376,176 @@ function buildPrePostagemPayload(order, { sender, recipient, packageInfo, servic
   };
 }
 
-function extractCorreiosError(body, status) {
-  if (Array.isArray(body?.msgs) && body.msgs.length > 0) {
-    return body.msgs.join('; ');
+function collectCorreiosMessages(value, bag = [], depth = 0) {
+  if (value == null || depth > 4) return bag;
+
+  if (typeof value === 'string') {
+    const text = value.trim();
+    if (text && text !== 'null' && text !== 'undefined' && !bag.includes(text)) {
+      bag.push(text);
+    }
+    return bag;
   }
-  if (body?.message) return body.message;
-  if (body?.causa) return body.causa;
-  return `Erro na API de pré-postagem (${status})`;
+
+  if (Array.isArray(value)) {
+    for (const item of value) collectCorreiosMessages(item, bag, depth + 1);
+    return bag;
+  }
+
+  if (typeof value === 'object') {
+    for (const key of ['msgs', 'message', 'causa', 'msg', 'erro', 'error', 'detail', 'details']) {
+      if (value[key] != null) collectCorreiosMessages(value[key], bag, depth + 1);
+    }
+  }
+
+  return bag;
+}
+
+function extractCorreiosError(body, status, fallback = 'Erro na API de pré-postagem') {
+  const messages = collectCorreiosMessages(body);
+  if (messages.length > 0) return messages.join('; ');
+  if (status) return `${fallback} (HTTP ${status})`;
+  return fallback;
+}
+
+function throwCorreiosError({ message, details = [], step = null, status = null, raw = null }) {
+  const uniqueDetails = [...new Set(
+    details
+      .flatMap((item) => collectCorreiosMessages(item))
+      .map((item) => String(item).trim())
+      .filter((item) => item && item !== 'null' && item !== 'undefined')
+  )];
+
+  const err = new Error(message || uniqueDetails[0] || 'Erro ao gerar código Correios');
+  err.code = 'CORREIOS_PREPOSTAGEM';
+  err.details = uniqueDetails;
+  err.step = step;
+  err.status = status;
+  err.raw = raw;
+  throw err;
 }
 
 export async function generateCorreiosTrackingCode(order) {
-  const config = await getPrePostagemConfig();
-  const sender = await getSenderConfig();
-  const recipient = parseRecipientAddress(order);
-  validatePrePostagemSetup({ sender, recipient, order, config });
+  try {
+    const config = await getPrePostagemConfig();
+    const sender = await getSenderConfig();
+    const recipient = parseRecipientAddress(order);
+    validatePrePostagemSetup({ sender, recipient, order, config });
 
-  const token = await getCorreiosApiToken({ forPostagem: true });
-  if (!token) {
-    throw new Error('Configure usuário e senha da API Correios em Configurações → Frete.');
-  }
-
-  const packageInfo = await buildPackageFromOrder(order, config);
-  const serviceCode = resolvePrePostagemServiceCode(order, config);
-  const payload = buildPrePostagemPayload(order, {
-    sender,
-    recipient,
-    packageInfo,
-    serviceCode,
-  });
-
-  const created = await correiosApiFetch('/v1/prepostagens', {
-    method: 'POST',
-    token,
-    body: payload,
-  });
-
-  if (!created.ok) {
-    throw new Error(extractCorreiosError(created.data, created.status));
-  }
-
-  let body = created.data || {};
-  let trackingCode = extractTrackingCodeFromPayload(body);
-  const prepostagemId = body.id || body.idPrePostagem || body.idPrepostagem || null;
-
-  // Às vezes o create devolve só o id; o código surge na consulta ou ao emitir o rótulo
-  if (!trackingCode && prepostagemId) {
-    const refreshed = await fetchPrePostagemById(token, prepostagemId);
-    if (refreshed) {
-      body = { ...body, ...refreshed };
-      trackingCode = extractTrackingCodeFromPayload(refreshed);
-    }
-  }
-
-  if (!trackingCode && prepostagemId) {
-    const fromRotulo = await requestRotuloAndResolveCode(token, prepostagemId);
-    if (fromRotulo.code) {
-      trackingCode = fromRotulo.code;
-      body = { ...body, rotulo: fromRotulo.raw };
-    } else {
-      console.warn('[Correios] Pré-postagem sem codigoObjeto', {
-        prepostagemId,
-        status: body.statusAtual || body.descStatusAtual,
-        createKeys: Object.keys(created.data || {}),
-        rotulo: fromRotulo.raw,
+    const token = await getCorreiosApiToken({ forPostagem: true });
+    if (!token) {
+      throwCorreiosError({
+        message: 'Credenciais da API Correios não configuradas.',
+        details: [
+          'Preencha usuário Meu Correios e código de acesso CWS em Configurações → Frete → API Correios.',
+          'Salve as configurações e use “Testar API” antes de gerar o código.',
+        ],
+        step: 'autenticacao',
       });
     }
-  }
 
-  if (!trackingCode) {
-    const status = body.statusAtual || body.descStatusAtual || 'desconhecido';
-    throw new Error(
-      prepostagemId
-        ? `Pré-postagem criada (${prepostagemId}), mas o código de rastreio veio vazio (status: ${status}). Verifique no CWS se o cartão tem saldo de etiquetas e se o serviço ${serviceCode} está liberado no contrato.`
-        : 'A API dos Correios não retornou o código de rastreio nem o id da pré-postagem.'
-    );
-  }
+    const packageInfo = await buildPackageFromOrder(order, config);
+    const serviceCode = resolvePrePostagemServiceCode(order, config);
+    const payload = buildPrePostagemPayload(order, {
+      sender,
+      recipient,
+      packageInfo,
+      serviceCode,
+    });
 
-  return {
-    tracking_code: trackingCode,
-    prepostagem_id: prepostagemId,
-    service_code: body.codigoServico || payload.codigoServico,
-    status: body.descStatusAtual || body.statusAtual || null,
-    raw: body,
-  };
+    const created = await correiosApiFetch('/v1/prepostagens', {
+      method: 'POST',
+      token,
+      body: payload,
+    });
+
+    if (!created.ok) {
+      throwCorreiosError({
+        message: 'Os Correios recusaram a criação da pré-postagem.',
+        details: [
+          extractCorreiosError(created.data, created.status),
+          `Serviço enviado: ${serviceCode}`,
+          'Confira remetente, destinatário, CEP e se o serviço está liberado no cartão/contrato.',
+        ],
+        step: 'criar_prepostagem',
+        status: created.status,
+        raw: created.data,
+      });
+    }
+
+    let body = created.data || {};
+    let trackingCode = extractTrackingCodeFromPayload(body);
+    const prepostagemId = body.id || body.idPrePostagem || body.idPrepostagem || null;
+
+    // Às vezes o create devolve só o id; o código surge na consulta ou ao emitir o rótulo
+    if (!trackingCode && prepostagemId) {
+      const refreshed = await fetchPrePostagemById(token, prepostagemId);
+      if (refreshed) {
+        body = { ...body, ...refreshed };
+        trackingCode = extractTrackingCodeFromPayload(refreshed);
+      }
+    }
+
+    let rotuloRaw = null;
+    if (!trackingCode && prepostagemId) {
+      const fromRotulo = await requestRotuloAndResolveCode(token, prepostagemId);
+      rotuloRaw = fromRotulo.raw;
+      if (fromRotulo.code) {
+        trackingCode = fromRotulo.code;
+        body = { ...body, rotulo: fromRotulo.raw };
+      } else {
+        console.warn('[Correios] Pré-postagem sem codigoObjeto', {
+          prepostagemId,
+          status: body.statusAtual || body.descStatusAtual,
+          createKeys: Object.keys(created.data || {}),
+          rotulo: fromRotulo.raw,
+        });
+      }
+    }
+
+    if (!trackingCode) {
+      const statusLabel = body.statusAtual || body.descStatusAtual || 'desconhecido';
+      const rotuloMsgs = collectCorreiosMessages(rotuloRaw);
+      throwCorreiosError({
+        message: 'A pré-postagem foi criada, mas o código de rastreio não foi gerado.',
+        details: [
+          prepostagemId ? `ID da pré-postagem: ${prepostagemId}` : null,
+          `Status na API: ${statusLabel}`,
+          `Serviço: ${serviceCode}`,
+          ...rotuloMsgs,
+          'Verifique no CWS: saldo de etiquetas do cartão e liberação do serviço no contrato.',
+          'Depois tente novamente em alguns segundos.',
+        ].filter(Boolean),
+        step: 'codigo_objeto',
+        raw: { create: body, rotulo: rotuloRaw },
+      });
+    }
+
+    return {
+      tracking_code: trackingCode,
+      prepostagem_id: prepostagemId,
+      service_code: body.codigoServico || payload.codigoServico,
+      status: body.descStatusAtual || body.statusAtual || null,
+      raw: body,
+    };
+  } catch (err) {
+    if (err?.code === 'CORREIOS_PREPOSTAGEM') throw err;
+
+    const details = collectCorreiosMessages(err?.raw || err?.body || err?.details);
+    if (err?.message && !details.includes(err.message)) {
+      details.unshift(err.message);
+    }
+
+    throwCorreiosError({
+      message: err?.message && err.message !== 'null'
+        ? err.message
+        : 'Não foi possível gerar o código Correios.',
+      details: details.length
+        ? details
+        : ['Erro inesperado ao falar com a API dos Correios. Tente novamente.'],
+      step: err?.step || 'desconhecido',
+      status: err?.status || null,
+      raw: err?.raw || null,
+    });
+  }
 }

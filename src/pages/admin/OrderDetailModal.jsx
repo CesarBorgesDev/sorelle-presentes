@@ -13,7 +13,7 @@ import {
   formatOrderDate,
   formatMoney,
 } from '@/lib/orderLabels';
-import { ExternalLink, Loader2, Printer, ScanBarcode, Trash2, X } from 'lucide-react';
+import { AlertCircle, ExternalLink, Loader2, Printer, ScanBarcode, Trash2, X } from 'lucide-react';
 
 const STATUS_OPTIONS = ['pendente', 'confirmado', 'em_preparo', 'enviado', 'entregue', 'cancelado'];
 const PAYMENT_STATUS_OPTIONS = ['aguardando_pagamento', 'pago', 'recusado', 'cancelado'];
@@ -25,7 +25,7 @@ export default function OrderDetailModal({ order, onClose, onUpdated, onDeleted 
   const [cieloAuthorization, setCieloAuthorization] = useState(order.cielo_authorization_code || '');
   const [tracking, setTracking] = useState(null);
   const [trackingError, setTrackingError] = useState('');
-  const [trackingCodeError, setTrackingCodeError] = useState('');
+  const [trackingCodeError, setTrackingCodeError] = useState(null);
   const [labelUrl, setLabelUrl] = useState(order.shipping_label_url || '');
   const [hasInvoicePdf, setHasInvoicePdf] = useState(Boolean(order.has_invoice_pdf));
   const [hasInvoiceXml, setHasInvoiceXml] = useState(Boolean(order.has_invoice_xml));
@@ -39,7 +39,7 @@ export default function OrderDetailModal({ order, onClose, onUpdated, onDeleted 
     setHasInvoiceXml(Boolean(order.has_invoice_xml));
     setTracking(null);
     setTrackingError('');
-    setTrackingCodeError('');
+    setTrackingCodeError(null);
   }, [order]);
 
   const updateMutation = useMutation({
@@ -96,10 +96,16 @@ export default function OrderDetailModal({ order, onClose, onUpdated, onDeleted 
       const code = result.tracking_code || '';
       setTrackingCode(code);
       if (!code) {
-        setTrackingCodeError('A API respondeu sem código de rastreio. Tente novamente ou verifique o CWS.');
+        setTrackingCodeError({
+          message: 'A API respondeu sem código de rastreio.',
+          details: [
+            'A pré-postagem pode ter sido criada sem atribuir o objeto.',
+            'Verifique saldo de etiquetas no CWS e tente novamente.',
+          ],
+        });
         return;
       }
-      setTrackingCodeError('');
+      setTrackingCodeError(null);
       if (result.label_url) {
         setLabelUrl(result.label_url);
       }
@@ -109,7 +115,24 @@ export default function OrderDetailModal({ order, onClose, onUpdated, onDeleted 
       }
     },
     onError: (err) => {
-      setTrackingCodeError(err?.body?.message || err.message || 'Erro ao gerar código Correios');
+      const body = err?.body || {};
+      const message = body.message || err.message || 'Erro ao gerar código Correios';
+      const details = Array.isArray(body.details)
+        ? body.details.filter(Boolean)
+        : Array.isArray(body.msgs)
+          ? body.msgs.filter(Boolean)
+          : [];
+
+      // Evita mostrar só "null" / genérico sem contexto
+      const safeMessage = !message || message === 'null' || message === 'undefined'
+        ? 'Não foi possível gerar o código Correios.'
+        : message;
+
+      setTrackingCodeError({
+        message: safeMessage,
+        details: details.filter((item) => item && item !== safeMessage),
+        step: body.step || null,
+      });
     },
   });
 
@@ -303,13 +326,41 @@ export default function OrderDetailModal({ order, onClose, onUpdated, onDeleted 
             </div>
 
             {trackingCodeError && (
-              <p className="font-body text-xs text-destructive">{trackingCodeError}</p>
+              <div className="p-3 rounded-sm border border-destructive/40 bg-destructive/5 space-y-2">
+                <div className="flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 mt-0.5 shrink-0 text-destructive" />
+                  <div className="min-w-0 space-y-1">
+                    <p className="font-body text-sm text-destructive font-medium">
+                      {typeof trackingCodeError === 'string'
+                        ? trackingCodeError
+                        : trackingCodeError.message}
+                    </p>
+                    {typeof trackingCodeError === 'object' && trackingCodeError.step && (
+                      <p className="font-body text-[11px] text-muted-foreground">
+                        Etapa: {trackingCodeError.step}
+                      </p>
+                    )}
+                    {typeof trackingCodeError === 'object'
+                      && Array.isArray(trackingCodeError.details)
+                      && trackingCodeError.details.length > 0 && (
+                      <ul className="list-disc pl-4 space-y-1 font-body text-xs text-foreground/90">
+                        {trackingCodeError.details.map((detail) => (
+                          <li key={detail}>{detail}</li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                </div>
+              </div>
             )}
 
             <div className="flex flex-wrap gap-3">
               <button
                 type="button"
-                onClick={() => trackingCodeMutation.mutate()}
+                onClick={() => {
+                  setTrackingCodeError(null);
+                  trackingCodeMutation.mutate();
+                }}
                 disabled={trackingCodeMutation.isPending}
                 className="inline-flex items-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground rounded-sm font-body text-sm hover:opacity-90 disabled:opacity-50"
               >

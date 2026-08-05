@@ -127,7 +127,19 @@ router.post('/:id/codigo-correios', async (req, res) => {
     });
   } catch (err) {
     console.error('Erro ao gerar código Correios:', err);
-    res.status(400).json({ message: err.message || 'Erro ao gerar código Correios' });
+    const details = Array.isArray(err?.details)
+      ? err.details.filter(Boolean)
+      : [];
+    const message = (err?.message && err.message !== 'null')
+      ? err.message
+      : (details[0] || 'Erro ao gerar código Correios');
+
+    res.status(400).json({
+      message,
+      details,
+      step: err?.step || null,
+      correios_status: err?.status || null,
+    });
   }
 });
 
