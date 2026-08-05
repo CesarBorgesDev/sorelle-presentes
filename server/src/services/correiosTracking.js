@@ -1,6 +1,6 @@
 import { getSetting } from './settings.js';
 import { getCorreiosConfig } from './correios.js';
-import { getCorreiosApiToken } from './correiosAuth.js';
+import { getCorreiosApiBase, getCorreiosApiToken } from './correiosAuth.js';
 
 const TRACKING_URL_BASE = 'https://rastreamento.correios.com.br/app/index.php';
 
@@ -60,7 +60,7 @@ export async function trackCorreiosPackage(trackingCode) {
     }
 
     const response = await fetch(
-      `https://api.correios.com.br/srorastro/v1/objetos/${encodeURIComponent(code)}?resultado=T`,
+      `${getCorreiosApiBase()}/srorastro/v1/objetos/${encodeURIComponent(code)}?resultado=T`,
       {
         headers: {
           Accept: 'application/json',

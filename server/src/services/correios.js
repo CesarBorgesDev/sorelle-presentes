@@ -1,4 +1,10 @@
 import { getSetting } from './settings.js';
+import {
+  getCorreiosApiBase,
+  getCorreiosApiCredentials,
+  getCorreiosApiToken,
+  getCorreiosContractContext,
+} from './correiosAuth.js';
 import { getRodonavesConfig, quoteRodonavesShipping } from './rodonaves.js';
 
 const DEFAULT_ORIGIN_ZIP = '01310100';
@@ -86,10 +92,16 @@ export async function getCorreiosConfig() {
 
   const companyCode = ((await getSetting('correios_company_code')) || process.env.CORREIOS_COMPANY_CODE || '').trim();
   const password = ((await getSetting('correios_password')) || process.env.CORREIOS_PASSWORD || '').trim();
-  const hasContract = Boolean(companyCode && password);
+  const { user: apiUser, password: apiPassword } = await getCorreiosApiCredentials();
+  const { postCard, contract, dr } = await getCorreiosContractContext();
+  const hasApiCredentials = Boolean(apiUser && apiPassword);
+  const hasRestContract = Boolean(hasApiCredentials && (postCard || contract));
+  const hasLegacyContract = Boolean(companyCode && password);
+  const hasContract = hasRestContract || hasLegacyContract;
   const fallbackMode = getFallbackMode() || (process.env.NODE_ENV !== 'production' ? 'auto' : 'off');
   const carrier = await getCarrierSettings();
 
+  // Códigos de contrato (PAC 03298 / SEDEX 03220) quando há contrato REST ou legado
   const correiosServices = hasContract
     ? [
         { id: 'pac', code: CORREIOS_SERVICES.pac.contractCode, label: CORREIOS_SERVICES.pac.label },
@@ -105,6 +117,12 @@ export async function getCorreiosConfig() {
     companyCode,
     password,
     hasContract,
+    hasApiCredentials,
+    hasRestContract,
+    hasLegacyContract,
+    contractNumber: contract || companyCode || '',
+    contractDr: dr,
+    postCard,
     fallbackMode,
     carrier,
     defaultWeightKg: Number(process.env.CORREIOS_DEFAULT_WEIGHT_KG || DEFAULT_WEIGHT_KG),
@@ -248,7 +266,172 @@ function buildEstimatedShippingQuote({ cfg, destinationZip, packageInfo, fallbac
   };
 }
 
-async function fetchCorreiosApiQuote({ destinationZip, packageInfo, config }) {
+function parseApiErrorMessage(body, status) {
+  if (Array.isArray(body?.msgs) && body.msgs.length) return body.msgs.join('; ');
+  if (body?.message) return String(body.message);
+  if (body?.causa) return String(body.causa);
+  return `Correios retornou erro ${status}`;
+}
+
+async function fetchWithTimeout(url, options = {}, timeoutMs = 15000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } catch (err) {
+    if (err.name === 'AbortError') {
+      throw new Error('Correios demorou para responder. Tente novamente.');
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * Cotação via API REST Preço + Prazo (Bearer token CWS).
+ * Docs: https://api.correios.com.br/preco/v1 e /prazo/v1
+ */
+async function fetchCorreiosRestQuote({ destinationZip, packageInfo, config }) {
+  const cfg = config;
+  const dest = onlyDigits(destinationZip).slice(0, 8);
+
+  if (dest.length !== 8) {
+    throw new Error('CEP de destino inválido');
+  }
+  if (!cfg.originZip || cfg.originZip.length !== 8) {
+    throw new Error('CEP de origem não configurado. Defina em Configurações → Frete.');
+  }
+
+  const token = await getCorreiosApiToken({ forPostagem: false });
+  if (!token) {
+    throw new Error('Credenciais da API Correios não configuradas.');
+  }
+
+  const base = getCorreiosApiBase();
+  const weightGrams = String(Math.max(1, Math.round((Number(packageInfo.weightKg) || DEFAULT_WEIGHT_KG) * 1000)));
+  const length = String(Math.max(16, Math.round(packageInfo.length || DEFAULT_LENGTH)));
+  const width = String(Math.max(11, Math.round(packageInfo.width || DEFAULT_WIDTH)));
+  const height = String(Math.max(2, Math.round(packageInfo.height || DEFAULT_HEIGHT)));
+  const timeoutMs = shouldAutoFallback() ? 8000 : 15000;
+
+  const services = correiosServicesOnly(cfg.services);
+  const options = await Promise.all(services.map(async (service) => {
+    const priceParams = new URLSearchParams({
+      cepOrigem: cfg.originZip,
+      cepDestino: dest,
+      psObjeto: weightGrams,
+      tpObjeto: '2',
+      comprimento: length,
+      largura: width,
+      altura: height,
+    });
+    if (cfg.contractNumber) priceParams.set('nuContrato', cfg.contractNumber);
+    if (cfg.contractDr != null) priceParams.set('nuDR', String(cfg.contractDr));
+
+    try {
+      const [priceRes, prazoRes] = await Promise.all([
+        fetchWithTimeout(
+          `${base}/preco/v1/nacional/${encodeURIComponent(service.code)}?${priceParams}`,
+          {
+            headers: {
+              Accept: 'application/json',
+              Authorization: `Bearer ${token}`,
+            },
+          },
+          timeoutMs
+        ),
+        fetchWithTimeout(
+          `${base}/prazo/v1/nacional/${encodeURIComponent(service.code)}?${new URLSearchParams({
+            cepOrigem: cfg.originZip,
+            cepDestino: dest,
+          })}`,
+          {
+            headers: {
+              Accept: 'application/json',
+              Authorization: `Bearer ${token}`,
+            },
+          },
+          timeoutMs
+        ),
+      ]);
+
+      const priceBody = await priceRes.json().catch(() => ({}));
+      const prazoBody = await prazoRes.json().catch(() => ({}));
+
+      if (!priceRes.ok) {
+        return {
+          id: service.id,
+          service_code: service.code,
+          label: service.label,
+          price: null,
+          deadline_days: null,
+          available: false,
+          error: parseApiErrorMessage(priceBody, priceRes.status),
+        };
+      }
+
+      const price = parseBrazilianMoney(priceBody.pcFinal);
+      const deadline = Number(prazoBody.prazoEntrega);
+      if (price == null || price < 0) {
+        return {
+          id: service.id,
+          service_code: service.code,
+          label: service.label,
+          price: null,
+          deadline_days: null,
+          available: false,
+          error: 'Preço indisponível para este CEP',
+        };
+      }
+
+      return {
+        id: service.id,
+        service_code: service.code,
+        label: service.label,
+        price,
+        deadline_days: Number.isFinite(deadline) && deadline > 0 ? deadline : null,
+        available: true,
+      };
+    } catch (err) {
+      return {
+        id: service.id,
+        service_code: service.code,
+        label: service.label,
+        price: null,
+        deadline_days: null,
+        available: false,
+        error: err.message || 'Falha ao cotar serviço',
+      };
+    }
+  }));
+
+  // Se prazo falhou mas preço ok, mantém disponível com prazo nulo → usa estimativa mínima
+  for (const option of options) {
+    if (option.available && (option.deadline_days == null || option.deadline_days <= 0)) {
+      option.deadline_days = option.id === 'sedex' ? 2 : 6;
+    }
+  }
+
+  const finalOptions = appendCarrierOption(options, cfg.carrier, packageInfo, roundMoney);
+  const availableOptions = finalOptions.filter((o) => o.available);
+  if (availableOptions.length === 0) {
+    const firstError = options.find((o) => o.error)?.error || 'Não foi possível calcular o frete';
+    throw new Error(firstError);
+  }
+
+  return {
+    origin_zip: cfg.originZip,
+    destination_zip: dest,
+    package: packageInfo,
+    options: finalOptions,
+    estimated: false,
+    source: 'correios_rest',
+  };
+}
+
+/** Cotação legada CalcPrecoPrazo (SOAP/XML) — fallback quando REST não está disponível. */
+async function fetchCorreiosLegacyQuote({ destinationZip, packageInfo, config }) {
   const cfg = config;
   const dest = onlyDigits(destinationZip).slice(0, 8);
 
@@ -262,8 +445,8 @@ async function fetchCorreiosApiQuote({ destinationZip, packageInfo, config }) {
 
   const serviceCodes = correiosServicesOnly(cfg.services).map((s) => s.code).join(',');
   const params = new URLSearchParams({
-    nCdEmpresa: cfg.companyCode,
-    sDsSenha: cfg.password,
+    nCdEmpresa: cfg.companyCode || '',
+    sDsSenha: cfg.password || '',
     nCdServico: serviceCodes,
     sCepOrigem: cfg.originZip,
     sCepDestino: dest,
@@ -280,23 +463,16 @@ async function fetchCorreiosApiQuote({ destinationZip, packageInfo, config }) {
   });
 
   const url = `https://ws.correios.com.br/calculador/CalcPrecoPrazo.aspx?${params.toString()}`;
-  const controller = new AbortController();
   const timeoutMs = shouldAutoFallback() ? 8000 : 15000;
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   let response;
   try {
-    response = await fetch(url, {
+    response = await fetchWithTimeout(url, {
       headers: { Accept: 'application/xml, text/xml' },
-      signal: controller.signal,
-    });
+    }, timeoutMs);
   } catch (err) {
-    if (err.name === 'AbortError') {
-      throw new Error('Correios demorou para responder. Tente novamente.');
-    }
+    if (/demorou para responder/i.test(err.message)) throw err;
     throw new Error('Não foi possível conectar aos Correios');
-  } finally {
-    clearTimeout(timer);
   }
 
   if (!response.ok) {
@@ -343,7 +519,26 @@ async function fetchCorreiosApiQuote({ destinationZip, packageInfo, config }) {
     package: packageInfo,
     options: finalOptions,
     estimated: false,
+    source: 'correios_legacy',
   };
+}
+
+async function fetchCorreiosApiQuote({ destinationZip, packageInfo, config }) {
+  const cfg = config;
+
+  if (cfg.hasRestContract || cfg.hasApiCredentials) {
+    try {
+      return await fetchCorreiosRestQuote({ destinationZip, packageInfo, config: cfg });
+    } catch (err) {
+      if (cfg.hasLegacyContract) {
+        console.warn('[Correios] REST indisponível, tentando CalcPrecoPrazo:', err.message);
+        return fetchCorreiosLegacyQuote({ destinationZip, packageInfo, config: cfg });
+      }
+      throw err;
+    }
+  }
+
+  return fetchCorreiosLegacyQuote({ destinationZip, packageInfo, config: cfg });
 }
 
 async function tryAppendRodonavesOption(quote, { packageInfo, invoiceValue }) {

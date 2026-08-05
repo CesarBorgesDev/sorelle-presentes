@@ -102,6 +102,9 @@ export default function AdminSettings() {
   const [correiosPostCard, setCorreiosPostCard] = useState('');
   const [correiosContractNumber, setCorreiosContractNumber] = useState('');
   const [correiosContractDr, setCorreiosContractDr] = useState('');
+  const [correiosTestMode, setCorreiosTestMode] = useState('auto');
+  const [correiosTestZip, setCorreiosTestZip] = useState('01310100');
+  const [correiosTestResult, setCorreiosTestResult] = useState(null);
   const [carrierEnabled, setCarrierEnabled] = useState(false);
   const [carrierName, setCarrierName] = useState('Transportadora');
   const [carrierPrice, setCarrierPrice] = useState('');
@@ -176,6 +179,8 @@ export default function AdminSettings() {
       setCorreiosSenderDistrict(data.correios.sender_district || '');
       setCorreiosSenderCnpj(data.correios.sender_cnpj || '');
       setCorreiosContractNumber(data.correios.contract_number || '');
+      setCorreiosContractDr(data.correios.contract_dr || '');
+      setCorreiosApiUser(data.correios.api_user || '');
       if (data.correios.carrier) {
         setCarrierEnabled(Boolean(data.correios.carrier.enabled));
         setCarrierName(data.correios.carrier.label || 'Transportadora');
@@ -197,6 +202,16 @@ export default function AdminSettings() {
       setStorePickupDeadlineDays(String(data.store_pickup.deadline_days || 3));
     }
   }, [data?.image_model, data?.product_sort_order, data?.cielo, data?.payment, data?.sipag, data?.mercado_pago, data?.correios, data?.rodonaves, data?.store_pickup]);
+
+  const correiosTestMutation = useMutation({
+    mutationFn: (payload) => api.settings.testCorreios(payload),
+    onSuccess: (result) => setCorreiosTestResult(result),
+    onError: (err) => setCorreiosTestResult({
+      ok: false,
+      message: err?.body?.message || err.message || 'Falha ao testar API dos Correios',
+      steps: err?.body?.steps || [],
+    }),
+  });
 
   const mutation = useMutation({
     mutationFn: (payload) => api.settings.update(payload),
@@ -220,6 +235,7 @@ export default function AdminSettings() {
       setPixKey('');
       setCorreiosPassword('');
       setCorreiosApiPassword('');
+      setCorreiosPostCard('');
       setRodonavesPassword('');
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
@@ -650,394 +666,544 @@ export default function AdminSettings() {
                 </p>
               </div>
 
-            <div className="p-4 border border-border rounded-sm space-y-4 bg-secondary/20">
-              <label className="flex items-center gap-3 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={storePickupEnabled}
-                  onChange={(e) => setStorePickupEnabled(e.target.checked)}
-                  className="w-4 h-4 rounded"
-                />
-                <span className="font-body text-sm text-foreground">Oferecer retirada na loja no checkout</span>
-              </label>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div>
-                  <label className={labelClass}>Nome da opção</label>
-                  <input className={inputClass} value={storePickupLabel} onChange={(e) => setStorePickupLabel(e.target.value)} />
-                </div>
-                <div>
-                  <label className={labelClass}>Prazo (dias úteis)</label>
-                  <input type="number" min="1" className={inputClass} value={storePickupDeadlineDays} onChange={(e) => setStorePickupDeadlineDays(e.target.value)} />
-                </div>
-              </div>
-              <div>
-                <label className={labelClass}>Endereço da loja</label>
-                <input className={inputClass} value={storePickupAddress} onChange={(e) => setStorePickupAddress(e.target.value)} placeholder="Rua, número, cidade - UF" />
-              </div>
-              <div>
-                <label className={labelClass}>Instruções para o cliente</label>
-                <textarea rows={2} className={inputClass} value={storePickupInstructions} onChange={(e) => setStorePickupInstructions(e.target.value)} placeholder="Ex: Aguarde confirmação por e-mail antes de retirar." />
-              </div>
-            </div>
+              <Tabs defaultValue="retirada" className="w-full">
+                <TabsList className="w-full h-auto flex flex-wrap justify-start gap-1 p-1 mb-6 bg-secondary/40">
+                  <TabsTrigger value="retirada" className="gap-1.5 font-body text-xs sm:text-sm px-3 py-2">
+                    <Store className="w-3.5 h-3.5" />
+                    Retirada
+                  </TabsTrigger>
+                  <TabsTrigger value="correios" className="gap-1.5 font-body text-xs sm:text-sm px-3 py-2">
+                    <Truck className="w-3.5 h-3.5" />
+                    Correios
+                  </TabsTrigger>
+                  <TabsTrigger value="pre_postagem" className="gap-1.5 font-body text-xs sm:text-sm px-3 py-2">
+                    <Key className="w-3.5 h-3.5" />
+                    API Correios
+                  </TabsTrigger>
+                  <TabsTrigger value="remetente" className="gap-1.5 font-body text-xs sm:text-sm px-3 py-2">
+                    Remetente
+                  </TabsTrigger>
+                  <TabsTrigger value="transportadora" className="gap-1.5 font-body text-xs sm:text-sm px-3 py-2">
+                    Transportadora
+                  </TabsTrigger>
+                  <TabsTrigger value="rodonaves" className="gap-1.5 font-body text-xs sm:text-sm px-3 py-2">
+                    Rodonaves
+                  </TabsTrigger>
+                </TabsList>
 
-            <div>
-              <label className={labelClass}>CEP de origem *</label>
-              <input
-                type="text"
-                className={inputClass}
-                value={correiosOriginZip}
-                onChange={(e) => setCorreiosOriginZip(e.target.value.replace(/\D/g, '').slice(0, 8))}
-                placeholder="01310100"
-              />
-              <p className="font-body text-xs text-muted-foreground mt-1">
-                CEP de onde os produtos são despachados.
-              </p>
-            </div>
-
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div>
-                <label className={labelClass}>Código da empresa (opcional)</label>
-                <input
-                  type="text"
-                  className={inputClass}
-                  value={correiosCompanyCode}
-                  onChange={(e) => setCorreiosCompanyCode(e.target.value)}
-                  placeholder="Contrato Correios"
-                  autoComplete="off"
-                />
-              </div>
-              <div>
-                <label className={labelClass}>Senha do contrato (opcional)</label>
-                <input
-                  type="password"
-                  className={inputClass}
-                  value={correiosPassword}
-                  onChange={(e) => setCorreiosPassword(e.target.value)}
-                  placeholder="Senha API Correios"
-                  autoComplete="new-password"
-                />
-              </div>
-            </div>
-
-            <div className="pt-4 border-t border-border space-y-4">
-              <div>
-                <h3 className="font-display text-base tracking-wide text-foreground">Pré-postagem (gerar código)</h3>
-                <p className="font-body text-sm text-muted-foreground mt-1">
-                  Credenciais do Meu Correios/CWS e cartão de postagem para gerar o rastreio automaticamente no admin.
-                </p>
-              </div>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div>
-                  <label className={labelClass}>Cartão de postagem</label>
-                  <input
-                    type="text"
-                    className={inputClass}
-                    value={correiosPostCard}
-                    onChange={(e) => setCorreiosPostCard(e.target.value.replace(/\D/g, '').slice(0, 20))}
-                    placeholder={correios?.post_card_masked || 'Número do cartão'}
-                    autoComplete="off"
-                  />
-                </div>
-                <div>
-                  <label className={labelClass}>Contrato comercial</label>
-                  <input
-                    type="text"
-                    className={inputClass}
-                    value={correiosContractNumber}
-                    onChange={(e) => setCorreiosContractNumber(e.target.value)}
-                    placeholder={correios?.contract_number || 'Número do contrato'}
-                    autoComplete="off"
-                  />
-                </div>
-                <div>
-                  <label className={labelClass}>DR / Superintendência (opcional)</label>
-                  <input
-                    type="text"
-                    className={inputClass}
-                    value={correiosContractDr}
-                    onChange={(e) => setCorreiosContractDr(e.target.value.replace(/\D/g, '').slice(0, 2))}
-                    placeholder="Ex.: 10"
-                  />
-                </div>
-                <div>
-                  <label className={labelClass}>Usuário API Correios</label>
-                  <input
-                    type="text"
-                    className={inputClass}
-                    value={correiosApiUser}
-                    onChange={(e) => setCorreiosApiUser(e.target.value)}
-                    placeholder="IdCorreios / Meu Correios"
-                    autoComplete="off"
-                  />
-                </div>
-                <div className="sm:col-span-2">
-                  <label className={labelClass}>Senha API Correios</label>
-                  <input
-                    type="password"
-                    className={inputClass}
-                    value={correiosApiPassword}
-                    onChange={(e) => setCorreiosApiPassword(e.target.value)}
-                    placeholder="Código de acesso gerado no CWS"
-                    autoComplete="new-password"
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="pt-4 border-t border-border space-y-4">
-              <div>
-                <h3 className="font-display text-base tracking-wide text-foreground">Remetente (etiqueta)</h3>
-                <p className="font-body text-sm text-muted-foreground mt-1">
-                  Dados enviados na pré-postagem e impressos na etiqueta.
-                </p>
-              </div>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="sm:col-span-2">
-                  <label className={labelClass}>Nome do remetente</label>
-                  <input
-                    type="text"
-                    className={inputClass}
-                    value={correiosSenderName}
-                    onChange={(e) => setCorreiosSenderName(e.target.value)}
-                    placeholder="Sorelle Presentes"
-                  />
-                </div>
-                <div className="sm:col-span-2">
-                  <label className={labelClass}>Logradouro</label>
-                  <input
-                    type="text"
-                    className={inputClass}
-                    value={correiosSenderStreet}
-                    onChange={(e) => setCorreiosSenderStreet(e.target.value)}
-                    placeholder="Rua Exemplo"
-                  />
-                </div>
-                <div>
-                  <label className={labelClass}>Número</label>
-                  <input
-                    type="text"
-                    className={inputClass}
-                    value={correiosSenderNumber}
-                    onChange={(e) => setCorreiosSenderNumber(e.target.value)}
-                    placeholder="123"
-                  />
-                </div>
-                <div>
-                  <label className={labelClass}>Bairro</label>
-                  <input
-                    type="text"
-                    className={inputClass}
-                    value={correiosSenderDistrict}
-                    onChange={(e) => setCorreiosSenderDistrict(e.target.value)}
-                    placeholder="Centro"
-                  />
-                </div>
-                <div>
-                  <label className={labelClass}>Complemento</label>
-                  <input
-                    type="text"
-                    className={inputClass}
-                    value={correiosSenderComplement}
-                    onChange={(e) => setCorreiosSenderComplement(e.target.value)}
-                  />
-                </div>
-                <div>
-                  <label className={labelClass}>CNPJ (opcional)</label>
-                  <input
-                    type="text"
-                    className={inputClass}
-                    value={correiosSenderCnpj}
-                    onChange={(e) => setCorreiosSenderCnpj(e.target.value.replace(/\D/g, '').slice(0, 14))}
-                  />
-                </div>
-                <div>
-                  <label className={labelClass}>Cidade</label>
-                  <input
-                    type="text"
-                    className={inputClass}
-                    value={correiosSenderCity}
-                    onChange={(e) => setCorreiosSenderCity(e.target.value)}
-                  />
-                </div>
-                <div>
-                  <label className={labelClass}>UF</label>
-                  <input
-                    type="text"
-                    className={inputClass}
-                    value={correiosSenderState}
-                    onChange={(e) => setCorreiosSenderState(e.target.value.toUpperCase().slice(0, 2))}
-                    placeholder="SP"
-                  />
-                </div>
-                <div>
-                  <label className={labelClass}>Telefone</label>
-                  <input
-                    type="text"
-                    className={inputClass}
-                    value={correiosSenderPhone}
-                    onChange={(e) => setCorreiosSenderPhone(e.target.value)}
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="pt-4 border-t border-border space-y-4">
-              <div>
-                <h3 className="font-display text-base tracking-wide text-foreground">Transportadora</h3>
-                <p className="font-body text-sm text-muted-foreground mt-1">
-                  Frete fixo ou calculado por peso, sem integração com API. Aparece no checkout junto com PAC/SEDEX.
-                </p>
-              </div>
-
-              <label className="flex items-center gap-3 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={carrierEnabled}
-                  onChange={(e) => setCarrierEnabled(e.target.checked)}
-                  className="rounded border-border"
-                />
-                <span className="font-body text-sm text-foreground">Oferecer transportadora no checkout</span>
-              </label>
-
-              {carrierEnabled && (
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="sm:col-span-2">
-                    <label className={labelClass}>Nome exibido ao cliente</label>
-                    <input
-                      type="text"
-                      className={inputClass}
-                      value={carrierName}
-                      onChange={(e) => setCarrierName(e.target.value)}
-                      placeholder="Transportadora"
-                    />
+                <TabsContent value="retirada" className="space-y-4 mt-0 focus-visible:outline-none">
+                  <div className="p-4 border border-border rounded-sm space-y-4 bg-secondary/20">
+                    <label className="flex items-center gap-3 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={storePickupEnabled}
+                        onChange={(e) => setStorePickupEnabled(e.target.checked)}
+                        className="w-4 h-4 rounded"
+                      />
+                      <span className="font-body text-sm text-foreground">Oferecer retirada na loja no checkout</span>
+                    </label>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div>
+                        <label className={labelClass}>Nome da opção</label>
+                        <input className={inputClass} value={storePickupLabel} onChange={(e) => setStorePickupLabel(e.target.value)} />
+                      </div>
+                      <div>
+                        <label className={labelClass}>Prazo (dias úteis)</label>
+                        <input type="number" min="1" className={inputClass} value={storePickupDeadlineDays} onChange={(e) => setStorePickupDeadlineDays(e.target.value)} />
+                      </div>
+                    </div>
+                    <div>
+                      <label className={labelClass}>Endereço da loja</label>
+                      <input className={inputClass} value={storePickupAddress} onChange={(e) => setStorePickupAddress(e.target.value)} placeholder="Rua, número, cidade - UF" />
+                    </div>
+                    <div>
+                      <label className={labelClass}>Instruções para o cliente</label>
+                      <textarea rows={2} className={inputClass} value={storePickupInstructions} onChange={(e) => setStorePickupInstructions(e.target.value)} placeholder="Ex: Aguarde confirmação por e-mail antes de retirar." />
+                    </div>
                   </div>
-                  <div>
-                    <label className={labelClass}>Valor do frete (R$)</label>
-                    <input
-                      type="text"
-                      className={inputClass}
-                      value={carrierPrice}
-                      onChange={(e) => setCarrierPrice(e.target.value.replace(/[^\d,.]/g, ''))}
-                      placeholder="Ex.: 35,00 (vazio = por peso)"
-                    />
-                  </div>
-                  <div>
-                    <label className={labelClass}>Prazo (dias úteis)</label>
-                    <input
-                      type="number"
-                      min={1}
-                      max={60}
-                      className={inputClass}
-                      value={carrierDeadlineDays}
-                      onChange={(e) => setCarrierDeadlineDays(e.target.value)}
-                    />
-                  </div>
-                </div>
-              )}
-            </div>
+                </TabsContent>
 
-            <div className="pt-4 border-t border-border space-y-4">
-              <div>
-                <h3 className="font-display text-base tracking-wide text-foreground">Rodonaves (integração API)</h3>
-                <p className="font-body text-sm text-muted-foreground mt-1">
-                  Cotação de frete em tempo real pela API da Rodonaves (RTE). É preciso ter cadastro
-                  como cliente Rodonaves e credenciais de API fornecidas pela transportadora.
-                </p>
-              </div>
-
-              <label className="flex items-center gap-3 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={rodonavesEnabled}
-                  onChange={(e) => setRodonavesEnabled(e.target.checked)}
-                  className="rounded border-border"
-                />
-                <span className="font-body text-sm text-foreground">Oferecer Rodonaves no checkout</span>
-              </label>
-
-              {rodonavesEnabled && !rodonaves?.is_ready && (
-                <div className="flex items-start gap-2 p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 rounded-sm">
-                  <AlertCircle className="w-4 h-4 mt-0.5 shrink-0 text-amber-600 dark:text-amber-400" />
-                  <p className="font-body text-xs text-amber-800 dark:text-amber-300">
-                    Preencha usuário, senha e CNPJ para a cotação funcionar. Enquanto isso, a opção
-                    Rodonaves não aparecerá no checkout.
-                  </p>
-                </div>
-              )}
-
-              {rodonavesEnabled && (
-                <div className="grid gap-4 sm:grid-cols-2">
+                <TabsContent value="correios" className="space-y-4 mt-0 focus-visible:outline-none">
                   <div>
-                    <label className={labelClass}>Usuário da API *</label>
-                    <input
-                      type="text"
-                      className={inputClass}
-                      value={rodonavesUsername}
-                      onChange={(e) => setRodonavesUsername(e.target.value)}
-                      placeholder="Usuário fornecido pela Rodonaves"
-                      autoComplete="off"
-                    />
-                  </div>
-                  <div>
-                    <label className={labelClass}>Senha da API *</label>
-                    <input
-                      type="password"
-                      className={inputClass}
-                      value={rodonavesPassword}
-                      onChange={(e) => setRodonavesPassword(e.target.value)}
-                      placeholder={rodonaves?.has_password ? rodonaves.password_masked || 'Senha salva' : 'Senha de acesso'}
-                      autoComplete="new-password"
-                    />
-                    {rodonaves?.has_password && (
-                      <p className="font-body text-xs text-muted-foreground mt-1">
-                        Já configurada. Preencha apenas para trocar.
-                      </p>
-                    )}
-                  </div>
-                  <div>
-                    <label className={labelClass}>CNPJ do cliente Rodonaves *</label>
-                    <input
-                      type="text"
-                      className={inputClass}
-                      value={rodonavesCnpj}
-                      onChange={(e) => setRodonavesCnpj(e.target.value.replace(/\D/g, '').slice(0, 14))}
-                      placeholder="Somente números"
-                      autoComplete="off"
-                    />
-                    <p className="font-body text-xs text-muted-foreground mt-1">
-                      CNPJ vinculado ao contrato/tabela negociada com a Rodonaves.
+                    <h3 className="font-display text-base tracking-wide text-foreground">Correios (PAC/SEDEX)</h3>
+                    <p className="font-body text-sm text-muted-foreground mt-1">
+                      CEP de origem para cotação. Com credenciais CWS na aba Pré-postagem, o frete usa a API REST Preço/Prazo.
                     </p>
                   </div>
                   <div>
-                    <label className={labelClass}>Nome exibido ao cliente</label>
+                    <label className={labelClass}>CEP de origem *</label>
                     <input
                       type="text"
                       className={inputClass}
-                      value={rodonavesLabel}
-                      onChange={(e) => setRodonavesLabel(e.target.value)}
-                      placeholder="Rodonaves"
+                      value={correiosOriginZip}
+                      onChange={(e) => setCorreiosOriginZip(e.target.value.replace(/\D/g, '').slice(0, 8))}
+                      placeholder="01310100"
                     />
+                    <p className="font-body text-xs text-muted-foreground mt-1">
+                      CEP de onde os produtos são despachados.
+                    </p>
                   </div>
-                </div>
-              )}
-            </div>
 
-            {correios && (
-              <p className="font-body text-xs text-muted-foreground">
-                Serviços: {correios.services?.map((s) => s.label).join(', ') || 'PAC, SEDEX'}
-                {correios.has_contract ? ' (com contrato)' : ' (varejo)'}
-                {correios.has_post_card ? ' · Cartão configurado' : ' · Sem cartão de postagem'}
-                {correios.has_api_credentials ? ' · API OK' : ' · API não configurada'}
-                {correios.fallback_mode && correios.fallback_mode !== 'off' && (
-                  <> · Fallback: <span className="font-mono">{correios.fallback_mode}</span> (env CORREIOS_FALLBACK)</>
-                )}
-              </p>
-            )}
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div>
+                      <label className={labelClass}>Código da empresa — legado (opcional)</label>
+                      <input
+                        type="text"
+                        className={inputClass}
+                        value={correiosCompanyCode}
+                        onChange={(e) => setCorreiosCompanyCode(e.target.value)}
+                        placeholder="CalcPrecoPrazo (fallback)"
+                        autoComplete="off"
+                      />
+                    </div>
+                    <div>
+                      <label className={labelClass}>Senha do contrato — legado (opcional)</label>
+                      <input
+                        type="password"
+                        className={inputClass}
+                        value={correiosPassword}
+                        onChange={(e) => setCorreiosPassword(e.target.value)}
+                        placeholder="Senha CalcPrecoPrazo"
+                        autoComplete="new-password"
+                      />
+                    </div>
+                  </div>
 
-            <div className="p-3 rounded-sm bg-secondary/50 border border-border font-body text-xs text-muted-foreground">
-              Se a API legada dos Correios não responder, o sistema usa frete estimado em desenvolvimento
-              (<span className="font-mono">CORREIOS_FALLBACK=auto</span>). Em produção, use <span className="font-mono">off</span> ou migre para a API REST com contrato.
-            </div>
+                  {correios && (
+                    <p className="font-body text-xs text-muted-foreground">
+                      Serviços: {correios.services?.map((s) => s.label).join(', ') || 'PAC, SEDEX'}
+                      {correios.has_rest_contract ? ' · API REST' : correios.has_legacy_contract ? ' · legado' : ' · varejo'}
+                      {correios.has_post_card ? ' · Cartão configurado' : ' · Sem cartão de postagem'}
+                      {correios.has_api_credentials ? ' · Credenciais CWS OK' : ' · API não configurada'}
+                      {correios.fallback_mode && correios.fallback_mode !== 'off' && (
+                        <> · Fallback: <span className="font-mono">{correios.fallback_mode}</span></>
+                      )}
+                    </p>
+                  )}
+
+                  <div className="p-3 rounded-sm bg-secondary/50 border border-border font-body text-xs text-muted-foreground">
+                    Prefira a API REST (usuário/senha CWS + cartão ou contrato na aba Pré-postagem). O CalcPrecoPrazo legado só entra como fallback.
+                    Em desenvolvimento, <span className="font-mono">CORREIOS_FALLBACK=auto</span> estima frete se a API falhar.
+                  </div>
+                </TabsContent>
+
+                <TabsContent value="pre_postagem" className="space-y-4 mt-0 focus-visible:outline-none">
+                  <div>
+                    <h3 className="font-display text-base tracking-wide text-foreground">API Correios (Token CWS)</h3>
+                    <p className="font-body text-sm text-muted-foreground mt-1">
+                      Autenticação com <span className="font-mono">Authorization: Basic</span> (usuário Meu Correios + código de acesso),
+                      conforme a{' '}
+                      <a
+                        href="https://api.correios.com.br/token/v3/api-docs"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="underline underline-offset-2 hover:text-foreground"
+                      >
+                        API Token
+                      </a>
+                      . Usado em cotação REST, pré-postagem e rastreio.
+                    </p>
+                  </div>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div>
+                      <label className={labelClass}>Usuário API (Meu Correios) *</label>
+                      <input
+                        type="text"
+                        className={inputClass}
+                        value={correiosApiUser}
+                        onChange={(e) => setCorreiosApiUser(e.target.value)}
+                        placeholder="IdCorreios / Meu Correios"
+                        autoComplete="off"
+                      />
+                    </div>
+                    <div>
+                      <label className={labelClass}>Código de acesso (CWS) *</label>
+                      <input
+                        type="password"
+                        className={inputClass}
+                        value={correiosApiPassword}
+                        onChange={(e) => setCorreiosApiPassword(e.target.value)}
+                        placeholder={correios?.has_api_credentials ? 'Salvo — preencha para trocar' : 'Gerado no portal CWS'}
+                        autoComplete="new-password"
+                      />
+                    </div>
+                    <div>
+                      <label className={labelClass}>Cartão de postagem</label>
+                      <input
+                        type="text"
+                        className={inputClass}
+                        value={correiosPostCard}
+                        onChange={(e) => setCorreiosPostCard(e.target.value.replace(/\D/g, '').slice(0, 20))}
+                        placeholder={correios?.post_card_masked || 'Número do cartão'}
+                        autoComplete="off"
+                      />
+                      <p className="font-body text-xs text-muted-foreground mt-1">
+                        Autentica em <span className="font-mono">/v1/autentica/cartaopostagem</span>
+                      </p>
+                    </div>
+                    <div>
+                      <label className={labelClass}>Contrato comercial</label>
+                      <input
+                        type="text"
+                        className={inputClass}
+                        value={correiosContractNumber}
+                        onChange={(e) => setCorreiosContractNumber(e.target.value)}
+                        placeholder={correios?.contract_number || 'Número do contrato'}
+                        autoComplete="off"
+                      />
+                      <p className="font-body text-xs text-muted-foreground mt-1">
+                        Autentica em <span className="font-mono">/v1/autentica/contrato</span>
+                      </p>
+                    </div>
+                    <div>
+                      <label className={labelClass}>DR / Superintendência (opcional)</label>
+                      <input
+                        type="text"
+                        className={inputClass}
+                        value={correiosContractDr}
+                        onChange={(e) => setCorreiosContractDr(e.target.value.replace(/\D/g, '').slice(0, 2))}
+                        placeholder="Ex.: 10"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="pt-4 border-t border-border space-y-4">
+                    <div>
+                      <h4 className="font-display text-sm tracking-wide text-foreground">Testar conexão</h4>
+                      <p className="font-body text-xs text-muted-foreground mt-1">
+                        Salve as credenciais antes de testar. Valida o token e, com CEP, as APIs Preço e Prazo.
+                      </p>
+                    </div>
+                    <div className="grid gap-4 sm:grid-cols-3">
+                      <div>
+                        <label className={labelClass}>Modo de autenticação</label>
+                        <select
+                          className={inputClass}
+                          value={correiosTestMode}
+                          onChange={(e) => setCorreiosTestMode(e.target.value)}
+                        >
+                          <option value="auto">Automático (cartão → contrato → usuário)</option>
+                          <option value="cartaopostagem">Cartão de postagem</option>
+                          <option value="contrato">Contrato</option>
+                          <option value="usuario">Usuário (/v1/autentica)</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className={labelClass}>CEP destino (teste Preço/Prazo)</label>
+                        <input
+                          type="text"
+                          className={inputClass}
+                          value={correiosTestZip}
+                          onChange={(e) => setCorreiosTestZip(e.target.value.replace(/\D/g, '').slice(0, 8))}
+                          placeholder="01310100"
+                        />
+                      </div>
+                      <div className="flex items-end">
+                        <button
+                          type="button"
+                          disabled={correiosTestMutation.isPending}
+                          onClick={() => {
+                            setCorreiosTestResult(null);
+                            correiosTestMutation.mutate({
+                              mode: correiosTestMode,
+                              destination_zip: correiosTestZip,
+                              service_code: '03298',
+                            });
+                          }}
+                          className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-sm bg-primary text-primary-foreground font-body text-sm hover:opacity-90 disabled:opacity-60"
+                        >
+                          {correiosTestMutation.isPending ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <Key className="w-4 h-4" />
+                          )}
+                          Testar API
+                        </button>
+                      </div>
+                    </div>
+
+                    {correiosTestResult && (
+                      <div
+                        className={`p-4 rounded-sm border space-y-3 ${
+                          correiosTestResult.ok
+                            ? 'border-green-200 bg-green-50 dark:border-green-900 dark:bg-green-950/30'
+                            : 'border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/30'
+                        }`}
+                      >
+                        <div className="flex items-start gap-2">
+                          {correiosTestResult.ok ? (
+                            <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0 text-green-600 dark:text-green-400" />
+                          ) : (
+                            <AlertCircle className="w-4 h-4 mt-0.5 shrink-0 text-amber-600 dark:text-amber-400" />
+                          )}
+                          <p className="font-body text-sm text-foreground">{correiosTestResult.message}</p>
+                        </div>
+                        {Array.isArray(correiosTestResult.steps) && correiosTestResult.steps.length > 0 && (
+                          <ul className="space-y-2 font-body text-xs text-muted-foreground">
+                            {correiosTestResult.steps.map((step) => (
+                              <li key={step.name} className="border-t border-border/60 pt-2 first:border-0 first:pt-0">
+                                <span className={step.ok ? 'text-green-700 dark:text-green-400' : 'text-amber-700 dark:text-amber-400'}>
+                                  {step.ok ? 'OK' : 'Falha'}
+                                </span>
+                                {' · '}
+                                <span className="font-mono">{step.name}</span>
+                                {step.endpoint && <> · {step.endpoint}</>}
+                                {step.mode && <> · modo {step.mode}</>}
+                                {step.ambiente && <> · {step.ambiente}</>}
+                                {step.expiraEm && <> · expira {step.expiraEm}</>}
+                                {step.pcFinal && <> · preço R$ {step.pcFinal}</>}
+                                {step.prazoEntrega != null && <> · {step.prazoEntrega} dia(s)</>}
+                                {step.apis_autorizadas != null && <> · {step.apis_autorizadas} API(s)</>}
+                                {step.error && (
+                                  <span className="block mt-0.5 text-destructive">{step.error}</span>
+                                )}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </TabsContent>
+
+                <TabsContent value="remetente" className="space-y-4 mt-0 focus-visible:outline-none">
+                  <div>
+                    <h3 className="font-display text-base tracking-wide text-foreground">Remetente (etiqueta)</h3>
+                    <p className="font-body text-sm text-muted-foreground mt-1">
+                      Dados enviados na pré-postagem e impressos na etiqueta.
+                    </p>
+                  </div>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="sm:col-span-2">
+                      <label className={labelClass}>Nome do remetente</label>
+                      <input
+                        type="text"
+                        className={inputClass}
+                        value={correiosSenderName}
+                        onChange={(e) => setCorreiosSenderName(e.target.value)}
+                        placeholder="Sorelle Presentes"
+                      />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label className={labelClass}>Logradouro</label>
+                      <input
+                        type="text"
+                        className={inputClass}
+                        value={correiosSenderStreet}
+                        onChange={(e) => setCorreiosSenderStreet(e.target.value)}
+                        placeholder="Rua Exemplo"
+                      />
+                    </div>
+                    <div>
+                      <label className={labelClass}>Número</label>
+                      <input
+                        type="text"
+                        className={inputClass}
+                        value={correiosSenderNumber}
+                        onChange={(e) => setCorreiosSenderNumber(e.target.value)}
+                        placeholder="123"
+                      />
+                    </div>
+                    <div>
+                      <label className={labelClass}>Bairro</label>
+                      <input
+                        type="text"
+                        className={inputClass}
+                        value={correiosSenderDistrict}
+                        onChange={(e) => setCorreiosSenderDistrict(e.target.value)}
+                        placeholder="Centro"
+                      />
+                    </div>
+                    <div>
+                      <label className={labelClass}>Complemento</label>
+                      <input
+                        type="text"
+                        className={inputClass}
+                        value={correiosSenderComplement}
+                        onChange={(e) => setCorreiosSenderComplement(e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <label className={labelClass}>CNPJ (opcional)</label>
+                      <input
+                        type="text"
+                        className={inputClass}
+                        value={correiosSenderCnpj}
+                        onChange={(e) => setCorreiosSenderCnpj(e.target.value.replace(/\D/g, '').slice(0, 14))}
+                      />
+                    </div>
+                    <div>
+                      <label className={labelClass}>Cidade</label>
+                      <input
+                        type="text"
+                        className={inputClass}
+                        value={correiosSenderCity}
+                        onChange={(e) => setCorreiosSenderCity(e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <label className={labelClass}>UF</label>
+                      <input
+                        type="text"
+                        className={inputClass}
+                        value={correiosSenderState}
+                        onChange={(e) => setCorreiosSenderState(e.target.value.toUpperCase().slice(0, 2))}
+                        placeholder="SP"
+                      />
+                    </div>
+                    <div>
+                      <label className={labelClass}>Telefone</label>
+                      <input
+                        type="text"
+                        className={inputClass}
+                        value={correiosSenderPhone}
+                        onChange={(e) => setCorreiosSenderPhone(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                </TabsContent>
+
+                <TabsContent value="transportadora" className="space-y-4 mt-0 focus-visible:outline-none">
+                  <div>
+                    <h3 className="font-display text-base tracking-wide text-foreground">Transportadora</h3>
+                    <p className="font-body text-sm text-muted-foreground mt-1">
+                      Frete fixo ou calculado por peso, sem integração com API. Aparece no checkout junto com PAC/SEDEX.
+                    </p>
+                  </div>
+
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={carrierEnabled}
+                      onChange={(e) => setCarrierEnabled(e.target.checked)}
+                      className="rounded border-border"
+                    />
+                    <span className="font-body text-sm text-foreground">Oferecer transportadora no checkout</span>
+                  </label>
+
+                  {carrierEnabled && (
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div className="sm:col-span-2">
+                        <label className={labelClass}>Nome exibido ao cliente</label>
+                        <input
+                          type="text"
+                          className={inputClass}
+                          value={carrierName}
+                          onChange={(e) => setCarrierName(e.target.value)}
+                          placeholder="Transportadora"
+                        />
+                      </div>
+                      <div>
+                        <label className={labelClass}>Valor do frete (R$)</label>
+                        <input
+                          type="text"
+                          className={inputClass}
+                          value={carrierPrice}
+                          onChange={(e) => setCarrierPrice(e.target.value.replace(/[^\d,.]/g, ''))}
+                          placeholder="Ex.: 35,00 (vazio = por peso)"
+                        />
+                      </div>
+                      <div>
+                        <label className={labelClass}>Prazo (dias úteis)</label>
+                        <input
+                          type="number"
+                          min={1}
+                          max={60}
+                          className={inputClass}
+                          value={carrierDeadlineDays}
+                          onChange={(e) => setCarrierDeadlineDays(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </TabsContent>
+
+                <TabsContent value="rodonaves" className="space-y-4 mt-0 focus-visible:outline-none">
+                  <div>
+                    <h3 className="font-display text-base tracking-wide text-foreground">Rodonaves (integração API)</h3>
+                    <p className="font-body text-sm text-muted-foreground mt-1">
+                      Cotação de frete em tempo real pela API da Rodonaves (RTE). É preciso ter cadastro
+                      como cliente Rodonaves e credenciais de API fornecidas pela transportadora.
+                    </p>
+                  </div>
+
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={rodonavesEnabled}
+                      onChange={(e) => setRodonavesEnabled(e.target.checked)}
+                      className="rounded border-border"
+                    />
+                    <span className="font-body text-sm text-foreground">Oferecer Rodonaves no checkout</span>
+                  </label>
+
+                  {rodonavesEnabled && !rodonaves?.is_ready && (
+                    <div className="flex items-start gap-2 p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 rounded-sm">
+                      <AlertCircle className="w-4 h-4 mt-0.5 shrink-0 text-amber-600 dark:text-amber-400" />
+                      <p className="font-body text-xs text-amber-800 dark:text-amber-300">
+                        Preencha usuário, senha e CNPJ para a cotação funcionar. Enquanto isso, a opção
+                        Rodonaves não aparecerá no checkout.
+                      </p>
+                    </div>
+                  )}
+
+                  {rodonavesEnabled && (
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div>
+                        <label className={labelClass}>Usuário da API *</label>
+                        <input
+                          type="text"
+                          className={inputClass}
+                          value={rodonavesUsername}
+                          onChange={(e) => setRodonavesUsername(e.target.value)}
+                          placeholder="Usuário fornecido pela Rodonaves"
+                          autoComplete="off"
+                        />
+                      </div>
+                      <div>
+                        <label className={labelClass}>Senha da API *</label>
+                        <input
+                          type="password"
+                          className={inputClass}
+                          value={rodonavesPassword}
+                          onChange={(e) => setRodonavesPassword(e.target.value)}
+                          placeholder={rodonaves?.has_password ? rodonaves.password_masked || 'Senha salva' : 'Senha de acesso'}
+                          autoComplete="new-password"
+                        />
+                        {rodonaves?.has_password && (
+                          <p className="font-body text-xs text-muted-foreground mt-1">
+                            Já configurada. Preencha apenas para trocar.
+                          </p>
+                        )}
+                      </div>
+                      <div>
+                        <label className={labelClass}>CNPJ do cliente Rodonaves *</label>
+                        <input
+                          type="text"
+                          className={inputClass}
+                          value={rodonavesCnpj}
+                          onChange={(e) => setRodonavesCnpj(e.target.value.replace(/\D/g, '').slice(0, 14))}
+                          placeholder="Somente números"
+                          autoComplete="off"
+                        />
+                        <p className="font-body text-xs text-muted-foreground mt-1">
+                          CNPJ vinculado ao contrato/tabela negociada com a Rodonaves.
+                        </p>
+                      </div>
+                      <div>
+                        <label className={labelClass}>Nome exibido ao cliente</label>
+                        <input
+                          type="text"
+                          className={inputClass}
+                          value={rodonavesLabel}
+                          onChange={(e) => setRodonavesLabel(e.target.value)}
+                          placeholder="Rodonaves"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </TabsContent>
+              </Tabs>
             </TabsContent>
 
             <TabsContent value="cielo" className="space-y-6 mt-0 focus-visible:outline-none">

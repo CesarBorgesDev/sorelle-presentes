@@ -305,6 +305,13 @@ const settings = {
       body: JSON.stringify(data),
     });
   },
+
+  async testCorreios(data = {}) {
+    return apiFetch('/settings/correios/test', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
 };
 
 const pages = {

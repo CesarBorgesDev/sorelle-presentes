@@ -16,6 +16,7 @@ import {
 } from '../services/paymentMethods.js';
 import { getInstallmentScale, parseInstallmentScale } from '../services/installmentScale.js';
 import { getCorreiosConfig } from '../services/correios.js';
+import { clearCorreiosTokenCache, testCorreiosApiConnection } from '../services/correiosAuth.js';
 import { getRodonavesConfig } from '../services/rodonaves.js';
 
 const router = Router();
@@ -76,6 +77,8 @@ async function buildSettingsResponse(message) {
     correios: {
       origin_zip: correiosConfig.originZip,
       has_contract: correiosConfig.hasContract,
+      has_rest_contract: Boolean(correiosConfig.hasRestContract),
+      has_legacy_contract: Boolean(correiosConfig.hasLegacyContract),
       services: correiosConfig.services,
       fallback_mode: correiosConfig.fallbackMode,
       carrier: correiosConfig.carrier,
@@ -84,20 +87,12 @@ async function buildSettingsResponse(message) {
       sender_city: (await getSetting('correios_sender_city')) || '',
       sender_state: (await getSetting('correios_sender_state')) || '',
       sender_phone: (await getSetting('correios_sender_phone')) || '',
-      has_api_credentials: Boolean(
-        (await getSetting('correios_api_user')) || process.env.CORREIOS_API_USER
-      ),
-      has_post_card: Boolean(
-        (await getSetting('correios_post_card')) || process.env.CORREIOS_POST_CARD
-      ),
-      post_card_masked: maskToken((await getSetting('correios_post_card')) || process.env.CORREIOS_POST_CARD || ''),
-      contract_number: (
-        (await getSetting('correios_contract_number'))
-        || (await getSetting('correios_company_code'))
-        || process.env.CORREIOS_CONTRACT_NUMBER
-        || process.env.CORREIOS_COMPANY_CODE
-        || ''
-      ),
+      has_api_credentials: Boolean(correiosConfig.hasApiCredentials),
+      api_user: (await getSetting('correios_api_user')) || process.env.CORREIOS_API_USER || '',
+      has_post_card: Boolean(correiosConfig.postCard),
+      post_card_masked: maskToken(correiosConfig.postCard || ''),
+      contract_number: correiosConfig.contractNumber || '',
+      contract_dr: correiosConfig.contractDr != null ? String(correiosConfig.contractDr) : '',
       sender_number: (await getSetting('correios_sender_number')) || '',
       sender_district: (await getSetting('correios_sender_district')) || '',
       sender_complement: (await getSetting('correios_sender_complement')) || '',
@@ -171,6 +166,27 @@ router.get('/', requireAuth, requireAdmin, async (_req, res) => {
   } catch (err) {
     console.error('Erro ao buscar configurações:', err);
     res.status(500).json({ message: 'Erro ao carregar configurações' });
+  }
+});
+
+/** Testa autenticação Token v1 (+ Preço/Prazo opcional) das APIs dos Correios. */
+router.post('/correios/test', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const mode = String(req.body?.mode || 'auto').trim().toLowerCase();
+    const allowed = new Set(['auto', 'usuario', 'contrato', 'cartaopostagem']);
+    const result = await testCorreiosApiConnection({
+      mode: allowed.has(mode) ? mode : 'auto',
+      destinationZip: req.body?.destination_zip || '',
+      serviceCode: req.body?.service_code || '03298',
+    });
+    res.json(result);
+  } catch (err) {
+    console.error('Erro ao testar API Correios:', err);
+    res.status(500).json({
+      ok: false,
+      message: err.message || 'Erro ao testar API dos Correios',
+      steps: [],
+    });
   }
 });
 
@@ -424,24 +440,35 @@ router.put('/', requireAuth, requireAdmin, async (req, res) => {
       await setSetting('correios_password', correios_password.trim());
     }
 
+    let correiosAuthChanged = false;
+
     if (correios_api_user !== undefined) {
       await setSetting('correios_api_user', correios_api_user.trim());
+      correiosAuthChanged = true;
     }
 
     if (correios_api_password !== undefined && correios_api_password !== '') {
       await setSetting('correios_api_password', correios_api_password.trim());
+      correiosAuthChanged = true;
     }
 
     if (correios_post_card !== undefined && correios_post_card !== '') {
       await setSetting('correios_post_card', correios_post_card.replace(/\D/g, '').trim());
+      correiosAuthChanged = true;
     }
 
     if (correios_contract_number !== undefined && correios_contract_number !== '') {
       await setSetting('correios_contract_number', correios_contract_number.trim());
+      correiosAuthChanged = true;
     }
 
     if (correios_contract_dr !== undefined && correios_contract_dr !== '') {
       await setSetting('correios_contract_dr', String(correios_contract_dr).trim());
+      correiosAuthChanged = true;
+    }
+
+    if (correiosAuthChanged) {
+      clearCorreiosTokenCache();
     }
 
     if (correios_sender_name !== undefined) {
