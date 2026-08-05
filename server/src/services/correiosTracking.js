@@ -100,6 +100,9 @@ export async function getSenderLabelConfig() {
   return {
     name: ((await getSetting('correios_sender_name')) || process.env.CORREIOS_SENDER_NAME || 'Sorelle Presentes').trim(),
     street: ((await getSetting('correios_sender_street')) || process.env.CORREIOS_SENDER_STREET || '').trim(),
+    number: ((await getSetting('correios_sender_number')) || process.env.CORREIOS_SENDER_NUMBER || '').trim(),
+    complement: ((await getSetting('correios_sender_complement')) || process.env.CORREIOS_SENDER_COMPLEMENT || '').trim(),
+    district: ((await getSetting('correios_sender_district')) || process.env.CORREIOS_SENDER_DISTRICT || '').trim(),
     city: ((await getSetting('correios_sender_city')) || process.env.CORREIOS_SENDER_CITY || '').trim(),
     state: ((await getSetting('correios_sender_state')) || process.env.CORREIOS_SENDER_STATE || '').trim(),
     zip: correios.originZip,

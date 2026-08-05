@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { parseOrderRecipientAddress } from '../utils/address.js';
 import { getSenderLabelConfig, normalizeTrackingCode } from './correiosTracking.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -14,21 +15,58 @@ function escapeHtml(value) {
     .replace(/"/g, '&quot;');
 }
 
-function extractZipFromNotes(notes) {
-  const match = String(notes || '').match(/CEP:\s*(\d{5}-?\d{3}|\d{8})/i);
-  return match ? match[1].replace(/\D/g, '') : '';
+function formatZip(zip) {
+  const digits = String(zip || '').replace(/\D/g, '').slice(0, 8);
+  if (digits.length !== 8) return digits;
+  return digits.replace(/(\d{5})(\d{3})/, '$1-$2');
 }
 
 function buildSenderBlock(sender) {
   const lines = [
     sender.name,
-    sender.street,
+    [sender.street, sender.number].filter(Boolean).join(', '),
+    sender.complement,
+    sender.district,
     [sender.city, sender.state].filter(Boolean).join(' - '),
-    sender.zip ? `CEP ${sender.zip.replace(/(\d{5})(\d{3})/, '$1-$2')}` : '',
+    sender.zip ? `CEP ${formatZip(sender.zip)}` : '',
     sender.phone ? `Tel: ${sender.phone}` : '',
   ].filter(Boolean);
 
   return lines.map((line) => `<div>${escapeHtml(line)}</div>`).join('');
+}
+
+function buildRecipientBlock(order) {
+  const recipient = parseOrderRecipientAddress(order);
+  const streetLine = [
+    recipient.street,
+    recipient.number ? `nº ${recipient.number}` : null,
+  ].filter(Boolean).join(', ');
+
+  const lines = [
+    order.customer_name,
+    streetLine,
+    recipient.complement,
+    recipient.district,
+    [recipient.city, recipient.state].filter(Boolean).join(' - '),
+    recipient.zip ? `CEP ${formatZip(recipient.zip)}` : '',
+    order.customer_phone ? `Tel: ${order.customer_phone}` : '',
+  ].filter(Boolean);
+
+  // Fallback: se o parse falhar, mostra o texto bruto do pedido
+  if (!recipient.street && order.customer_address) {
+    return [
+      `<div><strong>${escapeHtml(order.customer_name)}</strong></div>`,
+      `<div>${escapeHtml(order.customer_address)}</div>`,
+      recipient.zip ? `<div>CEP ${escapeHtml(formatZip(recipient.zip))}</div>` : '',
+      order.customer_phone ? `<div>Tel: ${escapeHtml(order.customer_phone)}</div>` : '',
+    ].filter(Boolean).join('');
+  }
+
+  return lines.map((line, index) => (
+    index === 0
+      ? `<div><strong>${escapeHtml(line)}</strong></div>`
+      : `<div>${escapeHtml(line)}</div>`
+  )).join('');
 }
 
 export async function generateCorreiosShippingLabel(order, { trackingCode } = {}) {
@@ -38,7 +76,6 @@ export async function generateCorreiosShippingLabel(order, { trackingCode } = {}
 
   const sender = await getSenderLabelConfig();
   const code = normalizeTrackingCode(trackingCode || order.tracking_code);
-  const destinationZip = extractZipFromNotes(order.notes);
   const filename = `etiqueta-${order.id}.html`;
   const filepath = path.join(LABELS_DIR, filename);
 
@@ -85,10 +122,7 @@ export async function generateCorreiosShippingLabel(order, { trackingCode } = {}
     <div class="block">
       <div class="label">Destinatário</div>
       <div class="content">
-        <div><strong>${escapeHtml(order.customer_name)}</strong></div>
-        <div>${escapeHtml(order.customer_address)}</div>
-        ${destinationZip ? `<div>CEP ${escapeHtml(destinationZip.replace(/(\d{5})(\d{3})/, '$1-$2'))}</div>` : ''}
-        ${order.customer_phone ? `<div>Tel: ${escapeHtml(order.customer_phone)}</div>` : ''}
+        ${buildRecipientBlock(order)}
       </div>
     </div>
 

@@ -1,5 +1,5 @@
 import pool from '../config/db.js';
-import { toCieloAddress } from '../utils/address.js';
+import { parseOrderRecipientAddress } from '../utils/address.js';
 import {
   buildPackageFromProducts,
   CARRIER_SERVICE,
@@ -33,23 +33,16 @@ function splitPhone(phone) {
   return { ddd: '', number: digits };
 }
 
-function extractZipFromNotes(notes) {
-  const match = String(notes || '').match(/CEP:\s*(\d{5}-?\d{3}|\d{8})/i);
-  return match ? onlyDigits(match[1]).slice(0, 8) : '';
-}
-
 function parseRecipientAddress(order) {
-  const parsed = toCieloAddress({ customer_address: order.customer_address });
-  const zip = extractZipFromNotes(order.notes);
-
+  const parsed = parseOrderRecipientAddress(order);
   return {
-    street: parsed.Street,
-    number: parsed.Number,
-    complement: parsed.Complement || '',
-    district: parsed.District,
-    city: parsed.City,
-    state: parsed.State,
-    zip,
+    street: parsed.street,
+    number: parsed.number || 'S/N',
+    complement: parsed.complement || '',
+    district: parsed.district || 'Centro',
+    city: parsed.city,
+    state: parsed.state,
+    zip: parsed.zip,
   };
 }
 
