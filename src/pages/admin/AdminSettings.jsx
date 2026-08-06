@@ -729,7 +729,7 @@ export default function AdminSettings() {
                   <div>
                     <h3 className="font-display text-base tracking-wide text-foreground">Correios (PAC/SEDEX)</h3>
                     <p className="font-body text-sm text-muted-foreground mt-1">
-                      CEP de origem para cotação. Com credenciais CWS na aba Pré-postagem, o frete usa a API REST Preço/Prazo.
+                      CEP de origem para cotação. Com credenciais CWS na aba API Correios, o frete usa a API REST Preço/Prazo.
                     </p>
                   </div>
                   <div>
@@ -784,7 +784,7 @@ export default function AdminSettings() {
                   )}
 
                   <div className="p-3 rounded-sm bg-secondary/50 border border-border font-body text-xs text-muted-foreground">
-                    Prefira a API REST (usuário/senha CWS + cartão ou contrato na aba Pré-postagem). O CalcPrecoPrazo legado só entra como fallback.
+                    Prefira a API REST (usuário/senha CWS + cartão ou contrato na aba API Correios). O CalcPrecoPrazo legado só entra como fallback.
                     Em desenvolvimento, <span className="font-mono">CORREIOS_FALLBACK=auto</span> estima frete se a API falhar.
                   </div>
                 </TabsContent>
@@ -804,6 +804,27 @@ export default function AdminSettings() {
                         API Token
                       </a>
                       . Usado em cotação REST, pré-postagem e rastreio.
+                    </p>
+                  </div>
+
+                  <div className="p-4 rounded-sm border border-border bg-secondary/20 space-y-2">
+                    <h4 className="font-display text-sm tracking-wide text-foreground">
+                      Como configurar para gerar códigos
+                    </h4>
+                    <ol className="list-decimal pl-4 space-y-1.5 font-body text-xs text-muted-foreground">
+                      <li>Crie usuário no Meu Correios e gere o <strong className="text-foreground font-medium">código de acesso</strong> no CWS.</li>
+                      <li>Informe <strong className="text-foreground font-medium">cartão de postagem</strong> e/ou <strong className="text-foreground font-medium">contrato + DR</strong> (DR = regional do contrato no PDF).</li>
+                      <li>
+                        No CWS, libere no cartão: Token, Preço, Prazo,{' '}
+                        <strong className="text-foreground font-medium">Pré-postagem (86720)</strong> e PAC/SEDEX de contrato (03298/03220).
+                      </li>
+                      <li>Salve esta tela e use <strong className="text-foreground font-medium">Testar API</strong> (modo Cartão).</li>
+                      <li>Preencha a aba <strong className="text-foreground font-medium">Remetente</strong> e salve de novo.</li>
+                      <li>No pedido com frete PAC/SEDEX, abra o detalhe e clique em <strong className="text-foreground font-medium">Gerar código Correios</strong>.</li>
+                    </ol>
+                    <p className="font-body text-[11px] text-muted-foreground pt-1 border-t border-border/60">
+                      O Testar API valida token, Preço e Prazo — <strong className="font-medium text-foreground">não</strong> cria pré-postagem.
+                      Se a geração no pedido falhar com erro de serviço (ex.: 86720), peça liberação ao comercial dos Correios.
                     </p>
                   </div>
                   <div className="grid gap-4 sm:grid-cols-2">
@@ -973,7 +994,8 @@ export default function AdminSettings() {
                     <div>
                       <h3 className="font-display text-base tracking-wide text-foreground">Remetente (etiqueta)</h3>
                       <p className="font-body text-sm text-muted-foreground mt-1">
-                        Obrigatório para gerar código Correios. Não usa o endereço da aba Retirada — preencha logradouro e cidade aqui (ou pelo CEP de origem) e salve.
+                        Obrigatório para gerar código Correios e para a etiqueta. Campos marcados com * entram na pré-postagem.
+                        Não usa o endereço da aba Retirada — preencha aqui (ou pelo CEP de origem), confira o número e <strong className="font-medium text-foreground">salve</strong>.
                       </p>
                     </div>
                     <button
@@ -1010,6 +1032,16 @@ export default function AdminSettings() {
                   {senderCepMessage && (
                     <p className="font-body text-xs text-muted-foreground">{senderCepMessage}</p>
                   )}
+                  <div className="p-3 rounded-sm border border-border bg-secondary/20 font-body text-xs text-muted-foreground space-y-1">
+                    <p>
+                      Para pré-postagem, preencha pelo menos <strong className="font-medium text-foreground">logradouro</strong>,{' '}
+                      <strong className="font-medium text-foreground">cidade</strong> e{' '}
+                      <strong className="font-medium text-foreground">UF</strong>. O CEP de origem fica na aba Correios.
+                    </p>
+                    <p>
+                      O endereço da aba <strong className="font-medium text-foreground">Retirada</strong> não é enviado aos Correios.
+                    </p>
+                  </div>
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div className="sm:col-span-2">
                       <label className={labelClass}>Nome do remetente</label>

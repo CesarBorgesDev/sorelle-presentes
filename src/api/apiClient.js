@@ -417,6 +417,10 @@ const orderShipping = {
     return apiFetch(`/orders/${orderId}/rastreio`);
   },
 
+  preflightTrackingCode(orderId) {
+    return apiFetch(`/orders/${orderId}/codigo-correios/preflight`);
+  },
+
   generateTrackingCode(orderId) {
     return apiFetch(`/orders/${orderId}/codigo-correios`, {
       method: 'POST',

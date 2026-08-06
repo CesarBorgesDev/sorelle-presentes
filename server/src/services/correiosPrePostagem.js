@@ -7,8 +7,14 @@ import {
   fetchAddressByCep,
   getCorreiosConfig,
 } from './correios.js';
-import { getCorreiosApiBase, getCorreiosApiToken } from './correiosAuth.js';
+import {
+  getCorreiosApiBase,
+  getCorreiosApiCredentials,
+  getCorreiosApiToken,
+  getCorreiosContractContext,
+} from './correiosAuth.js';
 import { getSetting } from './settings.js';
+import { STORE_PICKUP_ID } from './storePickup.js';
 import { normalizeTrackingCode } from './correiosTracking.js';
 
 const SERVICE_CODE_TO_CONTRACT = {
@@ -17,6 +23,30 @@ const SERVICE_CODE_TO_CONTRACT = {
   pac: CORREIOS_SERVICES.pac.contractCode,
   sedex: CORREIOS_SERVICES.sedex.contractCode,
 };
+
+const STEP_LABELS = {
+  autenticacao: 'Autenticação CWS',
+  criar_prepostagem: 'Criar pré-postagem',
+  codigo_objeto: 'Obter código de rastreio',
+  preflight: 'Pré-requisitos',
+  desconhecido: 'Processamento',
+};
+
+function stepLabel(step) {
+  return STEP_LABELS[step] || STEP_LABELS.desconhecido;
+}
+
+/** Remove ruído de exceções Java dos Correios (ApiNegocioRuntimeException: ...). */
+function cleanCorreiosMessage(text) {
+  let value = String(text || '').trim();
+  if (!value || value === 'null' || value === 'undefined') return '';
+  value = value
+    .replace(/^ApiNegocioRuntimeException:\s*/i, '')
+    .replace(/\bApiNegocioRuntimeException:\s*/gi, '')
+    .replace(/^br\.com\.correios[\w.$]*Exception:\s*/i, '')
+    .trim();
+  return value;
+}
 
 function onlyDigits(value) {
   return String(value || '').replace(/\D/g, '');
@@ -310,56 +340,166 @@ async function requestRotuloAndResolveCode(token, prepostagemId) {
   };
 }
 
-function validatePrePostagemSetup({ sender, recipient, order, config }) {
-  const missing = [];
+async function getPrePostagemConfig() {
+  const correios = await getCorreiosConfig();
+  const { postCard, contract, dr } = await getCorreiosContractContext();
+  return {
+    ...correios,
+    postCard,
+    contractNumber: contract,
+    contractDr: dr,
+  };
+}
 
+/**
+ * Checklist de pré-requisitos para gerar código Correios no pedido.
+ * @returns {Promise<{ ready: boolean, items: Array, service_code_mapped: string|null, service_code_raw: string }>}
+ */
+export async function buildCorreiosCodePrerequisites(order) {
+  const [{ user, password }, contractCtx, correios, sender] = await Promise.all([
+    getCorreiosApiCredentials(),
+    getCorreiosContractContext(),
+    getCorreiosConfig(),
+    getSenderConfig(),
+  ]);
+  const recipient = parseRecipientAddress(order);
+  const serviceRaw = String(order.shipping_service_code || '').trim();
+  const serviceId = String(order.shipping_service_id || order.shipping_service_code || '').trim();
+  const isPickup = serviceRaw === 'pickup' || serviceId === STORE_PICKUP_ID || /retirada/i.test(String(order.shipping_service_name || ''));
+  const isCarrier = serviceRaw === CARRIER_SERVICE.code || serviceId === CARRIER_SERVICE.id;
+  const isCorreiosService = Boolean(serviceRaw)
+    && !isPickup
+    && !isCarrier
+    && (
+      Boolean(SERVICE_CODE_TO_CONTRACT[serviceRaw])
+      || Boolean(SERVICE_CODE_TO_CONTRACT[serviceRaw.toLowerCase()])
+      || ['03298', '03220', '04510', '04014'].includes(serviceRaw)
+    );
+
+  const config = { ...correios, postCard: contractCtx.postCard, contractNumber: contractCtx.contract };
+  const mapped = isCorreiosService ? resolvePrePostagemServiceCode(order, config) : null;
+
+  const hasCardOrContract = Boolean(contractCtx.postCard || contractCtx.contract);
+  const contractNeedsDr = Boolean(contractCtx.contract && !contractCtx.postCard && contractCtx.dr == null);
+
+  const items = [
+    {
+      id: 'api_credentials',
+      ok: Boolean(user && password),
+      label: 'Usuário e código de acesso CWS',
+      help: 'Preencha em Configurações → Frete → API Correios (Meu Correios + código gerado no CWS).',
+      hrefHint: 'api_correios',
+    },
+    {
+      id: 'card_or_contract',
+      ok: hasCardOrContract && !contractNeedsDr,
+      label: contractNeedsDr
+        ? 'Contrato informado — falta a DR'
+        : 'Cartão de postagem ou contrato (+ DR)',
+      help: contractNeedsDr
+        ? 'Informe a DR/Superintendência do contrato (número curto no PDF do contrato).'
+        : 'Cartão de postagem e/ou número do contrato comercial em Frete → API Correios.',
+      hrefHint: 'api_correios',
+    },
+    {
+      id: 'sender',
+      ok: Boolean(
+        sender.name?.length >= 3
+        && sender.street
+        && sender.city
+        && sender.state
+        && onlyDigits(sender.zip).length === 8
+      ),
+      label: 'Remetente completo (logradouro, cidade, UF, CEP)',
+      help: 'Aba Frete → Remetente. O endereço da Retirada na loja não é usado na pré-postagem.',
+      hrefHint: 'remetente',
+    },
+    {
+      id: 'service',
+      ok: isCorreiosService,
+      label: 'Pedido com frete PAC ou SEDEX',
+      help: isPickup
+        ? 'Este pedido é retirada na loja — não gera código Correios.'
+        : isCarrier
+          ? 'Este pedido usa transportadora — não gera código Correios.'
+          : 'O pedido precisa ter sido cotado com PAC ou SEDEX dos Correios.',
+      hrefHint: null,
+    },
+    {
+      id: 'recipient_address',
+      ok: Boolean(order.customer_name && recipient.street && recipient.city && recipient.state),
+      label: 'Endereço do destinatário no pedido',
+      help: 'Nome, rua, cidade e UF devem estar no endereço do pedido.',
+      hrefHint: null,
+    },
+    {
+      id: 'recipient_zip',
+      ok: onlyDigits(recipient.zip).length === 8,
+      label: 'CEP do destinatário',
+      help: 'O CEP costuma estar nas observações do pedido (CEP: 00000000). Sem CEP a API recusa.',
+      hrefHint: null,
+    },
+  ];
+
+  return {
+    ready: items.every((item) => item.ok),
+    items,
+    service_code_raw: serviceRaw || null,
+    service_code_mapped: mapped,
+    origin_zip: onlyDigits(sender.zip).slice(0, 8) || null,
+    destination_zip: onlyDigits(recipient.zip).slice(0, 8) || null,
+  };
+}
+
+function validatePrePostagemSetup({ sender, recipient, order, config }) {
+  // Validação síncrona leve; o preflight cobre a mensagem completa
   const postCard = (config.postCard || '').trim();
   const contract = (config.contractNumber || '').trim();
   if (!postCard && !contract) {
-    missing.push('cartão de postagem ou número do contrato em Configurações → Frete');
+    throwCorreiosError({
+      message: 'Falta cartão de postagem ou contrato comercial.',
+      details: ['Configure em Configurações → Frete → API Correios.'],
+      step: 'preflight',
+      nextSteps: [
+        'Informe o cartão de postagem (recomendado) ou contrato + DR.',
+        'Salve e use Testar API no modo Cartão de postagem.',
+      ],
+    });
   }
 
-  if (!sender.name || sender.name.length < 3) {
-    missing.push('nome do remetente (Configurações → Frete → Remetente)');
+  if (!sender.street || !sender.city || onlyDigits(sender.zip).length !== 8) {
+    throwCorreiosError({
+      message: 'Remetente incompleto para pré-postagem.',
+      details: ['Preencha logradouro, cidade e CEP na aba Remetente.'],
+      step: 'preflight',
+      nextSteps: [
+        'Abra Configurações → Frete → Remetente.',
+        'Use “Preencher pelo CEP de origem”, confira o número e salve.',
+      ],
+    });
   }
-  if (!sender.street) {
-    missing.push('logradouro do remetente (aba Remetente — o endereço da retirada na loja não é usado aqui)');
-  }
-  if (!sender.city) {
-    missing.push('cidade do remetente (aba Remetente)');
-  }
-  if (!sender.state) missing.push('UF do remetente (aba Remetente)');
-  if (sender.zip.length !== 8) missing.push('CEP de origem válido (aba Correios)');
 
-  if (!order.customer_name) missing.push('nome do destinatário');
-  if (!recipient.street) missing.push('endereço do destinatário');
-  if (!recipient.city) missing.push('cidade do destinatário');
-  if (!recipient.state) missing.push('UF do destinatário');
-  if (recipient.zip.length !== 8) missing.push('CEP do destinatário (confira as observações do pedido)');
+  if (!recipient.street || !recipient.city || onlyDigits(recipient.zip).length !== 8) {
+    throwCorreiosError({
+      message: 'Destinatário incompleto no pedido.',
+      details: ['É preciso endereço parseável e CEP (notes do pedido).'],
+      step: 'preflight',
+      nextSteps: [
+        'Confira o endereço do cliente no pedido.',
+        'Garanta que as observações contenham “CEP: 00000000”.',
+      ],
+    });
+  }
 
   const serviceCode = String(order.shipping_service_code || '').trim();
   if (!serviceCode || serviceCode === CARRIER_SERVICE.code) {
-    missing.push('serviço Correios (PAC/SEDEX) no pedido');
+    throwCorreiosError({
+      message: 'Este pedido não tem serviço Correios (PAC/SEDEX).',
+      details: ['Transportadora e retirada na loja não geram código Correios.'],
+      step: 'preflight',
+      nextSteps: ['Use um pedido enviado por PAC ou SEDEX.'],
+    });
   }
-
-  if (missing.length > 0) {
-    throw new Error(`Configure ou corrija: ${missing.join(', ')}.`);
-  }
-}
-
-async function getPrePostagemConfig() {
-  const correios = await getCorreiosConfig();
-  return {
-    ...correios,
-    postCard: ((await getSetting('correios_post_card')) || process.env.CORREIOS_POST_CARD || '').trim(),
-    contractNumber: (
-      (await getSetting('correios_contract_number'))
-      || (await getSetting('correios_company_code'))
-      || process.env.CORREIOS_CONTRACT_NUMBER
-      || process.env.CORREIOS_COMPANY_CODE
-      || ''
-    ).trim(),
-  };
 }
 
 function buildPrePostagemPayload(order, { sender, recipient, packageInfo, serviceCode }) {
@@ -422,8 +562,8 @@ function collectCorreiosMessages(value, bag = [], depth = 0) {
   if (value == null || depth > 5) return bag;
 
   if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
-    const text = String(value).trim();
-    if (text && text !== 'null' && text !== 'undefined' && !bag.includes(text)) {
+    const text = cleanCorreiosMessage(value);
+    if (text && !bag.includes(text)) {
       bag.push(text);
     }
     return bag;
@@ -435,13 +575,13 @@ function collectCorreiosMessages(value, bag = [], depth = 0) {
   }
 
   if (typeof value === 'object') {
+    // Prefer msgs over causa (causa costuma ser só ApiNegocioRuntimeException)
     for (const key of [
-      'msgs', 'message', 'causa', 'msg', 'erro', 'error', 'detail', 'details',
-      'mensagem', 'descricao', 'description', 'title',
+      'msgs', 'message', 'msg', 'erro', 'error', 'detail', 'details',
+      'mensagem', 'descricao', 'description', 'title', 'causa',
     ]) {
       if (value[key] != null) collectCorreiosMessages(value[key], bag, depth + 1);
     }
-    // Objetos de validação tipo { campo: "msg" }
     if (!value.msgs && !value.message && !value.causa) {
       for (const [key, nested] of Object.entries(value)) {
         if (['date', 'method', 'path', 'stackTrace', 'status', 'raw'].includes(key)) continue;
@@ -456,34 +596,91 @@ function collectCorreiosMessages(value, bag = [], depth = 0) {
 }
 
 function extractCorreiosError(body, status, fallback = 'Erro na API de pré-postagem') {
-  const messages = collectCorreiosMessages(body);
+  const messages = collectCorreiosMessages(body)
+    .filter((m) => !/^ApiNegocioRuntimeException:?$/i.test(m));
   if (messages.length > 0) return messages.join(' | ');
   if (status) return `${fallback} (HTTP ${status})`;
   return fallback;
 }
 
-function throwCorreiosError({ message, details = [], step = null, status = null, raw = null }) {
+function nextStepsForStep(step, apiMsg = '') {
+  const text = String(apiMsg || '');
+  if (step === 'autenticacao') {
+    return [
+      'Confira usuário Meu Correios e código de acesso no CWS.',
+      'Salve em Frete → API Correios e use Testar API (modo Cartão).',
+    ];
+  }
+  if (step === 'criar_prepostagem') {
+    const steps = [
+      'No CWS, libere a API Pré-postagem (serviço 86720) no cartão.',
+      'Confirme PAC/SEDEX de contrato (03298/03220) no cartão.',
+      'Confira remetente (aba Remetente) e CEP do destinatário no pedido.',
+    ];
+    if (/CON-011|86720|não foi encontrado|nao foi encontrado/i.test(text)) {
+      steps.unshift('O cartão não tem o serviço de pré-postagem (86720). Peça liberação ao comercial dos Correios.');
+    }
+    if (/PRC-111|nuDR|DR/i.test(text)) {
+      steps.unshift('Preencha a DR do contrato em Frete → API Correios e salve.');
+    }
+    return steps;
+  }
+  if (step === 'codigo_objeto') {
+    return [
+      'Verifique saldo de etiquetas do cartão no CWS.',
+      'Aguarde alguns segundos e tente gerar o código novamente.',
+      'Confirme se o serviço PAC/SEDEX está liberado no contrato.',
+    ];
+  }
+  if (step === 'preflight') {
+    return [
+      'Complete o checklist em Configurações → Frete (API Correios + Remetente).',
+      'Abra o pedido novamente e confira os itens pendentes.',
+    ];
+  }
+  return ['Revise Frete → API Correios, Remetente e os dados do pedido.'];
+}
+
+function throwCorreiosError({
+  message,
+  details = [],
+  step = null,
+  status = null,
+  raw = null,
+  nextSteps = null,
+}) {
   const uniqueDetails = [...new Set(
     details
       .flatMap((item) => {
-        if (typeof item === 'string') return [item];
+        if (typeof item === 'string') return [cleanCorreiosMessage(item)].filter(Boolean);
         return collectCorreiosMessages(item);
       })
-      .map((item) => String(item).trim())
-      .filter((item) => item && item !== 'null' && item !== 'undefined')
+      .map((item) => cleanCorreiosMessage(item))
+      .filter((item) => item && !/^ApiNegocioRuntimeException:?$/i.test(item))
   )];
 
-  // Se a mensagem genérica não traz o motivo, usa o primeiro detalhe da API no título
-  let finalMessage = message || uniqueDetails[0] || 'Erro ao gerar código Correios';
-  const apiDetail = uniqueDetails.find((d) => d !== finalMessage && !d.startsWith('Serviço enviado') && !d.startsWith('Confira '));
-  if (apiDetail && /recusaram|não foi possível|Erro na API/i.test(finalMessage)) {
-    finalMessage = `${finalMessage.replace(/\.$/, '')}: ${apiDetail}`;
+  let finalMessage = cleanCorreiosMessage(message) || uniqueDetails[0] || 'Erro ao gerar código Correios';
+  const apiDetail = uniqueDetails.find((d) => (
+    d !== finalMessage
+    && !d.startsWith('Serviço enviado')
+    && !d.startsWith('HTTP ')
+    && !d.startsWith('CEP ')
+    && !d.startsWith('Confira ')
+  ));
+  if (apiDetail && /recusaram|não foi possível|Erro na API|Falta |incompleto/i.test(finalMessage)) {
+    if (!finalMessage.includes(apiDetail)) {
+      finalMessage = `${finalMessage.replace(/\.$/, '')}: ${apiDetail}`;
+    }
   }
 
   const err = new Error(finalMessage);
   err.code = 'CORREIOS_PREPOSTAGEM';
   err.details = uniqueDetails;
   err.step = step;
+  err.step_label = stepLabel(step);
+  err.next_steps = Array.isArray(nextSteps) && nextSteps.length
+    ? nextSteps
+    : nextStepsForStep(step, finalMessage);
   err.status = status;
   err.raw = raw;
   throw err;
@@ -491,6 +688,17 @@ function throwCorreiosError({ message, details = [], step = null, status = null,
 
 export async function generateCorreiosTrackingCode(order) {
   try {
+    const preflight = await buildCorreiosCodePrerequisites(order);
+    if (!preflight.ready) {
+      const pending = preflight.items.filter((item) => !item.ok);
+      throwCorreiosError({
+        message: 'Ainda faltam configurações para gerar o código Correios.',
+        details: pending.map((item) => `${item.label}: ${item.help}`),
+        step: 'preflight',
+        nextSteps: pending.map((item) => item.help),
+      });
+    }
+
     const config = await getPrePostagemConfig();
     const sender = await getSenderConfig();
     const recipient = parseRecipientAddress(order);
@@ -546,11 +754,11 @@ export async function generateCorreiosTrackingCode(order) {
           `Serviço enviado: ${serviceCode}`,
           `CEP remetente: ${payload.remetente?.endereco?.cep || '-'}`,
           `CEP destinatário: ${payload.destinatario?.endereco?.cep || '-'}`,
-          'Confira remetente (aba Remetente), destinatário do pedido e se o serviço está liberado no cartão/contrato no CWS.',
         ],
         step: 'criar_prepostagem',
         status: created.status,
         raw: created.data,
+        nextSteps: nextStepsForStep('criar_prepostagem', apiMsg),
       });
     }
 

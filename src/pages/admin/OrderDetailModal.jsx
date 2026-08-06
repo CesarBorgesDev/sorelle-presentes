@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { Link } from 'react-router-dom';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/api/apiClient';
 import { resolveMediaUrl } from '@/lib/resolveMediaUrl';
 import OrderTrackingPanel from '@/components/OrderTrackingPanel';
@@ -13,7 +14,9 @@ import {
   formatOrderDate,
   formatMoney,
 } from '@/lib/orderLabels';
-import { AlertCircle, ExternalLink, Loader2, Printer, ScanBarcode, Trash2, X } from 'lucide-react';
+import {
+  AlertCircle, CheckCircle2, Circle, ExternalLink, Loader2, Printer, ScanBarcode, Trash2, X,
+} from 'lucide-react';
 
 const STATUS_OPTIONS = ['pendente', 'confirmado', 'em_preparo', 'enviado', 'entregue', 'cancelado'];
 const PAYMENT_STATUS_OPTIONS = ['aguardando_pagamento', 'pago', 'recusado', 'cancelado'];
@@ -90,6 +93,16 @@ export default function OrderDetailModal({ order, onClose, onUpdated, onDeleted 
     },
   });
 
+  const {
+    data: correiosPreflight,
+    isLoading: preflightLoading,
+    refetch: refetchPreflight,
+  } = useQuery({
+    queryKey: ['correios-preflight', order.id],
+    queryFn: () => api.orderShipping.preflightTrackingCode(order.id),
+    staleTime: 30_000,
+  });
+
   const trackingCodeMutation = useMutation({
     mutationFn: () => api.orderShipping.generateTrackingCode(order.id),
     onSuccess: (result) => {
@@ -102,6 +115,10 @@ export default function OrderDetailModal({ order, onClose, onUpdated, onDeleted 
             'A pré-postagem pode ter sido criada sem atribuir o objeto.',
             'Verifique saldo de etiquetas no CWS e tente novamente.',
           ],
+          next_steps: [
+            'Confira no CWS o saldo de etiquetas do cartão.',
+            'Tente gerar o código novamente em alguns segundos.',
+          ],
         });
         return;
       }
@@ -109,7 +126,15 @@ export default function OrderDetailModal({ order, onClose, onUpdated, onDeleted 
       if (result.label_url) {
         setLabelUrl(result.label_url);
       }
+      if (result.label_error) {
+        setTrackingCodeError({
+          message: 'Código gerado, mas a etiqueta local falhou.',
+          details: [result.label_error],
+          next_steps: ['Use “Gerar etiqueta” manualmente após conferir o código.'],
+        });
+      }
       queryClient.invalidateQueries({ queryKey: ['orders'] });
+      queryClient.invalidateQueries({ queryKey: ['correios-preflight', order.id] });
       if (result.order) {
         onUpdated?.(result.order);
       }
@@ -137,9 +162,14 @@ export default function OrderDetailModal({ order, onClose, onUpdated, onDeleted 
         message: safeMessage,
         details: uniqueDetails,
         step: body.step || null,
+        step_label: body.step_label || null,
+        next_steps: Array.isArray(body.next_steps) ? body.next_steps.filter(Boolean) : [],
       });
+      refetchPreflight();
     },
   });
+
+  const canGenerateCorreiosCode = Boolean(correiosPreflight?.ready);
 
   function saveShippingPayment() {
     updateMutation.mutate({
@@ -313,9 +343,67 @@ export default function OrderDetailModal({ order, onClose, onUpdated, onDeleted 
           <div className="space-y-4 p-4 rounded-sm border border-border">
             <div>
               <h3 className="font-display text-base tracking-wide text-foreground">Envio Correios</h3>
-              <p className="font-body text-xs text-muted-foreground mt-1">
-                Gere o código de rastreio pela API dos Correios ou informe manualmente após a postagem.
+              <ol className="mt-2 space-y-1 font-body text-xs text-muted-foreground list-decimal pl-4">
+                <li>
+                  Configure{' '}
+                  <Link to="/admin/configuracoes" className="underline underline-offset-2 hover:text-foreground">
+                    Frete → API Correios
+                  </Link>
+                  {' '}(CWS + cartão/contrato)
+                </li>
+                <li>
+                  Preencha e salve o{' '}
+                  <Link to="/admin/configuracoes" className="underline underline-offset-2 hover:text-foreground">
+                    Remetente
+                  </Link>
+                </li>
+                <li>Neste pedido (PAC/SEDEX), clique em Gerar código Correios</li>
+              </ol>
+              <p className="font-body text-[11px] text-muted-foreground mt-2">
+                A geração também cria etiqueta HTML e pode marcar o pedido como Enviado.
               </p>
+            </div>
+
+            <div className="rounded-sm border border-border/80 bg-secondary/20 p-3 space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <p className="font-body text-xs uppercase tracking-wider text-muted-foreground">
+                  Checklist
+                </p>
+                {preflightLoading && <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground" />}
+              </div>
+              {Array.isArray(correiosPreflight?.items) && correiosPreflight.items.length > 0 ? (
+                <ul className="space-y-1.5">
+                  {correiosPreflight.items.map((item) => (
+                    <li key={item.id} className="flex items-start gap-2 font-body text-xs">
+                      {item.ok ? (
+                        <CheckCircle2 className="w-3.5 h-3.5 mt-0.5 shrink-0 text-green-600 dark:text-green-400" />
+                      ) : (
+                        <Circle className="w-3.5 h-3.5 mt-0.5 shrink-0 text-amber-600 dark:text-amber-400" />
+                      )}
+                      <span className={item.ok ? 'text-foreground/80' : 'text-foreground'}>
+                        <span className="font-medium">{item.label}</span>
+                        {!item.ok && item.help ? (
+                          <span className="block text-muted-foreground mt-0.5">{item.help}</span>
+                        ) : null}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                !preflightLoading && (
+                  <p className="font-body text-xs text-muted-foreground">
+                    Não foi possível carregar o checklist. Tente reabrir o pedido.
+                  </p>
+                )
+              )}
+              {correiosPreflight?.service_code_mapped && (
+                <p className="font-body text-[11px] text-muted-foreground">
+                  Serviço que será enviado: <span className="font-mono">{correiosPreflight.service_code_mapped}</span>
+                  {correiosPreflight.destination_zip
+                    ? <> · CEP destino <span className="font-mono">{correiosPreflight.destination_zip}</span></>
+                    : null}
+                </p>
+              )}
             </div>
 
             <div>
@@ -334,15 +422,15 @@ export default function OrderDetailModal({ order, onClose, onUpdated, onDeleted 
               <div className="p-3 rounded-sm border border-destructive/40 bg-destructive/5 space-y-2">
                 <div className="flex items-start gap-2">
                   <AlertCircle className="w-4 h-4 mt-0.5 shrink-0 text-destructive" />
-                  <div className="min-w-0 space-y-1">
+                  <div className="min-w-0 space-y-1.5">
                     <p className="font-body text-sm text-destructive font-medium">
                       {typeof trackingCodeError === 'string'
                         ? trackingCodeError
                         : trackingCodeError.message}
                     </p>
-                    {typeof trackingCodeError === 'object' && trackingCodeError.step && (
+                    {typeof trackingCodeError === 'object' && (trackingCodeError.step_label || trackingCodeError.step) && (
                       <p className="font-body text-[11px] text-muted-foreground">
-                        Etapa: {trackingCodeError.step}
+                        Etapa: {trackingCodeError.step_label || trackingCodeError.step}
                       </p>
                     )}
                     {typeof trackingCodeError === 'object'
@@ -354,6 +442,20 @@ export default function OrderDetailModal({ order, onClose, onUpdated, onDeleted 
                         ))}
                       </ul>
                     )}
+                    {typeof trackingCodeError === 'object'
+                      && Array.isArray(trackingCodeError.next_steps)
+                      && trackingCodeError.next_steps.length > 0 && (
+                      <div className="pt-1">
+                        <p className="font-body text-[11px] uppercase tracking-wider text-muted-foreground mb-1">
+                          Próximos passos
+                        </p>
+                        <ol className="list-decimal pl-4 space-y-1 font-body text-xs text-foreground/90">
+                          {trackingCodeError.next_steps.map((step) => (
+                            <li key={step}>{step}</li>
+                          ))}
+                        </ol>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -362,11 +464,16 @@ export default function OrderDetailModal({ order, onClose, onUpdated, onDeleted 
             <div className="flex flex-wrap gap-3">
               <button
                 type="button"
+                title={
+                  canGenerateCorreiosCode
+                    ? 'Gerar código pela API de pré-postagem'
+                    : 'Complete o checklist acima antes de gerar'
+                }
                 onClick={() => {
                   setTrackingCodeError(null);
                   trackingCodeMutation.mutate();
                 }}
-                disabled={trackingCodeMutation.isPending}
+                disabled={trackingCodeMutation.isPending || preflightLoading || !canGenerateCorreiosCode}
                 className="inline-flex items-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground rounded-sm font-body text-sm hover:opacity-90 disabled:opacity-50"
               >
                 {trackingCodeMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <ScanBarcode className="w-4 h-4" />}

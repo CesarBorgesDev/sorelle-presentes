@@ -76,11 +76,10 @@ export async function getCorreiosApiCredentials() {
 
 export async function getCorreiosContractContext() {
   const postCard = ((await getSetting('correios_post_card')) || process.env.CORREIOS_POST_CARD || '').trim();
+  // Contrato comercial REST — não usar código de empresa legado (CalcPrecoPrazo)
   const contract = (
     (await getSetting('correios_contract_number'))
-    || (await getSetting('correios_company_code'))
     || process.env.CORREIOS_CONTRACT_NUMBER
-    || process.env.CORREIOS_COMPANY_CODE
     || ''
   ).trim();
   const drRaw = ((await getSetting('correios_contract_dr')) || process.env.CORREIOS_CONTRACT_DR || '').trim();

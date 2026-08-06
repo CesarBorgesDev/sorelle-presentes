@@ -120,7 +120,7 @@ export async function getCorreiosConfig() {
     hasApiCredentials,
     hasRestContract,
     hasLegacyContract,
-    contractNumber: contract || companyCode || '',
+    contractNumber: contract || '',
     contractDr: dr,
     postCard,
     fallbackMode,

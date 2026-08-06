@@ -4,7 +4,10 @@ import { requireAuth, requireAdmin } from '../middleware/auth.js';
 import { parseSort, rowToEntity, rowsToEntities } from '../utils/helpers.js';
 import { generateCorreiosShippingLabel } from '../services/shippingLabels.js';
 import { normalizeTrackingCode, trackCorreiosPackage } from '../services/correiosTracking.js';
-import { generateCorreiosTrackingCode } from '../services/correiosPrePostagem.js';
+import {
+  buildCorreiosCodePrerequisites,
+  generateCorreiosTrackingCode,
+} from '../services/correiosPrePostagem.js';
 import { getInvoiceTypeConfig, saveInvoiceFile } from '../services/invoiceUpload.js';
 import { streamOrderInvoice, withInvoiceFlags, withInvoiceFlagsList } from '../services/invoiceAccess.js';
 
@@ -96,39 +99,66 @@ router.post('/:id/etiqueta', async (req, res) => {
   }
 });
 
+router.get('/:id/codigo-correios/preflight', async (req, res) => {
+  try {
+    const order = await loadOrderOr404(req.params.id, res);
+    if (!order) return;
+    const preflight = await buildCorreiosCodePrerequisites(order);
+    res.json(preflight);
+  } catch (err) {
+    console.error('Erro no preflight Correios:', err);
+    res.status(500).json({ message: err.message || 'Erro ao verificar pré-requisitos' });
+  }
+});
+
 router.post('/:id/codigo-correios', async (req, res) => {
   try {
     const order = await loadOrderOr404(req.params.id, res);
     if (!order) return;
 
     const generated = await generateCorreiosTrackingCode(order);
-    const label = await generateCorreiosShippingLabel(order, {
-      trackingCode: generated.tracking_code,
-    });
+
+    let labelUrl = null;
+    let labelError = null;
+    try {
+      const label = await generateCorreiosShippingLabel(order, {
+        trackingCode: generated.tracking_code,
+      });
+      labelUrl = label.label_url;
+    } catch (labelErr) {
+      console.error('Etiqueta HTML falhou após código Correios:', labelErr);
+      labelError = labelErr.message || 'Falha ao gerar etiqueta HTML local';
+    }
 
     const result = await pool.query(
       `UPDATE orders
        SET tracking_code = $1,
-           shipping_label_url = $2,
+           shipping_label_url = COALESCE($2, shipping_label_url),
            status = CASE WHEN status IN ('confirmado', 'em_preparo', 'pendente') THEN 'enviado' ELSE status END,
            shipped_at = COALESCE(shipped_at, NOW()),
            updated_date = NOW()
        WHERE id = $3
        RETURNING *`,
-      [generated.tracking_code, label.label_url, order.id]
+      [generated.tracking_code, labelUrl, order.id]
     );
 
     res.json({
-      message: 'Código de rastreio gerado com sucesso',
+      message: labelError
+        ? 'Código de rastreio gerado (etiqueta local falhou)'
+        : 'Código de rastreio gerado com sucesso',
       tracking_code: generated.tracking_code,
       prepostagem_id: generated.prepostagem_id,
-      label_url: label.label_url,
+      label_url: labelUrl,
+      label_error: labelError,
       order: withInvoiceFlags(rowToEntity(result.rows[0])),
     });
   } catch (err) {
     console.error('Erro ao gerar código Correios:', err);
     const details = Array.isArray(err?.details)
       ? err.details.filter(Boolean)
+      : [];
+    const nextSteps = Array.isArray(err?.next_steps)
+      ? err.next_steps.filter(Boolean)
       : [];
     const message = (err?.message && err.message !== 'null')
       ? err.message
@@ -137,7 +167,9 @@ router.post('/:id/codigo-correios', async (req, res) => {
     res.status(400).json({
       message,
       details,
+      next_steps: nextSteps,
       step: err?.step || null,
+      step_label: err?.step_label || null,
       correios_status: err?.status || null,
     });
   }
