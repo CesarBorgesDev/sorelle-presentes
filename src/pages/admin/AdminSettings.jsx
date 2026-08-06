@@ -4,7 +4,7 @@ import { api } from '@/api/apiClient';
 import {
   Settings, Key, Sparkles, Loader2, CheckCircle2,
   CreditCard, Circle, ExternalLink, AlertCircle, Truck, ShoppingBag, Store,
-  Plus, Trash2,
+  Plus, Trash2, ScanBarcode,
 } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { PRODUCT_SORT_OPTIONS } from '@/hooks/useProductSort';
@@ -105,6 +105,7 @@ export default function AdminSettings() {
   const [correiosTestMode, setCorreiosTestMode] = useState('auto');
   const [correiosTestZip, setCorreiosTestZip] = useState('01310100');
   const [correiosTestResult, setCorreiosTestResult] = useState(null);
+  const [correiosPrePostagemTestResult, setCorreiosPrePostagemTestResult] = useState(null);
   const [fillingSenderFromCep, setFillingSenderFromCep] = useState(false);
   const [senderCepMessage, setSenderCepMessage] = useState('');
   const [carrierEnabled, setCarrierEnabled] = useState(false);
@@ -212,6 +213,17 @@ export default function AdminSettings() {
       ok: false,
       message: err?.body?.message || err.message || 'Falha ao testar API dos Correios',
       steps: err?.body?.steps || [],
+    }),
+  });
+
+  const correiosPrePostagemTestMutation = useMutation({
+    mutationFn: (payload) => api.settings.testCorreiosPrePostagem(payload),
+    onSuccess: (result) => setCorreiosPrePostagemTestResult(result),
+    onError: (err) => setCorreiosPrePostagemTestResult({
+      ok: false,
+      message: err?.body?.message || err.message || 'Falha ao testar pré-postagem',
+      steps: err?.body?.steps || [],
+      next_steps: err?.body?.next_steps || [],
     }),
   });
 
@@ -820,11 +832,13 @@ export default function AdminSettings() {
                       </li>
                       <li>Salve esta tela e use <strong className="text-foreground font-medium">Testar API</strong> (modo Cartão).</li>
                       <li>Preencha a aba <strong className="text-foreground font-medium">Remetente</strong> e salve de novo.</li>
+                      <li>Use <strong className="text-foreground font-medium">Testar pré-postagem</strong> (cria e cancela um envio de teste).</li>
                       <li>No pedido com frete PAC/SEDEX, abra o detalhe e clique em <strong className="text-foreground font-medium">Gerar código Correios</strong>.</li>
                     </ol>
                     <p className="font-body text-[11px] text-muted-foreground pt-1 border-t border-border/60">
-                      O Testar API valida token, Preço e Prazo — <strong className="font-medium text-foreground">não</strong> cria pré-postagem.
-                      Se a geração no pedido falhar com erro de serviço (ex.: 86720), peça liberação ao comercial dos Correios.
+                      O Testar API valida token, Preço e Prazo. O Testar pré-postagem valida o serviço{' '}
+                      <strong className="font-medium text-foreground">86720</strong> e o PAC/SEDEX do cartão.
+                      Se falhar, peça liberação ao comercial dos Correios.
                     </p>
                   </div>
                   <div className="grid gap-4 sm:grid-cols-2">
@@ -894,7 +908,7 @@ export default function AdminSettings() {
                     <div>
                       <h4 className="font-display text-sm tracking-wide text-foreground">Testar conexão</h4>
                       <p className="font-body text-xs text-muted-foreground mt-1">
-                        Salve as credenciais antes de testar. Valida o token e, com CEP, as APIs Preço e Prazo.
+                        Salve as credenciais e o Remetente antes de testar. Use o CEP destino nos dois testes abaixo.
                       </p>
                     </div>
                     <div className="grid gap-4 sm:grid-cols-3">
@@ -912,7 +926,7 @@ export default function AdminSettings() {
                         </select>
                       </div>
                       <div>
-                        <label className={labelClass}>CEP destino (teste Preço/Prazo)</label>
+                        <label className={labelClass}>CEP destino (teste)</label>
                         <input
                           type="text"
                           className={inputClass}
@@ -921,10 +935,10 @@ export default function AdminSettings() {
                           placeholder="01310100"
                         />
                       </div>
-                      <div className="flex items-end">
+                      <div className="flex items-end gap-2 sm:col-span-1 sm:flex-col lg:flex-row">
                         <button
                           type="button"
-                          disabled={correiosTestMutation.isPending}
+                          disabled={correiosTestMutation.isPending || correiosPrePostagemTestMutation.isPending}
                           onClick={() => {
                             setCorreiosTestResult(null);
                             correiosTestMutation.mutate({
@@ -945,6 +959,34 @@ export default function AdminSettings() {
                       </div>
                     </div>
 
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between rounded-sm border border-border bg-secondary/20 p-3">
+                      <div className="min-w-0">
+                        <p className="font-body text-sm text-foreground">Testar pré-postagem</p>
+                        <p className="font-body text-[11px] text-muted-foreground mt-0.5">
+                          Cria uma pré-postagem PAC de teste e cancela em seguida. Valida o serviço 86720 e o cartão.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        disabled={correiosTestMutation.isPending || correiosPrePostagemTestMutation.isPending}
+                        onClick={() => {
+                          setCorreiosPrePostagemTestResult(null);
+                          correiosPrePostagemTestMutation.mutate({
+                            destination_zip: correiosTestZip,
+                            service_code: '03298',
+                          });
+                        }}
+                        className="shrink-0 inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-sm border border-border bg-background font-body text-sm hover:bg-secondary disabled:opacity-60"
+                      >
+                        {correiosPrePostagemTestMutation.isPending ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <ScanBarcode className="w-4 h-4" />
+                        )}
+                        Testar pré-postagem
+                      </button>
+                    </div>
+
                     {correiosTestResult && (
                       <div
                         className={`p-4 rounded-sm border space-y-3 ${
@@ -959,7 +1001,10 @@ export default function AdminSettings() {
                           ) : (
                             <AlertCircle className="w-4 h-4 mt-0.5 shrink-0 text-amber-600 dark:text-amber-400" />
                           )}
-                          <p className="font-body text-sm text-foreground">{correiosTestResult.message}</p>
+                          <p className="font-body text-sm text-foreground">
+                            <span className="text-xs uppercase tracking-wider text-muted-foreground block mb-0.5">API Token / Preço</span>
+                            {correiosTestResult.message}
+                          </p>
                         </div>
                         {Array.isArray(correiosTestResult.steps) && correiosTestResult.steps.length > 0 && (
                           <ul className="space-y-2 font-body text-xs text-muted-foreground">
@@ -983,6 +1028,65 @@ export default function AdminSettings() {
                               </li>
                             ))}
                           </ul>
+                        )}
+                      </div>
+                    )}
+
+                    {correiosPrePostagemTestResult && (
+                      <div
+                        className={`p-4 rounded-sm border space-y-3 ${
+                          correiosPrePostagemTestResult.ok
+                            ? 'border-green-200 bg-green-50 dark:border-green-900 dark:bg-green-950/30'
+                            : 'border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/30'
+                        }`}
+                      >
+                        <div className="flex items-start gap-2">
+                          {correiosPrePostagemTestResult.ok ? (
+                            <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0 text-green-600 dark:text-green-400" />
+                          ) : (
+                            <AlertCircle className="w-4 h-4 mt-0.5 shrink-0 text-amber-600 dark:text-amber-400" />
+                          )}
+                          <p className="font-body text-sm text-foreground">
+                            <span className="text-xs uppercase tracking-wider text-muted-foreground block mb-0.5">Pré-postagem</span>
+                            {correiosPrePostagemTestResult.message}
+                          </p>
+                        </div>
+                        {Array.isArray(correiosPrePostagemTestResult.steps) && correiosPrePostagemTestResult.steps.length > 0 && (
+                          <ul className="space-y-2 font-body text-xs text-muted-foreground">
+                            {correiosPrePostagemTestResult.steps.map((step, idx) => (
+                              <li key={`${step.name}-${idx}`} className="border-t border-border/60 pt-2 first:border-0 first:pt-0">
+                                <span className={step.ok ? 'text-green-700 dark:text-green-400' : 'text-amber-700 dark:text-amber-400'}>
+                                  {step.ok ? 'OK' : 'Falha'}
+                                </span>
+                                {' · '}
+                                <span className="font-mono">{step.name}</span>
+                                {step.endpoint && <> · {step.endpoint}</>}
+                                {step.mode && <> · modo {step.mode}</>}
+                                {step.service_code && <> · serviço {step.service_code}</>}
+                                {step.prepostagem_id && <> · id {step.prepostagem_id}</>}
+                                {step.tracking_code && <> · {step.tracking_code}</>}
+                                {step.prepostagem_no_token != null && (
+                                  <> · pré-postagem no token: {step.prepostagem_no_token ? 'sim' : 'não'}</>
+                                )}
+                                {step.error && (
+                                  <span className="block mt-0.5 text-destructive">{step.error}</span>
+                                )}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                        {Array.isArray(correiosPrePostagemTestResult.next_steps)
+                          && correiosPrePostagemTestResult.next_steps.length > 0 && (
+                          <div className="pt-1 border-t border-border/60">
+                            <p className="font-body text-[11px] uppercase tracking-wider text-muted-foreground mb-1">
+                              Próximos passos
+                            </p>
+                            <ol className="list-decimal pl-4 space-y-1 font-body text-xs text-foreground/90">
+                              {correiosPrePostagemTestResult.next_steps.map((step) => (
+                                <li key={step}>{step}</li>
+                              ))}
+                            </ol>
+                          </div>
                         )}
                       </div>
                     )}

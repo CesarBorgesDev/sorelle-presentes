@@ -8,10 +8,12 @@ import {
   getCorreiosConfig,
 } from './correios.js';
 import {
+  clearCorreiosTokenCache,
   getCorreiosApiBase,
   getCorreiosApiCredentials,
   getCorreiosApiToken,
   getCorreiosContractContext,
+  requestCorreiosToken,
 } from './correiosAuth.js';
 import { getSetting } from './settings.js';
 import { STORE_PICKUP_ID } from './storePickup.js';
@@ -837,4 +839,301 @@ export async function generateCorreiosTrackingCode(order) {
       raw: err?.raw || null,
     });
   }
+}
+
+/**
+ * Teste admin: autentica, cria uma pré-postagem mínima e cancela em seguida.
+ * Valida liberação do serviço 86720 / PAC contrato — o “Testar API” não cobre isso.
+ */
+export async function testCorreiosPrePostagem({
+  destinationZip = '',
+  serviceCode = '03298',
+} = {}) {
+  const steps = [];
+  const [{ user, password }, contractCtx, sender] = await Promise.all([
+    getCorreiosApiCredentials(),
+    getCorreiosContractContext(),
+    getSenderConfig(),
+  ]);
+
+  const credentials = {
+    has_user: Boolean(user),
+    has_password: Boolean(password),
+    has_post_card: Boolean(contractCtx.postCard),
+    has_contract: Boolean(contractCtx.contract),
+    contract: contractCtx.contract || null,
+    dr: contractCtx.dr ?? null,
+    has_sender_street: Boolean(sender.street),
+    has_sender_city: Boolean(sender.city),
+    sender_zip: onlyDigits(sender.zip).slice(0, 8) || null,
+  };
+
+  if (!user || !password) {
+    return {
+      ok: false,
+      message: 'Usuário e código de acesso CWS não configurados.',
+      steps,
+      next_steps: [
+        'Preencha usuário Meu Correios e código de acesso na aba API Correios.',
+        'Salve e tente novamente.',
+      ],
+      credentials,
+    };
+  }
+
+  if (!contractCtx.postCard && !contractCtx.contract) {
+    return {
+      ok: false,
+      message: 'Informe cartão de postagem ou contrato comercial.',
+      steps,
+      next_steps: [
+        'Preencha o cartão de postagem (recomendado) ou contrato + DR.',
+        'Salve e use o modo Cartão ao testar.',
+      ],
+      credentials,
+    };
+  }
+
+  if (!sender.street || !sender.city || onlyDigits(sender.zip).length !== 8) {
+    return {
+      ok: false,
+      message: 'Remetente incompleto (logradouro, cidade e CEP de origem).',
+      steps: [{
+        name: 'remetente',
+        ok: false,
+        error: 'Preencha a aba Remetente e o CEP na aba Correios.',
+      }],
+      next_steps: [
+        'Abra Frete → Remetente, use “Preencher pelo CEP de origem” e salve.',
+        'Confira o CEP de origem na aba Correios.',
+      ],
+      credentials,
+    };
+  }
+
+  steps.push({
+    name: 'remetente',
+    ok: true,
+    city: sender.city,
+    uf: sender.state,
+    cep: onlyDigits(sender.zip).slice(0, 8),
+  });
+
+  let auth;
+  try {
+    clearCorreiosTokenCache();
+    auth = await requestCorreiosToken('auto', { forPostagem: true, forceRefresh: true });
+    const apis = Array.isArray(auth.meta?.apis) ? auth.meta.apis : [];
+    const hasPrepostagemApi = apis.some((item) => {
+      const apiName = String(item?.api || '').toLowerCase();
+      const paths = Array.isArray(item?.paths) ? item.paths.join(' ') : '';
+      return /prepostagem|pré-postagem|pre-postagem/i.test(`${apiName} ${paths}`);
+    });
+    steps.push({
+      name: 'token',
+      ok: true,
+      mode: auth.mode,
+      ambiente: auth.meta?.ambiente || null,
+      apis_autorizadas: apis.length,
+      prepostagem_no_token: hasPrepostagemApi,
+    });
+    if (!hasPrepostagemApi && apis.length > 0) {
+      steps.push({
+        name: 'apis_token',
+        ok: false,
+        error: 'O token não listou a API de pré-postagem. Confira a liberação do serviço 86720 no CWS.',
+      });
+    }
+  } catch (err) {
+    steps.push({
+      name: 'token',
+      ok: false,
+      error: cleanCorreiosMessage(err.message) || err.message,
+    });
+    return {
+      ok: false,
+      message: cleanCorreiosMessage(err.message) || 'Falha na autenticação CWS.',
+      steps,
+      next_steps: nextStepsForStep('autenticacao', err.message),
+      credentials,
+    };
+  }
+
+  const destZip = onlyDigits(destinationZip || sender.zip).slice(0, 8);
+  let destStreet = sender.street;
+  let destDistrict = sender.district || 'Centro';
+  let destCity = sender.city;
+  let destState = sender.state;
+  let destNumber = '100';
+
+  if (destZip.length === 8 && destZip !== onlyDigits(sender.zip).slice(0, 8)) {
+    try {
+      const fromCep = await fetchAddressByCep(destZip);
+      if (fromCep.street) destStreet = fromCep.street;
+      if (fromCep.district) destDistrict = fromCep.district;
+      if (fromCep.city) destCity = fromCep.city;
+      if (fromCep.state) destState = fromCep.state;
+      steps.push({
+        name: 'cep_destino',
+        ok: true,
+        cep: destZip,
+        city: destCity,
+        uf: destState,
+      });
+    } catch (err) {
+      steps.push({
+        name: 'cep_destino',
+        ok: false,
+        cep: destZip,
+        error: err.message || 'ViaCEP indisponível; usando endereço do remetente.',
+      });
+    }
+  } else {
+    steps.push({
+      name: 'cep_destino',
+      ok: true,
+      cep: destZip,
+      note: 'Usando CEP de origem (teste local).',
+    });
+  }
+
+  const code = String(serviceCode || CORREIOS_SERVICES.pac.contractCode).replace(/\D/g, '')
+    || CORREIOS_SERVICES.pac.contractCode;
+
+  const fakeOrder = {
+    id: `TESTE-${Date.now().toString(36).slice(-8)}`.slice(0, 25),
+    customer_name: 'TESTE PREPOSTAGEM ADMIN',
+    customer_email: sender.email || 'teste@sorellepresentes.com.br',
+    customer_phone: sender.phone?.number
+      ? `${sender.phone.ddd || '11'}${sender.phone.number}`
+      : '11999999999',
+    shipping_service_code: code,
+    total: 10,
+    items: [{
+      product_name: 'Teste prepostagem admin',
+      quantity: 1,
+      unit_price: 10,
+      total: 10,
+    }],
+  };
+
+  const payload = buildPrePostagemPayload(fakeOrder, {
+    sender,
+    recipient: {
+      street: destStreet,
+      number: destNumber,
+      complement: '',
+      district: destDistrict || 'Centro',
+      city: destCity,
+      state: destState,
+      zip: destZip,
+    },
+    packageInfo: {
+      weightKg: 0.3,
+      height: 10,
+      width: 15,
+      length: 20,
+    },
+    serviceCode: code,
+  });
+  payload.observacao = truncate('TESTE ADMIN — cancelar', 50);
+
+  const created = await correiosApiFetch('/v1/prepostagens', {
+    method: 'POST',
+    token: auth.token,
+    body: payload,
+  });
+
+  if (!created.ok) {
+    const apiMsg = extractCorreiosError(created.data, created.status, 'API de pré-postagem recusou o teste');
+    steps.push({
+      name: 'criar_prepostagem',
+      ok: false,
+      status: created.status,
+      endpoint: 'POST /prepostagem/v1/prepostagens',
+      error: apiMsg,
+      service_code: code,
+    });
+    return {
+      ok: false,
+      message: apiMsg,
+      step_label: STEP_LABELS.criar_prepostagem,
+      steps,
+      next_steps: nextStepsForStep('criar_prepostagem', apiMsg),
+      credentials,
+    };
+  }
+
+  const prepostagemId = created.data?.id
+    || created.data?.idPrePostagem
+    || created.data?.idPrepostagem
+    || null;
+  const trackingCode = extractTrackingCodeFromPayload(created.data) || null;
+
+  steps.push({
+    name: 'criar_prepostagem',
+    ok: true,
+    status: created.status,
+    endpoint: 'POST /prepostagem/v1/prepostagens',
+    prepostagem_id: prepostagemId,
+    tracking_code: trackingCode,
+    service_code: code,
+  });
+
+  let cancelled = false;
+  if (prepostagemId) {
+    const cancel = await correiosApiFetch(`/v1/prepostagens/${encodeURIComponent(prepostagemId)}`, {
+      method: 'DELETE',
+      token: auth.token,
+    });
+    cancelled = cancel.ok || cancel.status === 204 || cancel.status === 200;
+    steps.push({
+      name: 'cancelar_prepostagem',
+      ok: cancelled,
+      status: cancel.status,
+      endpoint: `DELETE /prepostagem/v1/prepostagens/${prepostagemId}`,
+      ...(cancelled ? {} : {
+        error: extractCorreiosError(cancel.data, cancel.status, 'Não foi possível cancelar a pré-postagem de teste'),
+      }),
+    });
+  } else if (trackingCode) {
+    const cancel = await correiosApiFetch(`/v1/prepostagens/objeto/${encodeURIComponent(trackingCode)}`, {
+      method: 'DELETE',
+      token: auth.token,
+    });
+    cancelled = cancel.ok || cancel.status === 204 || cancel.status === 200;
+    steps.push({
+      name: 'cancelar_prepostagem',
+      ok: cancelled,
+      status: cancel.status,
+      endpoint: `DELETE /prepostagem/v1/prepostagens/objeto/${trackingCode}`,
+      ...(cancelled ? {} : {
+        error: extractCorreiosError(cancel.data, cancel.status, 'Não foi possível cancelar a pré-postagem de teste'),
+      }),
+    });
+  } else {
+    steps.push({
+      name: 'cancelar_prepostagem',
+      ok: false,
+      error: 'Pré-postagem criada sem ID/código para cancelar. Cancele manualmente no CWS se necessário.',
+    });
+  }
+
+  return {
+    ok: true,
+    message: cancelled
+      ? 'Pré-postagem OK: criação e cancelamento concluídos. Pode gerar códigos nos pedidos.'
+      : 'Pré-postagem criada com sucesso, mas o cancelamento automático falhou. Cancele no CWS se aparecer pendente.',
+    steps,
+    next_steps: cancelled
+      ? ['No pedido PAC/SEDEX, use Gerar código Correios.']
+      : [
+        'Cancele a pré-postagem de teste no CWS se ainda estiver ativa.',
+        'No pedido PAC/SEDEX, use Gerar código Correios.',
+      ],
+    credentials,
+    prepostagem_id: prepostagemId,
+    tracking_code: trackingCode,
+    cancelled,
+  };
 }

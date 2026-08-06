@@ -312,6 +312,13 @@ const settings = {
       body: JSON.stringify(data),
     });
   },
+
+  async testCorreiosPrePostagem(data = {}) {
+    return apiFetch('/settings/correios/test-prepostagem', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
 };
 
 const pages = {

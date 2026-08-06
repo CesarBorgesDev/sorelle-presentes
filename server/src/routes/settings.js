@@ -17,6 +17,7 @@ import {
 import { getInstallmentScale, parseInstallmentScale } from '../services/installmentScale.js';
 import { getCorreiosConfig } from '../services/correios.js';
 import { clearCorreiosTokenCache, testCorreiosApiConnection } from '../services/correiosAuth.js';
+import { testCorreiosPrePostagem } from '../services/correiosPrePostagem.js';
 import { getRodonavesConfig } from '../services/rodonaves.js';
 
 const router = Router();
@@ -186,6 +187,28 @@ router.post('/correios/test', requireAuth, requireAdmin, async (req, res) => {
       ok: false,
       message: err.message || 'Erro ao testar API dos Correios',
       steps: [],
+    });
+  }
+});
+
+/** Cria e cancela uma pré-postagem de teste (valida serviço 86720 / PAC contrato). */
+router.post('/correios/test-prepostagem', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const result = await testCorreiosPrePostagem({
+      destinationZip: req.body?.destination_zip || '',
+      serviceCode: req.body?.service_code || '03298',
+    });
+    res.json(result);
+  } catch (err) {
+    console.error('Erro ao testar pré-postagem Correios:', err);
+    res.status(500).json({
+      ok: false,
+      message: err.message || 'Erro ao testar pré-postagem',
+      steps: [],
+      next_steps: [
+        'Confira Frete → API Correios e Remetente.',
+        'Libere a API Pré-postagem (86720) no CWS.',
+      ],
     });
   }
 });
