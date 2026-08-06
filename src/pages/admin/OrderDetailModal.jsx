@@ -76,15 +76,61 @@ export default function OrderDetailModal({ order, onClose, onUpdated, onDeleted 
   const labelMutation = useMutation({
     mutationFn: () => api.orderShipping.generateLabel(order.id, { tracking_code: trackingCode }),
     onSuccess: (result) => {
-      setLabelUrl(result.label_url);
+      setTrackingCodeError(null);
+      if (result.label_url) {
+        setLabelUrl(result.label_url);
+      }
       if (result.tracking_code) {
         setTrackingCode(result.tracking_code);
       }
+      if (result.label_error) {
+        setTrackingCodeError({
+          message: result.label_source === 'correios_pdf'
+            ? 'Rótulo gerado, mas houve aviso.'
+            : 'PDF oficial indisponível; etiqueta HTML também falhou ou não foi gerada.',
+          details: [result.label_error],
+          next_steps: ['Confira saldo CWS e tente “Atualizar rótulo” novamente.'],
+        });
+      }
       queryClient.invalidateQueries({ queryKey: ['orders'] });
+      queryClient.invalidateQueries({ queryKey: ['correios-preflight', order.id] });
       if (result.order) {
         onUpdated?.(result.order);
       }
-      window.open(resolveMediaUrl(result.label_url), '_blank', 'noopener,noreferrer');
+      if (result.label_url) {
+        const href = result.label_url.startsWith('http')
+          ? result.label_url
+          : resolveMediaUrl(result.label_url);
+        window.open(href, '_blank', 'noopener,noreferrer');
+      }
+    },
+    onError: (err) => {
+      const body = err?.body || {};
+      const message = body.message || err.message || 'Erro ao gerar rótulo Correios';
+      const details = [
+        ...(Array.isArray(body.details) ? body.details : []),
+        ...(Array.isArray(body.msgs) ? body.msgs : []),
+        body.causa,
+      ].filter((item) => item && item !== 'null' && item !== 'undefined');
+
+      const safeMessage = !message || message === 'null' || message === 'undefined'
+        ? (details[0] || 'Não foi possível gerar o rótulo Correios.')
+        : message;
+
+      const uniqueDetails = [...new Set(
+        details
+          .map((item) => String(item).trim())
+          .filter((item) => item && item !== safeMessage && !safeMessage.includes(item))
+      )];
+
+      setTrackingCodeError({
+        message: safeMessage,
+        details: uniqueDetails,
+        step: body.step || null,
+        step_label: body.step_label || null,
+        next_steps: Array.isArray(body.next_steps) ? body.next_steps.filter(Boolean) : [],
+      });
+      queryClient.invalidateQueries({ queryKey: ['correios-preflight', order.id] });
     },
   });
 
@@ -562,12 +608,24 @@ export default function OrderDetailModal({ order, onClose, onUpdated, onDeleted 
               {!isMelhorEnvioOrder && (
                 <button
                   type="button"
-                  onClick={() => labelMutation.mutate()}
+                  title={
+                    order.correios_prepostagem_id
+                      ? 'Reemitir rótulo PDF oficial da pré-postagem (Token CWS)'
+                      : canGenerateCorreiosCode
+                        ? 'Criar pré-postagem e emitir rótulo PDF oficial'
+                        : 'Gera rótulo oficial (PAC/SEDEX) ou etiqueta HTML local'
+                  }
+                  onClick={() => {
+                    setTrackingCodeError(null);
+                    labelMutation.mutate();
+                  }}
                   disabled={labelMutation.isPending}
                   className="inline-flex items-center gap-2 px-4 py-2.5 border border-border rounded-sm font-body text-sm hover:bg-secondary disabled:opacity-50"
                 >
                   {labelMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Printer className="w-4 h-4" />}
-                  {trackingCode ? 'Atualizar etiqueta' : 'Gerar etiqueta'}
+                  {order.correios_prepostagem_id || trackingCode
+                    ? 'Atualizar rótulo'
+                    : 'Gerar rótulo Correios'}
                 </button>
               )}
               <button

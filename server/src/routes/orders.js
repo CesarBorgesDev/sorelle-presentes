@@ -6,7 +6,9 @@ import { generateCorreiosShippingLabel } from '../services/shippingLabels.js';
 import { normalizeTrackingCode, trackCorreiosPackage } from '../services/correiosTracking.js';
 import {
   buildCorreiosCodePrerequisites,
+  generateCorreiosOfficialLabel,
   generateCorreiosTrackingCode,
+  isCorreiosPrePostagemOrder,
 } from '../services/correiosPrePostagem.js';
 import {
   generateMelhorEnvioLabel,
@@ -76,6 +78,73 @@ router.post('/:id/etiqueta', async (req, res) => {
     const order = await loadOrderOr404(req.params.id, res);
     if (!order) return;
 
+    if (isMelhorEnvioServiceCode(order.shipping_service_code)) {
+      return res.status(400).json({
+        message: 'Este pedido usa Melhor Envio. Use “Gerar etiqueta Melhor Envio”.',
+      });
+    }
+
+    // PAC/SEDEX: rótulo oficial via Token CWS (reemite se já houver pré-postagem)
+    if (isCorreiosPrePostagemOrder(order)) {
+      const generated = await generateCorreiosOfficialLabel(order);
+
+      let labelUrl = generated.label_url || null;
+      let labelSource = generated.label_source || null;
+      let labelError = null;
+
+      if (!labelUrl) {
+        try {
+          const label = await generateCorreiosShippingLabel(order, {
+            trackingCode: generated.tracking_code
+              || normalizeTrackingCode(req.body?.tracking_code || order.tracking_code),
+          });
+          labelUrl = label.label_url;
+          labelSource = 'html_local';
+        } catch (labelErr) {
+          console.error('Etiqueta HTML falhou após rótulo Correios:', labelErr);
+          labelError = labelErr.message || 'Falha ao gerar etiqueta HTML local';
+        }
+      }
+
+      const trackingCode = generated.tracking_code
+        || normalizeTrackingCode(req.body?.tracking_code || order.tracking_code)
+        || null;
+
+      const result = await pool.query(
+        `UPDATE orders
+         SET tracking_code = COALESCE($1, tracking_code),
+             shipping_label_url = COALESCE($2, shipping_label_url),
+             correios_prepostagem_id = COALESCE($3, correios_prepostagem_id),
+             status = CASE
+               WHEN $1 IS NOT NULL AND status IN ('confirmado', 'em_preparo', 'pendente') THEN 'enviado'
+               ELSE status
+             END,
+             shipped_at = CASE WHEN $1 IS NOT NULL THEN COALESCE(shipped_at, NOW()) ELSE shipped_at END,
+             updated_date = NOW()
+         WHERE id = $4
+         RETURNING *`,
+        [trackingCode, labelUrl, generated.prepostagem_id || null, order.id]
+      );
+
+      return res.json({
+        message: labelError
+          ? 'Rótulo solicitado (PDF/HTML falhou)'
+          : labelSource === 'correios_pdf'
+            ? 'Rótulo oficial dos Correios gerado'
+            : trackingCode
+              ? 'Código gerado; etiqueta HTML local (PDF oficial indisponível)'
+              : 'Etiqueta gerada',
+        tracking_code: result.rows[0]?.tracking_code || trackingCode,
+        prepostagem_id: generated.prepostagem_id || null,
+        id_recibo: generated.id_recibo || null,
+        label_url: labelUrl,
+        label_source: labelSource,
+        label_error: labelError,
+        order: withInvoiceFlags(rowToEntity(result.rows[0])),
+      });
+    }
+
+    // Retirada / transportadora: HTML local
     const trackingCode = normalizeTrackingCode(req.body?.tracking_code || order.tracking_code);
     const label = await generateCorreiosShippingLabel(order, { trackingCode });
 
@@ -94,11 +163,26 @@ router.post('/:id/etiqueta', async (req, res) => {
     res.json({
       message: 'Etiqueta gerada com sucesso',
       label_url: label.label_url,
+      label_source: 'html_local',
       tracking_code: result.rows[0]?.tracking_code || null,
-      order: rowToEntity(result.rows[0]),
+      order: withInvoiceFlags(rowToEntity(result.rows[0])),
     });
   } catch (err) {
     console.error('Erro ao gerar etiqueta:', err);
+    if (err?.code === 'CORREIOS_PREPOSTAGEM') {
+      const details = Array.isArray(err.details) ? err.details.filter(Boolean) : [];
+      const nextSteps = Array.isArray(err.next_steps) ? err.next_steps.filter(Boolean) : [];
+      return res.status(400).json({
+        message: (err.message && err.message !== 'null')
+          ? err.message
+          : (details[0] || 'Erro ao gerar rótulo Correios'),
+        details,
+        next_steps: nextSteps,
+        step: err.step || null,
+        step_label: err.step_label || null,
+        correios_status: err.status || null,
+      });
+    }
     res.status(500).json({ message: err.message || 'Erro ao gerar etiqueta' });
   }
 });

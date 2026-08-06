@@ -1123,6 +1123,119 @@ export async function generateCorreiosTrackingCode(order) {
   }
 }
 
+/** Pedido elegível à pré-postagem/rótulo oficial (PAC/SEDEX). */
+export function isCorreiosPrePostagemOrder(order) {
+  const serviceRaw = String(order?.shipping_service_code || '').trim();
+  const serviceId = String(order?.shipping_service_id || order?.shipping_service_code || '').trim();
+  const isPickup = serviceRaw === 'pickup'
+    || serviceId === STORE_PICKUP_ID
+    || /retirada/i.test(String(order?.shipping_service_name || ''));
+  const isCarrier = serviceRaw === CARRIER_SERVICE.code || serviceId === CARRIER_SERVICE.id;
+  if (!serviceRaw || isPickup || isCarrier) return false;
+  return Boolean(SERVICE_CODE_TO_CONTRACT[serviceRaw])
+    || Boolean(SERVICE_CODE_TO_CONTRACT[serviceRaw.toLowerCase()])
+    || ['03298', '03220', '04510', '04014'].includes(serviceRaw);
+}
+
+/**
+ * Gera rótulo PDF oficial via Token CWS.
+ * - Com correios_prepostagem_id: reemite/baixa rótulo assíncrono.
+ * - Sem id: cria pré-postagem (generateCorreiosTrackingCode).
+ */
+export async function generateCorreiosOfficialLabel(order) {
+  const existingId = String(order?.correios_prepostagem_id || '').trim();
+  if (!existingId) {
+    return generateCorreiosTrackingCode(order);
+  }
+
+  try {
+    const token = await getCorreiosApiToken({ forPostagem: true });
+    if (!token) {
+      throwCorreiosError({
+        message: 'Credenciais da API Correios não configuradas.',
+        details: [
+          'Preencha usuário Meu Correios e o código de acesso de pré-postagem em Frete → API Correios.',
+          'Salve e use “Testar pré-postagem” antes de gerar o rótulo.',
+        ],
+        step: 'autenticacao',
+      });
+    }
+
+    const rotulo = await emitRotuloAndResolveCode(token, existingId);
+    if (!rotulo.emit_ok) {
+      const apiMsg = rotulo.wait_error
+        || extractCorreiosError(rotulo.raw?.emitir?.data || rotulo.raw?.emitir, rotulo.raw?.emitir?.status);
+      throwCorreiosError({
+        message: 'Não foi possível emitir o rótulo da pré-postagem existente.',
+        details: [
+          apiMsg,
+          `ID da pré-postagem: ${existingId}`,
+          rotulo.status_atual != null ? `Status: ${rotulo.status_atual}` : null,
+        ].filter(Boolean),
+        step: 'emitir_rotulo',
+        status: rotulo.raw?.emitir?.status || null,
+        raw: rotulo.raw,
+        nextSteps: nextStepsForStep('emitir_rotulo', apiMsg),
+      });
+    }
+
+    const trackingCode = rotulo.code
+      || normalizeTrackingCode(order.tracking_code)
+      || '';
+
+    let labelUrl = null;
+    let labelSource = null;
+    if (rotulo.download_ok && rotulo.label_base64) {
+      labelUrl = saveCorreiosRotuloPdf(order.id, rotulo.label_base64);
+      if (labelUrl) labelSource = 'correios_pdf';
+    }
+
+    if (!trackingCode && !labelUrl) {
+      throwCorreiosError({
+        message: 'O rótulo foi solicitado, mas não houve código nem PDF.',
+        details: [
+          `ID da pré-postagem: ${existingId}`,
+          rotulo.idRecibo ? `Recibo do rótulo: ${rotulo.idRecibo}` : null,
+          ...collectCorreiosMessages(rotulo.raw),
+        ].filter(Boolean),
+        step: 'baixar_rotulo',
+        raw: rotulo.raw,
+        nextSteps: nextStepsForStep('baixar_rotulo'),
+      });
+    }
+
+    return {
+      tracking_code: trackingCode || null,
+      prepostagem_id: existingId,
+      service_code: String(order.shipping_service_code || '').trim() || null,
+      status: rotulo.status_atual || null,
+      label_url: labelUrl,
+      label_source: labelSource,
+      id_recibo: rotulo.idRecibo || null,
+      raw: { rotulo: rotulo.raw },
+    };
+  } catch (err) {
+    if (err?.code === 'CORREIOS_PREPOSTAGEM') throw err;
+
+    const details = collectCorreiosMessages(err?.raw || err?.body || err?.details);
+    if (err?.message && !details.includes(err.message)) {
+      details.unshift(err.message);
+    }
+
+    throwCorreiosError({
+      message: err?.message && err.message !== 'null'
+        ? err.message
+        : 'Não foi possível gerar o rótulo Correios.',
+      details: details.length
+        ? details
+        : ['Erro inesperado ao falar com a API dos Correios. Tente novamente.'],
+      step: err?.step || 'desconhecido',
+      status: err?.status || null,
+      raw: err?.raw || null,
+    });
+  }
+}
+
 /**
  * Teste admin (manual): token → criar → rótulo assíncrono → download → cancelar.
  */
