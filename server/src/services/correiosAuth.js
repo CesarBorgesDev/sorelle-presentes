@@ -23,6 +23,9 @@ const tokenCache = {
   usuario: { token: null, expiresAt: 0, meta: null },
   contrato: { token: null, expiresAt: 0, meta: null },
   cartaopostagem: { token: null, expiresAt: 0, meta: null },
+  usuario_pp: { token: null, expiresAt: 0, meta: null },
+  contrato_pp: { token: null, expiresAt: 0, meta: null },
+  cartaopostagem_pp: { token: null, expiresAt: 0, meta: null },
 };
 
 function basicAuthHeader(user, password) {
@@ -68,10 +71,31 @@ function summarizeTokenPayload(data) {
   };
 }
 
-export async function getCorreiosApiCredentials() {
+/**
+ * Credenciais CWS.
+ * @param {{ forPostagem?: boolean }} options
+ *   forPostagem=true prefere o código de acesso específico de pré-postagem, se configurado.
+ */
+export async function getCorreiosApiCredentials({ forPostagem = false } = {}) {
   const user = ((await getSetting('correios_api_user')) || process.env.CORREIOS_API_USER || '').trim();
-  const password = ((await getSetting('correios_api_password')) || process.env.CORREIOS_API_PASSWORD || '').trim();
-  return { user, password };
+  const generalPassword = (
+    (await getSetting('correios_api_password')) || process.env.CORREIOS_API_PASSWORD || ''
+  ).trim();
+  const prepostagemPassword = (
+    (await getSetting('correios_prepostagem_api_password'))
+    || process.env.CORREIOS_PREPOSTAGEM_API_PASSWORD
+    || ''
+  ).trim();
+
+  const usePrepostagemKey = Boolean(forPostagem && prepostagemPassword);
+  return {
+    user,
+    password: usePrepostagemKey ? prepostagemPassword : generalPassword,
+    generalPassword,
+    prepostagemPassword,
+    usedPrepostagemKey: usePrepostagemKey,
+    hasPrepostagemKey: Boolean(prepostagemPassword),
+  };
 }
 
 export async function getCorreiosContractContext() {
@@ -115,7 +139,9 @@ export async function resolveCorreiosAuthMode(preferred = 'auto', { forPostagem 
  */
 export async function requestCorreiosToken(mode = 'auto', { forPostagem = false, forceRefresh = false } = {}) {
   const resolvedMode = await resolveCorreiosAuthMode(mode, { forPostagem });
-  const cache = tokenCache[resolvedMode];
+  const credentials = await getCorreiosApiCredentials({ forPostagem });
+  const cacheKey = credentials.usedPrepostagemKey ? `${resolvedMode}_pp` : resolvedMode;
+  const cache = tokenCache[cacheKey] || (tokenCache[cacheKey] = { token: null, expiresAt: 0, meta: null });
 
   if (!forceRefresh && cache.token && cache.expiresAt > Date.now() + REFRESH_BEFORE_MS) {
     return {
@@ -125,12 +151,17 @@ export async function requestCorreiosToken(mode = 'auto', { forPostagem = false,
       mode: resolvedMode,
       endpoint: endpointForMode(resolvedMode),
       cached: true,
+      used_prepostagem_key: credentials.usedPrepostagemKey,
     };
   }
 
-  const { user, password } = await getCorreiosApiCredentials();
+  const { user, password } = credentials;
   if (!user || !password) {
-    throw new Error('Configure usuário e senha (código de acesso CWS) da API Correios em Configurações → Frete.');
+    throw new Error(
+      forPostagem
+        ? 'Configure usuário e o código de acesso CWS de pré-postagem (ou o código geral) em Frete → API Correios.'
+        : 'Configure usuário e senha (código de acesso CWS) da API Correios em Configurações → Frete.'
+    );
   }
 
   const { postCard, contract, dr } = await getCorreiosContractContext();
@@ -201,6 +232,7 @@ export async function requestCorreiosToken(mode = 'auto', { forPostagem = false,
     mode: resolvedMode,
     endpoint: path,
     cached: false,
+    used_prepostagem_key: credentials.usedPrepostagemKey,
   };
 }
 

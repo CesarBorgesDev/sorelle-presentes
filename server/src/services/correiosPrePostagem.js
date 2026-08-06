@@ -358,12 +358,13 @@ async function getPrePostagemConfig() {
  * @returns {Promise<{ ready: boolean, items: Array, service_code_mapped: string|null, service_code_raw: string }>}
  */
 export async function buildCorreiosCodePrerequisites(order) {
-  const [{ user, password }, contractCtx, correios, sender] = await Promise.all([
-    getCorreiosApiCredentials(),
+  const [credentials, contractCtx, correios, sender] = await Promise.all([
+    getCorreiosApiCredentials({ forPostagem: true }),
     getCorreiosContractContext(),
     getCorreiosConfig(),
     getSenderConfig(),
   ]);
+  const { user, password, hasPrepostagemKey } = credentials;
   const recipient = parseRecipientAddress(order);
   const serviceRaw = String(order.shipping_service_code || '').trim();
   const serviceId = String(order.shipping_service_id || order.shipping_service_code || '').trim();
@@ -389,7 +390,18 @@ export async function buildCorreiosCodePrerequisites(order) {
       id: 'api_credentials',
       ok: Boolean(user && password),
       label: 'Usuário e código de acesso CWS',
-      help: 'Preencha em Configurações → Frete → API Correios (Meu Correios + código gerado no CWS).',
+      help: 'Preencha o usuário Meu Correios e o código CWS em Frete → API Correios.',
+      hrefHint: 'api_correios',
+    },
+    {
+      id: 'prepostagem_key',
+      ok: Boolean(hasPrepostagemKey || (user && password)),
+      label: hasPrepostagemKey
+        ? 'Código de acesso específico de pré-postagem'
+        : 'Código de acesso de pré-postagem (recomendado)',
+      help: hasPrepostagemKey
+        ? 'Usando a chave CWS dedicada à API Pré-postagem (86720).'
+        : 'Gere no CWS um código só com Pré-postagem (86720) e salve no campo específico — evita misturar com Preço/Prazo.',
       hrefHint: 'api_correios',
     },
     {
@@ -850,15 +862,18 @@ export async function testCorreiosPrePostagem({
   serviceCode = '03298',
 } = {}) {
   const steps = [];
-  const [{ user, password }, contractCtx, sender] = await Promise.all([
-    getCorreiosApiCredentials(),
+  const [apiCreds, contractCtx, sender] = await Promise.all([
+    getCorreiosApiCredentials({ forPostagem: true }),
     getCorreiosContractContext(),
     getSenderConfig(),
   ]);
+  const { user, password, hasPrepostagemKey, usedPrepostagemKey } = apiCreds;
 
   const credentials = {
     has_user: Boolean(user),
     has_password: Boolean(password),
+    has_prepostagem_key: hasPrepostagemKey,
+    used_prepostagem_key: usedPrepostagemKey,
     has_post_card: Boolean(contractCtx.postCard),
     has_contract: Boolean(contractCtx.contract),
     contract: contractCtx.contract || null,
@@ -874,7 +889,7 @@ export async function testCorreiosPrePostagem({
       message: 'Usuário e código de acesso CWS não configurados.',
       steps,
       next_steps: [
-        'Preencha usuário Meu Correios e código de acesso na aba API Correios.',
+        'Preencha usuário Meu Correios e o código de acesso de pré-postagem na aba API Correios.',
         'Salve e tente novamente.',
       ],
       credentials,
@@ -936,6 +951,7 @@ export async function testCorreiosPrePostagem({
       ambiente: auth.meta?.ambiente || null,
       apis_autorizadas: apis.length,
       prepostagem_no_token: hasPrepostagemApi,
+      used_prepostagem_key: Boolean(auth.used_prepostagem_key),
     });
     if (!hasPrepostagemApi && apis.length > 0) {
       steps.push({

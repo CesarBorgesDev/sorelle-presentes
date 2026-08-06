@@ -90,6 +90,10 @@ async function buildSettingsResponse(message) {
       sender_phone: (await getSetting('correios_sender_phone')) || '',
       has_api_credentials: Boolean(correiosConfig.hasApiCredentials),
       api_user: (await getSetting('correios_api_user')) || process.env.CORREIOS_API_USER || '',
+      has_prepostagem_api_password: Boolean(
+        (await getSetting('correios_prepostagem_api_password'))
+        || process.env.CORREIOS_PREPOSTAGEM_API_PASSWORD
+      ),
       has_post_card: Boolean(correiosConfig.postCard),
       post_card_masked: maskToken(correiosConfig.postCard || ''),
       contract_number: correiosConfig.contractNumber || '',
@@ -257,6 +261,7 @@ router.put('/', requireAuth, requireAdmin, async (req, res) => {
       correios_password,
       correios_api_user,
       correios_api_password,
+      correios_prepostagem_api_password,
       correios_post_card,
       correios_contract_number,
       correios_contract_dr,
@@ -472,6 +477,11 @@ router.put('/', requireAuth, requireAdmin, async (req, res) => {
 
     if (correios_api_password !== undefined && correios_api_password !== '') {
       await setSetting('correios_api_password', correios_api_password.trim());
+      correiosAuthChanged = true;
+    }
+
+    if (correios_prepostagem_api_password !== undefined && correios_prepostagem_api_password !== '') {
+      await setSetting('correios_prepostagem_api_password', correios_prepostagem_api_password.trim());
       correiosAuthChanged = true;
     }
 

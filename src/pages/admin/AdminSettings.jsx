@@ -99,6 +99,7 @@ export default function AdminSettings() {
   const [correiosSenderCnpj, setCorreiosSenderCnpj] = useState('');
   const [correiosApiUser, setCorreiosApiUser] = useState('');
   const [correiosApiPassword, setCorreiosApiPassword] = useState('');
+  const [correiosPrePostagemApiPassword, setCorreiosPrePostagemApiPassword] = useState('');
   const [correiosPostCard, setCorreiosPostCard] = useState('');
   const [correiosContractNumber, setCorreiosContractNumber] = useState('');
   const [correiosContractDr, setCorreiosContractDr] = useState('');
@@ -249,6 +250,7 @@ export default function AdminSettings() {
       setPixKey('');
       setCorreiosPassword('');
       setCorreiosApiPassword('');
+      setCorreiosPrePostagemApiPassword('');
       setCorreiosPostCard('');
       setRodonavesPassword('');
       setSaved(true);
@@ -324,6 +326,9 @@ export default function AdminSettings() {
     if (correiosPassword.trim()) payload.correios_password = correiosPassword.trim();
     if (correiosApiUser.trim()) payload.correios_api_user = correiosApiUser.trim();
     if (correiosApiPassword.trim()) payload.correios_api_password = correiosApiPassword.trim();
+    if (correiosPrePostagemApiPassword.trim()) {
+      payload.correios_prepostagem_api_password = correiosPrePostagemApiPassword.trim();
+    }
     if (correiosPostCard.trim()) payload.correios_post_card = correiosPostCard.replace(/\D/g, '');
     if (correiosContractNumber.trim()) payload.correios_contract_number = correiosContractNumber.trim();
     if (correiosContractDr.trim()) payload.correios_contract_dr = correiosContractDr.trim();
@@ -824,10 +829,10 @@ export default function AdminSettings() {
                       Como configurar para gerar códigos
                     </h4>
                     <ol className="list-decimal pl-4 space-y-1.5 font-body text-xs text-muted-foreground">
-                      <li>Crie usuário no Meu Correios e gere o <strong className="text-foreground font-medium">código de acesso</strong> no CWS.</li>
+                      <li>Crie usuário no Meu Correios e gere códigos de acesso no CWS (um para Preço/Prazo e outro só para pré-postagem, se preferir).</li>
                       <li>Informe <strong className="text-foreground font-medium">cartão de postagem</strong> e/ou <strong className="text-foreground font-medium">contrato + DR</strong> (DR = regional do contrato no PDF).</li>
                       <li>
-                        No CWS, libere no cartão: Token, Preço, Prazo,{' '}
+                        No CWS da chave de pré-postagem, libere: Token,{' '}
                         <strong className="text-foreground font-medium">Pré-postagem (86720)</strong> e PAC/SEDEX de contrato (03298/03220).
                       </li>
                       <li>Salve esta tela e use <strong className="text-foreground font-medium">Testar API</strong> (modo Cartão).</li>
@@ -854,7 +859,7 @@ export default function AdminSettings() {
                       />
                     </div>
                     <div>
-                      <label className={labelClass}>Código de acesso (CWS) *</label>
+                      <label className={labelClass}>Código de acesso (CWS) — Preço/Prazo *</label>
                       <input
                         type="password"
                         className={inputClass}
@@ -863,6 +868,28 @@ export default function AdminSettings() {
                         placeholder={correios?.has_api_credentials ? 'Salvo — preencha para trocar' : 'Gerado no portal CWS'}
                         autoComplete="new-password"
                       />
+                      <p className="font-body text-xs text-muted-foreground mt-1">
+                        Usado em cotação e no Testar API.
+                      </p>
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label className={labelClass}>Código de acesso (CWS) — Pré-postagem *</label>
+                      <input
+                        type="password"
+                        className={inputClass}
+                        value={correiosPrePostagemApiPassword}
+                        onChange={(e) => setCorreiosPrePostagemApiPassword(e.target.value)}
+                        placeholder={
+                          correios?.has_prepostagem_api_password
+                            ? 'Salvo — preencha para trocar'
+                            : 'Gere no CWS com API Pré-postagem (86720)'
+                        }
+                        autoComplete="new-password"
+                      />
+                      <p className="font-body text-xs text-muted-foreground mt-1">
+                        Chave específica para gerar códigos e etiquetas. No CWS, libere só Token + Pré-postagem (86720) + PAC/SEDEX do cartão.
+                        Se vazia, a geração usa o código geral acima.
+                      </p>
                     </div>
                     <div>
                       <label className={labelClass}>Cartão de postagem</label>
@@ -1067,6 +1094,9 @@ export default function AdminSettings() {
                                 {step.tracking_code && <> · {step.tracking_code}</>}
                                 {step.prepostagem_no_token != null && (
                                   <> · pré-postagem no token: {step.prepostagem_no_token ? 'sim' : 'não'}</>
+                                )}
+                                {step.used_prepostagem_key != null && (
+                                  <> · chave pré-postagem: {step.used_prepostagem_key ? 'sim' : 'geral'}</>
                                 )}
                                 {step.error && (
                                   <span className="block mt-0.5 text-destructive">{step.error}</span>
