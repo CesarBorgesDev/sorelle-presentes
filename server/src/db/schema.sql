@@ -155,6 +155,7 @@ ALTER TABLE orders ADD COLUMN IF NOT EXISTS shipping_service_name VARCHAR(50);
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS shipping_deadline_days INTEGER;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS tracking_code VARCHAR(30);
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS shipping_label_url TEXT;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS correios_prepostagem_id TEXT;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS shipped_at TIMESTAMPTZ;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS cielo_authorization_code VARCHAR(64);
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS cielo_payment_id VARCHAR(64);

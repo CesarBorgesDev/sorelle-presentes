@@ -837,7 +837,7 @@ export default function AdminSettings() {
                       </li>
                       <li>Salve esta tela e use <strong className="text-foreground font-medium">Testar API</strong> (modo Cartão).</li>
                       <li>Preencha a aba <strong className="text-foreground font-medium">Remetente</strong> e salve de novo.</li>
-                      <li>Use <strong className="text-foreground font-medium">Testar pré-postagem</strong> (cria e cancela um envio de teste).</li>
+                      <li>Use <strong className="text-foreground font-medium">Testar pré-postagem</strong> (criar → rótulo PDF → cancelar).</li>
                       <li>No pedido com frete PAC/SEDEX, abra o detalhe e clique em <strong className="text-foreground font-medium">Gerar código Correios</strong>.</li>
                     </ol>
                     <p className="font-body text-[11px] text-muted-foreground pt-1 border-t border-border/60">
@@ -990,7 +990,7 @@ export default function AdminSettings() {
                       <div className="min-w-0">
                         <p className="font-body text-sm text-foreground">Testar pré-postagem</p>
                         <p className="font-body text-[11px] text-muted-foreground mt-0.5">
-                          Cria uma pré-postagem PAC de teste e cancela em seguida. Valida o serviço 86720 e o cartão.
+                          Segue o manual: criar → rótulo assíncrono → download → cancelar. Valida 86720 e o cartão.
                         </p>
                       </div>
                       <button
@@ -1091,7 +1091,9 @@ export default function AdminSettings() {
                                 {step.mode && <> · modo {step.mode}</>}
                                 {step.service_code && <> · serviço {step.service_code}</>}
                                 {step.prepostagem_id && <> · id {step.prepostagem_id}</>}
+                                {step.id_recibo && <> · recibo {step.id_recibo}</>}
                                 {step.tracking_code && <> · {step.tracking_code}</>}
+                                {step.pdf != null && <> · pdf: {step.pdf ? 'sim' : 'não'}</>}
                                 {step.prepostagem_no_token != null && (
                                   <> · pré-postagem no token: {step.prepostagem_no_token ? 'sim' : 'não'}</>
                                 )}

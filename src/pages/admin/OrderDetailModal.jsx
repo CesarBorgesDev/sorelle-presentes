@@ -128,7 +128,9 @@ export default function OrderDetailModal({ order, onClose, onUpdated, onDeleted 
       }
       if (result.label_error) {
         setTrackingCodeError({
-          message: 'Código gerado, mas a etiqueta local falhou.',
+          message: result.label_source === 'correios_pdf'
+            ? 'Código gerado, mas houve aviso na etiqueta.'
+            : 'Código gerado, mas a etiqueta falhou (PDF oficial indisponível e HTML local também).',
           details: [result.label_error],
           next_steps: ['Use “Gerar etiqueta” manualmente após conferir o código.'],
         });
@@ -349,7 +351,7 @@ export default function OrderDetailModal({ order, onClose, onUpdated, onDeleted 
                   <Link to="/admin/configuracoes" className="underline underline-offset-2 hover:text-foreground">
                     Frete → API Correios
                   </Link>
-                  {' '}(CWS + cartão/contrato)
+                  {' '}(CWS + cartão + chave de pré-postagem)
                 </li>
                 <li>
                   Preencha e salve o{' '}
@@ -360,7 +362,7 @@ export default function OrderDetailModal({ order, onClose, onUpdated, onDeleted 
                 <li>Neste pedido (PAC/SEDEX), clique em Gerar código Correios</li>
               </ol>
               <p className="font-body text-[11px] text-muted-foreground mt-2">
-                A geração também cria etiqueta HTML e pode marcar o pedido como Enviado.
+                Fluxo oficial: criar pré-postagem → emitir rótulo PDF → obter código. Pode marcar o pedido como Enviado.
               </p>
             </div>
 

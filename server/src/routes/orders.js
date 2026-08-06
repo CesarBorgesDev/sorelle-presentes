@@ -18,7 +18,7 @@ const ALLOWED_FIELDS = [
   'items', 'subtotal', 'wrapping_cost', 'shipping_cost', 'shipping_service_code',
   'shipping_service_name', 'shipping_deadline_days', 'total', 'status', 'payment_method',
   'payment_status', 'gateway_order_number', 'notes', 'tracking_code', 'shipping_label_url',
-  'shipped_at', 'cielo_authorization_code', 'cielo_payment_id',
+  'correios_prepostagem_id', 'shipped_at', 'cielo_authorization_code', 'cielo_payment_id',
 ];
 
 router.use(requireAuth, requireAdmin);
@@ -118,37 +118,48 @@ router.post('/:id/codigo-correios', async (req, res) => {
 
     const generated = await generateCorreiosTrackingCode(order);
 
-    let labelUrl = null;
+    let labelUrl = generated.label_url || null;
+    let labelSource = generated.label_source || null;
     let labelError = null;
-    try {
-      const label = await generateCorreiosShippingLabel(order, {
-        trackingCode: generated.tracking_code,
-      });
-      labelUrl = label.label_url;
-    } catch (labelErr) {
-      console.error('Etiqueta HTML falhou após código Correios:', labelErr);
-      labelError = labelErr.message || 'Falha ao gerar etiqueta HTML local';
+
+    // Manual: PDF oficial primeiro; HTML local só como fallback
+    if (!labelUrl) {
+      try {
+        const label = await generateCorreiosShippingLabel(order, {
+          trackingCode: generated.tracking_code,
+        });
+        labelUrl = label.label_url;
+        labelSource = 'html_local';
+      } catch (labelErr) {
+        console.error('Etiqueta HTML falhou após código Correios:', labelErr);
+        labelError = labelErr.message || 'Falha ao gerar etiqueta HTML local';
+      }
     }
 
     const result = await pool.query(
       `UPDATE orders
        SET tracking_code = $1,
            shipping_label_url = COALESCE($2, shipping_label_url),
+           correios_prepostagem_id = COALESCE($3, correios_prepostagem_id),
            status = CASE WHEN status IN ('confirmado', 'em_preparo', 'pendente') THEN 'enviado' ELSE status END,
            shipped_at = COALESCE(shipped_at, NOW()),
            updated_date = NOW()
-       WHERE id = $3
+       WHERE id = $4
        RETURNING *`,
-      [generated.tracking_code, labelUrl, order.id]
+      [generated.tracking_code, labelUrl, generated.prepostagem_id || null, order.id]
     );
 
     res.json({
       message: labelError
-        ? 'Código de rastreio gerado (etiqueta local falhou)'
-        : 'Código de rastreio gerado com sucesso',
+        ? 'Código de rastreio gerado (etiqueta falhou)'
+        : labelSource === 'correios_pdf'
+          ? 'Código e rótulo oficial dos Correios gerados'
+          : 'Código de rastreio gerado com sucesso',
       tracking_code: generated.tracking_code,
       prepostagem_id: generated.prepostagem_id,
+      id_recibo: generated.id_recibo || null,
       label_url: labelUrl,
+      label_source: labelSource,
       label_error: labelError,
       order: withInvoiceFlags(rowToEntity(result.rows[0])),
     });

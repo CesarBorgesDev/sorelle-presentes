@@ -1,3 +1,6 @@
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import pool from '../config/db.js';
 import { parseOrderRecipientAddress } from '../utils/address.js';
 import {
@@ -19,6 +22,9 @@ import { getSetting } from './settings.js';
 import { STORE_PICKUP_ID } from './storePickup.js';
 import { normalizeTrackingCode } from './correiosTracking.js';
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const LABELS_DIR = path.join(__dirname, '../../uploads/labels');
+
 const SERVICE_CODE_TO_CONTRACT = {
   [CORREIOS_SERVICES.pac.code]: CORREIOS_SERVICES.pac.contractCode,
   [CORREIOS_SERVICES.sedex.code]: CORREIOS_SERVICES.sedex.contractCode,
@@ -29,10 +35,16 @@ const SERVICE_CODE_TO_CONTRACT = {
 const STEP_LABELS = {
   autenticacao: 'Autenticação CWS',
   criar_prepostagem: 'Criar pré-postagem',
+  emitir_rotulo: 'Emitir rótulo',
+  baixar_rotulo: 'Baixar rótulo',
   codigo_objeto: 'Obter código de rastreio',
   preflight: 'Pré-requisitos',
   desconhecido: 'Processamento',
 };
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 function stepLabel(step) {
   return STEP_LABELS[step] || STEP_LABELS.desconhecido;
@@ -275,7 +287,15 @@ async function correiosApiFetch(path, { method = 'GET', token, body } = {}) {
     headers,
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
-  const data = await response.json().catch(() => ({}));
+  const text = await response.text().catch(() => '');
+  let data = {};
+  if (text) {
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = text;
+    }
+  }
   return { ok: response.ok, status: response.status, data };
 }
 
@@ -294,9 +314,51 @@ async function fetchPrePostagemById(token, id) {
   return null;
 }
 
-async function requestRotuloAndResolveCode(token, prepostagemId) {
-  // 1) Endpoint síncrono citado no manual (pode não existir em todas as versões)
-  const sync = await correiosApiFetch('/v1/prepostagens/rotulo', {
+function extractIdRecibo(payload) {
+  if (!payload || typeof payload !== 'object') return '';
+  const candidates = [
+    payload.idRecibo,
+    payload.id_recibo,
+    payload.recibo,
+    payload.id,
+    Array.isArray(payload.itens) ? payload.itens[0]?.idRecibo : null,
+  ];
+  for (const value of candidates) {
+    const id = String(value || '').trim();
+    if (id && id.length >= 8) return id;
+  }
+  return '';
+}
+
+function extractBase64Pdf(payload) {
+  if (!payload) return '';
+  if (typeof payload === 'string') {
+    const text = payload.trim();
+    if (text.length > 80 && !text.startsWith('{')) return text.replace(/\s/g, '');
+    return '';
+  }
+  if (typeof payload !== 'object') return '';
+
+  const candidates = [
+    payload.dados,
+    payload.data,
+    payload.arquivo,
+    payload.pdf,
+    payload.conteudo,
+    payload.file,
+    Array.isArray(payload.itens) ? payload.itens[0]?.dados : null,
+  ];
+  for (const value of candidates) {
+    if (typeof value !== 'string') continue;
+    const cleaned = value.replace(/^data:application\/pdf;base64,/i, '').replace(/\s/g, '');
+    if (cleaned.length > 80) return cleaned;
+  }
+  return '';
+}
+
+/** Manual: POST /v1/prepostagens/rotulo/assincrono/pdf → idRecibo */
+async function requestRotuloAssincronoPdf(token, prepostagemId) {
+  const response = await correiosApiFetch('/v1/prepostagens/rotulo/assincrono/pdf', {
     method: 'POST',
     token,
     body: {
@@ -305,40 +367,127 @@ async function requestRotuloAndResolveCode(token, prepostagemId) {
       formatoRotulo: 'ET',
     },
   });
-  let code = extractTrackingCodeFromPayload(sync.data);
-  if (code) return { code, raw: sync.data };
+  // Resposta pode ser JSON { idRecibo } ou string pura do recibo
+  let idRecibo = extractIdRecibo(response.data);
+  if (!idRecibo && typeof response.data === 'string') {
+    idRecibo = String(response.data).trim();
+  }
+  return {
+    ok: response.ok,
+    status: response.status,
+    idRecibo,
+    data: response.data,
+  };
+}
 
-  // 2) Emissão assíncrona de PDF/rótulo — dispara atribuição do código do objeto
-  const asyncReq = await correiosApiFetch('/v1/prepostagens/rotulo/assincrono/pdf', {
-    method: 'POST',
-    token,
-    body: {
-      idsPrePostagem: [prepostagemId],
-      tipoRotulo: 'P',
-      formatoRotulo: 'ET',
-    },
-  });
-  code = extractTrackingCodeFromPayload(asyncReq.data);
-  if (code) return { code, raw: asyncReq.data };
+/** Manual: GET /v1/prepostagens/rotulo/download/assincrono/{idRecibo} */
+async function downloadRotuloAssincrono(token, idRecibo, { attempts = 8 } = {}) {
+  let last = { ok: false, status: null, data: null, base64: '' };
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    if (attempt > 0) await sleep(1000 + attempt * 250);
+    const response = await correiosApiFetch(
+      `/v1/prepostagens/rotulo/download/assincrono/${encodeURIComponent(idRecibo)}`,
+      { token }
+    );
+    const base64 = extractBase64Pdf(response.data);
+    last = {
+      ok: Boolean(response.ok && base64),
+      status: response.status,
+      data: response.data,
+      base64,
+    };
+    if (last.ok) return last;
+  }
+  return last;
+}
 
-  // 3) Consulta a pré-postagem (o código costuma aparecer após solicitar o rótulo)
-  for (let attempt = 0; attempt < 4; attempt += 1) {
-    if (attempt > 0) {
-      await new Promise((resolve) => setTimeout(resolve, 800 * attempt));
-    }
-    const refreshed = await fetchPrePostagemById(token, prepostagemId);
-    code = extractTrackingCodeFromPayload(refreshed);
-    if (code) return { code, raw: refreshed };
+function saveCorreiosRotuloPdf(orderId, base64) {
+  if (!fs.existsSync(LABELS_DIR)) {
+    fs.mkdirSync(LABELS_DIR, { recursive: true });
+  }
+  const cleaned = String(base64 || '')
+    .replace(/^data:application\/pdf;base64,/i, '')
+    .replace(/\s/g, '');
+  if (!cleaned) return null;
+  const filename = `etiqueta-${orderId}.pdf`;
+  fs.writeFileSync(path.join(LABELS_DIR, filename), Buffer.from(cleaned, 'base64'));
+  return `/api/uploads/labels/${filename}`;
+}
+
+async function cancelPrePostagem(token, { id, codigoObjeto } = {}) {
+  if (id) {
+    const response = await correiosApiFetch(`/v1/prepostagens/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+      token,
+    });
+    return {
+      ok: response.ok || response.status === 204 || response.status === 200,
+      status: response.status,
+      data: response.data,
+      by: 'id',
+    };
+  }
+  if (codigoObjeto) {
+    const response = await correiosApiFetch(
+      `/v1/prepostagens/objeto/${encodeURIComponent(codigoObjeto)}`,
+      { method: 'DELETE', token }
+    );
+    return {
+      ok: response.ok || response.status === 204 || response.status === 200,
+      status: response.status,
+      data: response.data,
+      by: 'codigoObjeto',
+    };
+  }
+  return { ok: false, status: null, data: null, by: null };
+}
+
+/**
+ * Fluxo do manual: emitir rótulo assíncrono → baixar PDF → consultar codigoObjeto.
+ */
+async function emitRotuloAndResolveCode(token, prepostagemId) {
+  const emitted = await requestRotuloAssincronoPdf(token, prepostagemId);
+  if (!emitted.ok) {
+    return {
+      code: '',
+      idRecibo: emitted.idRecibo || '',
+      label_url: null,
+      label_base64: '',
+      raw: { emitir: emitted },
+      emit_ok: false,
+      download_ok: false,
+    };
+  }
+
+  let downloaded = { ok: false, status: null, data: null, base64: '' };
+  if (emitted.idRecibo) {
+    downloaded = await downloadRotuloAssincrono(token, emitted.idRecibo);
+  }
+
+  let code = extractTrackingCodeFromPayload(emitted.data)
+    || extractTrackingCodeFromPayload(downloaded.data)
+    || '';
+  let refreshed = null;
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    if (attempt > 0) await sleep(800 * attempt);
+    refreshed = await fetchPrePostagemById(token, prepostagemId);
+    code = extractTrackingCodeFromPayload(refreshed) || code;
+    if (code) break;
   }
 
   return {
-    code: '',
+    code,
+    idRecibo: emitted.idRecibo || '',
+    label_base64: downloaded.base64 || '',
+    label_url: null,
     raw: {
-      sync_status: sync.status,
-      sync_body: sync.data,
-      async_status: asyncReq.status,
-      async_body: asyncReq.data,
+      emitir: emitted.data,
+      download: downloaded.data,
+      prepostagem: refreshed,
     },
+    emit_ok: true,
+    download_ok: downloaded.ok,
+    status_atual: refreshed?.statusAtual || refreshed?.descStatusAtual || null,
   };
 }
 
@@ -516,12 +665,20 @@ function validatePrePostagemSetup({ sender, recipient, order, config }) {
   }
 }
 
-function buildPrePostagemPayload(order, { sender, recipient, packageInfo, serviceCode }) {
+function buildPrePostagemPayload(order, {
+  sender,
+  recipient,
+  packageInfo,
+  serviceCode,
+  contractCtx = null,
+}) {
   const senderPhone = buildCorreiosPhoneFields(sender.phone);
   const recipientPhone = buildCorreiosPhoneFields(splitPhone(order.customer_phone));
   const recipientEmail = truncate(order.customer_email, 255);
   const senderEmail = truncate(sender.email, 255);
   const weightGrams = String(Math.min(999999, Math.max(1, Math.round(Number(packageInfo.weightKg) * 1000))));
+  const postCard = onlyDigits(contractCtx?.postCard || '').slice(0, 20);
+  const contractNumber = truncate(contractCtx?.contract || '', 20);
 
   return {
     remetente: {
@@ -558,6 +715,8 @@ function buildPrePostagemPayload(order, { sender, recipient, packageInfo, servic
       },
     },
     codigoServico: String(serviceCode || '').trim(),
+    ...(postCard ? { numeroCartaoPostagem: postCard } : {}),
+    ...(contractNumber ? { numeroContrato: contractNumber } : {}),
     pesoInformado: weightGrams,
     codigoFormatoObjetoInformado: '2',
     alturaInformada: dimensionCm(packageInfo.height, 2),
@@ -639,11 +798,11 @@ function nextStepsForStep(step, apiMsg = '') {
     }
     return steps;
   }
-  if (step === 'codigo_objeto') {
+  if (step === 'emitir_rotulo' || step === 'baixar_rotulo' || step === 'codigo_objeto') {
     return [
       'Verifique saldo de etiquetas do cartão no CWS.',
-      'Aguarde alguns segundos e tente gerar o código novamente.',
       'Confirme se o serviço PAC/SEDEX está liberado no contrato.',
+      'Use Testar pré-postagem em Frete → API Correios e tente de novo.',
     ];
   }
   if (step === 'preflight') {
@@ -701,6 +860,9 @@ function throwCorreiosError({
 }
 
 export async function generateCorreiosTrackingCode(order) {
+  let token = null;
+  let prepostagemId = null;
+
   try {
     const preflight = await buildCorreiosCodePrerequisites(order);
     if (!preflight.ready) {
@@ -714,17 +876,18 @@ export async function generateCorreiosTrackingCode(order) {
     }
 
     const config = await getPrePostagemConfig();
+    const contractCtx = await getCorreiosContractContext();
     const sender = await getSenderConfig();
     const recipient = parseRecipientAddress(order);
     validatePrePostagemSetup({ sender, recipient, order, config });
 
-    const token = await getCorreiosApiToken({ forPostagem: true });
+    token = await getCorreiosApiToken({ forPostagem: true });
     if (!token) {
       throwCorreiosError({
         message: 'Credenciais da API Correios não configuradas.',
         details: [
-          'Preencha usuário Meu Correios e código de acesso CWS em Configurações → Frete → API Correios.',
-          'Salve as configurações e use “Testar API” antes de gerar o código.',
+          'Preencha usuário Meu Correios e o código de acesso de pré-postagem em Frete → API Correios.',
+          'Salve e use “Testar pré-postagem” antes de gerar o código.',
         ],
         step: 'autenticacao',
       });
@@ -737,6 +900,7 @@ export async function generateCorreiosTrackingCode(order) {
       recipient,
       packageInfo,
       serviceCode,
+      contractCtx,
     });
 
     const created = await correiosApiFetch('/v1/prepostagens', {
@@ -752,13 +916,6 @@ export async function generateCorreiosTrackingCode(order) {
         serviceCode,
         apiMsg,
         body: created.data,
-        payloadSummary: {
-          codigoServico: payload.codigoServico,
-          pesoInformado: payload.pesoInformado,
-          remetenteCep: payload.remetente?.endereco?.cep,
-          destinatarioCep: payload.destinatario?.endereco?.cep,
-          cienteObjetoNaoProibido: payload.cienteObjetoNaoProibido,
-        },
       });
       throwCorreiosError({
         message: 'Os Correios recusaram a criação da pré-postagem.',
@@ -776,60 +933,69 @@ export async function generateCorreiosTrackingCode(order) {
       });
     }
 
-    let body = created.data || {};
-    let trackingCode = extractTrackingCodeFromPayload(body);
-    const prepostagemId = body.id || body.idPrePostagem || body.idPrepostagem || null;
-
-    // Às vezes o create devolve só o id; o código surge na consulta ou ao emitir o rótulo
-    if (!trackingCode && prepostagemId) {
-      const refreshed = await fetchPrePostagemById(token, prepostagemId);
-      if (refreshed) {
-        body = { ...body, ...refreshed };
-        trackingCode = extractTrackingCodeFromPayload(refreshed);
-      }
-    }
-
-    let rotuloRaw = null;
-    if (!trackingCode && prepostagemId) {
-      const fromRotulo = await requestRotuloAndResolveCode(token, prepostagemId);
-      rotuloRaw = fromRotulo.raw;
-      if (fromRotulo.code) {
-        trackingCode = fromRotulo.code;
-        body = { ...body, rotulo: fromRotulo.raw };
-      } else {
-        console.warn('[Correios] Pré-postagem sem codigoObjeto', {
-          prepostagemId,
-          status: body.statusAtual || body.descStatusAtual,
-          createKeys: Object.keys(created.data || {}),
-          rotulo: fromRotulo.raw,
-        });
-      }
-    }
-
-    if (!trackingCode) {
-      const statusLabel = body.statusAtual || body.descStatusAtual || 'desconhecido';
-      const rotuloMsgs = collectCorreiosMessages(rotuloRaw);
+    const body = created.data || {};
+    prepostagemId = body.id || body.idPrePostagem || body.idPrepostagem || null;
+    if (!prepostagemId) {
       throwCorreiosError({
-        message: 'A pré-postagem foi criada, mas o código de rastreio não foi gerado.',
+        message: 'A API criou a pré-postagem sem retornar o id.',
+        details: collectCorreiosMessages(body),
+        step: 'criar_prepostagem',
+        raw: body,
+      });
+    }
+
+    // Manual: codigoObjeto é atribuído na emissão do rótulo (assíncrono PDF)
+    const rotulo = await emitRotuloAndResolveCode(token, prepostagemId);
+    if (!rotulo.emit_ok) {
+      await cancelPrePostagem(token, { id: prepostagemId });
+      const apiMsg = extractCorreiosError(rotulo.raw?.emitir?.data || rotulo.raw?.emitir, rotulo.raw?.emitir?.status);
+      throwCorreiosError({
+        message: 'Não foi possível emitir o rótulo da pré-postagem.',
         details: [
-          prepostagemId ? `ID da pré-postagem: ${prepostagemId}` : null,
-          `Status na API: ${statusLabel}`,
+          apiMsg,
+          `ID da pré-postagem: ${prepostagemId}`,
+          'A pré-postagem de teste foi cancelada automaticamente.',
+        ].filter(Boolean),
+        step: 'emitir_rotulo',
+        status: rotulo.raw?.emitir?.status || null,
+        raw: rotulo.raw,
+        nextSteps: nextStepsForStep('emitir_rotulo', apiMsg),
+      });
+    }
+
+    let trackingCode = rotulo.code || extractTrackingCodeFromPayload(body);
+    if (!trackingCode) {
+      await cancelPrePostagem(token, { id: prepostagemId });
+      throwCorreiosError({
+        message: 'O rótulo foi solicitado, mas o código de rastreio não foi gerado.',
+        details: [
+          `ID da pré-postagem: ${prepostagemId}`,
+          rotulo.idRecibo ? `Recibo do rótulo: ${rotulo.idRecibo}` : null,
+          rotulo.status_atual ? `Status na API: ${rotulo.status_atual}` : null,
           `Serviço: ${serviceCode}`,
-          ...rotuloMsgs,
-          'Verifique no CWS: saldo de etiquetas do cartão e liberação do serviço no contrato.',
-          'Depois tente novamente em alguns segundos.',
+          ...collectCorreiosMessages(rotulo.raw),
         ].filter(Boolean),
         step: 'codigo_objeto',
-        raw: { create: body, rotulo: rotuloRaw },
+        raw: { create: body, rotulo: rotulo.raw },
       });
+    }
+
+    let labelUrl = null;
+    let labelSource = null;
+    if (rotulo.download_ok && rotulo.label_base64) {
+      labelUrl = saveCorreiosRotuloPdf(order.id, rotulo.label_base64);
+      if (labelUrl) labelSource = 'correios_pdf';
     }
 
     return {
       tracking_code: trackingCode,
       prepostagem_id: prepostagemId,
       service_code: body.codigoServico || payload.codigoServico,
-      status: body.descStatusAtual || body.statusAtual || null,
-      raw: body,
+      status: rotulo.status_atual || body.descStatusAtual || body.statusAtual || null,
+      label_url: labelUrl,
+      label_source: labelSource,
+      id_recibo: rotulo.idRecibo || null,
+      raw: { create: body, rotulo: rotulo.raw },
     };
   } catch (err) {
     if (err?.code === 'CORREIOS_PREPOSTAGEM') throw err;
@@ -854,8 +1020,7 @@ export async function generateCorreiosTrackingCode(order) {
 }
 
 /**
- * Teste admin: autentica, cria uma pré-postagem mínima e cancela em seguida.
- * Valida liberação do serviço 86720 / PAC contrato — o “Testar API” não cobre isso.
+ * Teste admin (manual): token → criar → rótulo assíncrono → download → cancelar.
  */
 export async function testCorreiosPrePostagem({
   destinationZip = '',
@@ -1051,6 +1216,7 @@ export async function testCorreiosPrePostagem({
       length: 20,
     },
     serviceCode: code,
+    contractCtx,
   });
   payload.observacao = truncate('TESTE ADMIN — cancelar', 50);
 
@@ -1084,7 +1250,6 @@ export async function testCorreiosPrePostagem({
     || created.data?.idPrePostagem
     || created.data?.idPrepostagem
     || null;
-  const trackingCode = extractTrackingCodeFromPayload(created.data) || null;
 
   steps.push({
     name: 'criar_prepostagem',
@@ -1092,64 +1257,83 @@ export async function testCorreiosPrePostagem({
     status: created.status,
     endpoint: 'POST /prepostagem/v1/prepostagens',
     prepostagem_id: prepostagemId,
-    tracking_code: trackingCode,
     service_code: code,
   });
 
-  let cancelled = false;
-  if (prepostagemId) {
-    const cancel = await correiosApiFetch(`/v1/prepostagens/${encodeURIComponent(prepostagemId)}`, {
-      method: 'DELETE',
-      token: auth.token,
-    });
-    cancelled = cancel.ok || cancel.status === 204 || cancel.status === 200;
-    steps.push({
-      name: 'cancelar_prepostagem',
-      ok: cancelled,
-      status: cancel.status,
-      endpoint: `DELETE /prepostagem/v1/prepostagens/${prepostagemId}`,
-      ...(cancelled ? {} : {
-        error: extractCorreiosError(cancel.data, cancel.status, 'Não foi possível cancelar a pré-postagem de teste'),
-      }),
-    });
-  } else if (trackingCode) {
-    const cancel = await correiosApiFetch(`/v1/prepostagens/objeto/${encodeURIComponent(trackingCode)}`, {
-      method: 'DELETE',
-      token: auth.token,
-    });
-    cancelled = cancel.ok || cancel.status === 204 || cancel.status === 200;
-    steps.push({
-      name: 'cancelar_prepostagem',
-      ok: cancelled,
-      status: cancel.status,
-      endpoint: `DELETE /prepostagem/v1/prepostagens/objeto/${trackingCode}`,
-      ...(cancelled ? {} : {
-        error: extractCorreiosError(cancel.data, cancel.status, 'Não foi possível cancelar a pré-postagem de teste'),
-      }),
-    });
-  } else {
-    steps.push({
-      name: 'cancelar_prepostagem',
+  if (!prepostagemId) {
+    return {
       ok: false,
-      error: 'Pré-postagem criada sem ID/código para cancelar. Cancele manualmente no CWS se necessário.',
-    });
+      message: 'Pré-postagem criada sem id — não é possível emitir rótulo.',
+      step_label: STEP_LABELS.criar_prepostagem,
+      steps,
+      next_steps: nextStepsForStep('criar_prepostagem'),
+      credentials,
+    };
   }
 
+  const rotulo = await emitRotuloAndResolveCode(auth.token, prepostagemId);
+  steps.push({
+    name: 'emitir_rotulo',
+    ok: rotulo.emit_ok,
+    endpoint: 'POST /prepostagem/v1/prepostagens/rotulo/assincrono/pdf',
+    id_recibo: rotulo.idRecibo || null,
+    ...(rotulo.emit_ok
+      ? {}
+      : { error: extractCorreiosError(rotulo.raw?.emitir?.data || rotulo.raw?.emitir, rotulo.raw?.emitir?.status) }),
+  });
+  steps.push({
+    name: 'baixar_rotulo',
+    ok: rotulo.download_ok,
+    endpoint: rotulo.idRecibo
+      ? `GET /prepostagem/v1/prepostagens/rotulo/download/assincrono/${rotulo.idRecibo}`
+      : 'GET /prepostagem/v1/prepostagens/rotulo/download/assincrono/{idRecibo}',
+    pdf: rotulo.download_ok,
+    tracking_code: rotulo.code || null,
+    status_atual: rotulo.status_atual || null,
+    ...(rotulo.download_ok
+      ? {}
+      : { error: rotulo.emit_ok ? 'PDF não ficou pronto a tempo (idRecibo obtido).' : 'Emissão do rótulo falhou.' }),
+  });
+
+  const trackingCode = rotulo.code || null;
+  const cancel = await cancelPrePostagem(auth.token, {
+    id: prepostagemId,
+    codigoObjeto: trackingCode,
+  });
+  steps.push({
+    name: 'cancelar_prepostagem',
+    ok: cancel.ok,
+    status: cancel.status,
+    endpoint: cancel.by === 'codigoObjeto'
+      ? `DELETE /prepostagem/v1/prepostagens/objeto/${trackingCode}`
+      : `DELETE /prepostagem/v1/prepostagens/${prepostagemId}`,
+    ...(cancel.ok
+      ? {}
+      : { error: extractCorreiosError(cancel.data, cancel.status, 'Não foi possível cancelar a pré-postagem de teste') }),
+  });
+
+  const flowOk = rotulo.emit_ok && Boolean(trackingCode || rotulo.download_ok);
   return {
-    ok: true,
-    message: cancelled
-      ? 'Pré-postagem OK: criação e cancelamento concluídos. Pode gerar códigos nos pedidos.'
-      : 'Pré-postagem criada com sucesso, mas o cancelamento automático falhou. Cancele no CWS se aparecer pendente.',
+    ok: flowOk,
+    message: flowOk
+      ? (cancel.ok
+        ? 'Pré-postagem OK (manual): criar → rótulo → código/PDF → cancelar. Pode gerar nos pedidos.'
+        : 'Fluxo de rótulo OK, mas o cancelamento automático falhou. Cancele no CWS se estiver pendente.')
+      : 'Falha no fluxo de rótulo assíncrono. Veja as etapas abaixo.',
     steps,
-    next_steps: cancelled
-      ? ['No pedido PAC/SEDEX, use Gerar código Correios.']
-      : [
-        'Cancele a pré-postagem de teste no CWS se ainda estiver ativa.',
-        'No pedido PAC/SEDEX, use Gerar código Correios.',
-      ],
+    next_steps: flowOk
+      ? (cancel.ok
+        ? ['No pedido PAC/SEDEX, use Gerar código Correios.']
+        : [
+          'Cancele a pré-postagem de teste no CWS se ainda estiver ativa.',
+          'No pedido PAC/SEDEX, use Gerar código Correios.',
+        ])
+      : nextStepsForStep(rotulo.emit_ok ? 'baixar_rotulo' : 'emitir_rotulo'),
     credentials,
     prepostagem_id: prepostagemId,
+    id_recibo: rotulo.idRecibo || null,
     tracking_code: trackingCode,
-    cancelled,
+    pdf_ok: rotulo.download_ok,
+    cancelled: cancel.ok,
   };
 }
