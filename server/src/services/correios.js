@@ -326,8 +326,10 @@ async function fetchCorreiosRestQuote({ destinationZip, packageInfo, config }) {
       largura: width,
       altura: height,
     });
-    if (cfg.contractNumber) priceParams.set('nuContrato', cfg.contractNumber);
-    if (cfg.contractDr != null) priceParams.set('nuDR', String(cfg.contractDr));
+    if (cfg.contractNumber && cfg.contractDr != null) {
+      priceParams.set('nuContrato', cfg.contractNumber);
+      priceParams.set('nuDR', String(cfg.contractDr));
+    }
 
     try {
       const [priceRes, prazoRes] = await Promise.all([

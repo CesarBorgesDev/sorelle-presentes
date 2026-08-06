@@ -351,8 +351,10 @@ export async function testCorreiosApiConnection({
       largura: '15',
       altura: '10',
     });
-    if (contractCtx.contract) params.set('nuContrato', contractCtx.contract);
-    if (contractCtx.dr != null) params.set('nuDR', String(contractCtx.dr));
+    if (contractCtx.contract && contractCtx.dr != null) {
+      params.set('nuContrato', contractCtx.contract);
+      params.set('nuDR', String(contractCtx.dr));
+    }
 
     const priceUrl = `${API_BASE}/preco/v1/nacional/${encodeURIComponent(code)}?${params.toString()}`;
     try {

@@ -812,8 +812,10 @@ export default function AdminSettings() {
                   <div>
                     <h3 className="font-display text-base tracking-wide text-foreground">API Correios (Token CWS)</h3>
                     <p className="font-body text-sm text-muted-foreground mt-1">
-                      Autenticação com <span className="font-mono">Authorization: Basic</span> (usuário Meu Correios + código de acesso),
-                      conforme a{' '}
+                      A API usa <strong className="font-medium text-foreground">usuário Meu Correios + chave de acesso CWS</strong>
+                      {' '}(<span className="font-mono">Authorization: Basic</span>) —{' '}
+                      <strong className="font-medium text-foreground">não</strong> a senha de login do portal Meu Correios.
+                      {' '}Docs:{' '}
                       <a
                         href="https://api.correios.com.br/token/v3/api-docs"
                         target="_blank"
@@ -822,8 +824,23 @@ export default function AdminSettings() {
                       >
                         API Token
                       </a>
-                      . Usado em cotação REST, pré-postagem e rastreio.
+                      .
                     </p>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2 font-body text-[11px]">
+                    <span className={`px-2 py-1 rounded-sm border ${correios?.has_api_credentials ? 'border-green-300 text-green-800 dark:text-green-300' : 'border-border text-muted-foreground'}`}>
+                      {correios?.has_api_credentials ? 'Chave CWS salva' : 'Chave CWS pendente'}
+                    </span>
+                    <span className={`px-2 py-1 rounded-sm border ${correios?.has_prepostagem_api_password ? 'border-green-300 text-green-800 dark:text-green-300' : 'border-border text-muted-foreground'}`}>
+                      {correios?.has_prepostagem_api_password ? 'Chave pré-postagem salva' : 'Pré-postagem usa chave geral'}
+                    </span>
+                    <span className={`px-2 py-1 rounded-sm border ${correios?.has_post_card ? 'border-green-300 text-green-800 dark:text-green-300' : 'border-border text-muted-foreground'}`}>
+                      {correios?.has_post_card ? `Cartão ${correios.post_card_masked || 'salvo'}` : 'Cartão pendente'}
+                    </span>
+                    <span className={`px-2 py-1 rounded-sm border ${correios?.contract_number ? 'border-green-300 text-green-800 dark:text-green-300' : 'border-border text-muted-foreground'}`}>
+                      {correios?.contract_number ? `Contrato ${correios.contract_number}` : 'Contrato opcional'}
+                    </span>
                   </div>
 
                   <div className="p-4 rounded-sm border border-border bg-secondary/20 space-y-2">
@@ -831,51 +848,44 @@ export default function AdminSettings() {
                       Como configurar para gerar códigos
                     </h4>
                     <ol className="list-decimal pl-4 space-y-1.5 font-body text-xs text-muted-foreground">
-                      <li>Crie usuário no Meu Correios e gere códigos de acesso no CWS (um para Preço/Prazo e outro só para pré-postagem, se preferir).</li>
-                      <li>Informe <strong className="text-foreground font-medium">cartão de postagem</strong> e/ou <strong className="text-foreground font-medium">contrato + DR</strong> (DR = regional do contrato no PDF).</li>
+                      <li>Informe o usuário (CNPJ / Meu Correios) e a <strong className="text-foreground font-medium">chave de acesso gerada no CWS</strong>.</li>
+                      <li>Informe <strong className="text-foreground font-medium">cartão de postagem</strong> e o <strong className="text-foreground font-medium">contrato</strong> (DR se a API pedir).</li>
                       <li>
-                        No CWS da chave de pré-postagem, libere: Token,{' '}
-                        <strong className="text-foreground font-medium">Pré-postagem (86720)</strong> e PAC/SEDEX de contrato (03298/03220).
+                        No CWS, libere Token, Preço, Prazo,{' '}
+                        <strong className="text-foreground font-medium">Pré-postagem (86720)</strong> e PAC/SEDEX (03298/03220).
                       </li>
-                      <li>Salve esta tela e use <strong className="text-foreground font-medium">Testar API</strong> (modo Cartão).</li>
-                      <li>Preencha a aba <strong className="text-foreground font-medium">Remetente</strong> e salve de novo.</li>
-                      <li>Use <strong className="text-foreground font-medium">Testar pré-postagem</strong> (criar → rótulo PDF → cancelar).</li>
-                      <li>No pedido com frete PAC/SEDEX, abra o detalhe e clique em <strong className="text-foreground font-medium">Gerar código Correios</strong>.</li>
+                      <li>Salve → <strong className="text-foreground font-medium">Testar API</strong> (modo Cartão) → aba Remetente → <strong className="text-foreground font-medium">Testar pré-postagem</strong>.</li>
+                      <li>No pedido PAC/SEDEX, use <strong className="text-foreground font-medium">Gerar código Correios</strong> (rótulo PDF oficial).</li>
                     </ol>
-                    <p className="font-body text-[11px] text-muted-foreground pt-1 border-t border-border/60">
-                      O Testar API valida token, Preço e Prazo. O Testar pré-postagem valida o serviço{' '}
-                      <strong className="font-medium text-foreground">86720</strong> e o PAC/SEDEX do cartão.
-                      Se falhar, peça liberação ao comercial dos Correios.
-                    </p>
                   </div>
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div>
-                      <label className={labelClass}>Usuário API (Meu Correios) *</label>
+                      <label className={labelClass}>Usuário API (Meu Correios / CNPJ) *</label>
                       <input
                         type="text"
                         className={inputClass}
                         value={correiosApiUser}
                         onChange={(e) => setCorreiosApiUser(e.target.value)}
-                        placeholder="IdCorreios / Meu Correios"
+                        placeholder={correios?.api_user || 'CNPJ ou IdCorreios'}
                         autoComplete="off"
                       />
                     </div>
                     <div>
-                      <label className={labelClass}>Código de acesso (CWS) — Preço/Prazo *</label>
+                      <label className={labelClass}>Chave de acesso CWS *</label>
                       <input
                         type="password"
                         className={inputClass}
                         value={correiosApiPassword}
                         onChange={(e) => setCorreiosApiPassword(e.target.value)}
-                        placeholder={correios?.has_api_credentials ? 'Salvo — preencha para trocar' : 'Gerado no portal CWS'}
+                        placeholder={correios?.has_api_credentials ? 'Salva — digite só para trocar' : 'Chave do CWS (não é a senha do portal)'}
                         autoComplete="new-password"
                       />
                       <p className="font-body text-xs text-muted-foreground mt-1">
-                        Usado em cotação e no Testar API.
+                        Cotação e autenticação. Não use a senha do site Meu Correios.
                       </p>
                     </div>
                     <div className="sm:col-span-2">
-                      <label className={labelClass}>Código de acesso (CWS) — Pré-postagem *</label>
+                      <label className={labelClass}>Chave CWS — só pré-postagem (opcional)</label>
                       <input
                         type="password"
                         className={inputClass}
@@ -883,18 +893,17 @@ export default function AdminSettings() {
                         onChange={(e) => setCorreiosPrePostagemApiPassword(e.target.value)}
                         placeholder={
                           correios?.has_prepostagem_api_password
-                            ? 'Salvo — preencha para trocar'
-                            : 'Gere no CWS com API Pré-postagem (86720)'
+                            ? 'Salva — digite só para trocar'
+                            : 'Vazio = reutiliza a chave geral'
                         }
                         autoComplete="new-password"
                       />
                       <p className="font-body text-xs text-muted-foreground mt-1">
-                        Chave específica para gerar códigos e etiquetas. No CWS, libere só Token + Pré-postagem (86720) + PAC/SEDEX do cartão.
-                        Se vazia, a geração usa o código geral acima.
+                        Se preenchida, geração de código/etiqueta usa esta chave (pode ser a mesma).
                       </p>
                     </div>
                     <div>
-                      <label className={labelClass}>Cartão de postagem</label>
+                      <label className={labelClass}>Cartão de postagem *</label>
                       <input
                         type="text"
                         className={inputClass}

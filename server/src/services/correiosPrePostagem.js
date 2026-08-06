@@ -275,7 +275,7 @@ function extractTrackingCodeFromPayload(payload) {
 
 async function correiosApiFetch(path, { method = 'GET', token, body } = {}) {
   const headers = {
-    Accept: 'application/json',
+    Accept: 'application/json, application/pdf, */*',
     Authorization: `Bearer ${token}`,
   };
   if (body !== undefined) {
@@ -287,6 +287,18 @@ async function correiosApiFetch(path, { method = 'GET', token, body } = {}) {
     headers,
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
+
+  const contentType = String(response.headers.get('content-type') || '').toLowerCase();
+  if (contentType.includes('application/pdf') || contentType.includes('octet-stream')) {
+    const buf = Buffer.from(await response.arrayBuffer());
+    return {
+      ok: response.ok,
+      status: response.status,
+      data: buf,
+      contentType,
+    };
+  }
+
   const text = await response.text().catch(() => '');
   let data = {};
   if (text) {
@@ -296,7 +308,7 @@ async function correiosApiFetch(path, { method = 'GET', token, body } = {}) {
       data = text;
     }
   }
-  return { ok: response.ok, status: response.status, data };
+  return { ok: response.ok, status: response.status, data, contentType };
 }
 
 async function fetchPrePostagemById(token, id) {
@@ -332,9 +344,25 @@ function extractIdRecibo(payload) {
 
 function extractBase64Pdf(payload) {
   if (!payload) return '';
+
+  if (Buffer.isBuffer(payload)) {
+    if (payload.length > 80) {
+      const head = payload.slice(0, 5).toString('utf8');
+      if (head.startsWith('%PDF') || payload.length > 500) {
+        return payload.toString('base64');
+      }
+    }
+    return '';
+  }
+
   if (typeof payload === 'string') {
     const text = payload.trim();
-    if (text.length > 80 && !text.startsWith('{')) return text.replace(/\s/g, '');
+    if (text.startsWith('%PDF')) {
+      return Buffer.from(text, 'binary').toString('base64');
+    }
+    if (text.length > 80 && !text.startsWith('{') && !text.startsWith('<')) {
+      return text.replace(/\s/g, '');
+    }
     return '';
   }
   if (typeof payload !== 'object') return '';
@@ -346,9 +374,17 @@ function extractBase64Pdf(payload) {
     payload.pdf,
     payload.conteudo,
     payload.file,
+    payload.rotulo,
+    payload.etiqueta,
     Array.isArray(payload.itens) ? payload.itens[0]?.dados : null,
+    Array.isArray(payload.objetos) ? payload.objetos[0]?.dados : null,
   ];
   for (const value of candidates) {
+    if (Buffer.isBuffer(value)) {
+      const nested = extractBase64Pdf(value);
+      if (nested) return nested;
+      continue;
+    }
     if (typeof value !== 'string') continue;
     const cleaned = value.replace(/^data:application\/pdf;base64,/i, '').replace(/\s/g, '');
     if (cleaned.length > 80) return cleaned;
@@ -381,10 +417,10 @@ async function requestRotuloAssincronoPdf(token, prepostagemId) {
 }
 
 /** Manual: GET /v1/prepostagens/rotulo/download/assincrono/{idRecibo} */
-async function downloadRotuloAssincrono(token, idRecibo, { attempts = 8 } = {}) {
+async function downloadRotuloAssincrono(token, idRecibo, { attempts = 12 } = {}) {
   let last = { ok: false, status: null, data: null, base64: '' };
   for (let attempt = 0; attempt < attempts; attempt += 1) {
-    if (attempt > 0) await sleep(1000 + attempt * 250);
+    if (attempt > 0) await sleep(1200 + attempt * 400);
     const response = await correiosApiFetch(
       `/v1/prepostagens/rotulo/download/assincrono/${encodeURIComponent(idRecibo)}`,
       { token }
@@ -393,10 +429,17 @@ async function downloadRotuloAssincrono(token, idRecibo, { attempts = 8 } = {}) 
     last = {
       ok: Boolean(response.ok && base64),
       status: response.status,
-      data: response.data,
+      data: Buffer.isBuffer(response.data)
+        ? { type: 'pdf_buffer', bytes: response.data.length }
+        : response.data,
       base64,
+      contentType: response.contentType || null,
     };
     if (last.ok) return last;
+    // 204 / 202 = ainda processando
+    if (response.status && ![200, 201, 202, 204].includes(response.status) && response.status >= 400) {
+      break;
+    }
   }
   return last;
 }
@@ -442,37 +485,87 @@ async function cancelPrePostagem(token, { id, codigoObjeto } = {}) {
   return { ok: false, status: null, data: null, by: null };
 }
 
+async function waitUntilPrePostado(token, prepostagemId, { attempts = 10 } = {}) {
+  let last = null;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    if (attempt > 0) await sleep(1000 + attempt * 300);
+    last = await fetchPrePostagemById(token, prepostagemId);
+    const status = last?.statusAtual;
+    const desc = String(last?.descStatusAtual || '').toLowerCase();
+    // 2 = Pré-postado (manual: só então o rótulo pode ser impresso)
+    if (status === 2 || status === '2' || /pr[eé]-?postado/i.test(desc)) {
+      return { ready: true, item: last };
+    }
+    // Já cancelado/expirado — não adianta esperar
+    if (status === 3 || status === 4 || status === 5 || /cancel|expir|estorno/i.test(desc)) {
+      return { ready: false, item: last };
+    }
+  }
+  return { ready: false, item: last };
+}
+
 /**
- * Fluxo do manual: emitir rótulo assíncrono → baixar PDF → consultar codigoObjeto.
+ * Fluxo do manual: esperar Pré-postado → emitir rótulo assíncrono → baixar PDF → codigoObjeto.
  */
 async function emitRotuloAndResolveCode(token, prepostagemId) {
+  const waited = await waitUntilPrePostado(token, prepostagemId);
+  let code = extractTrackingCodeFromPayload(waited.item);
+
+  if (!waited.ready) {
+    return {
+      code,
+      idRecibo: '',
+      label_url: null,
+      label_base64: '',
+      raw: { status: waited.item },
+      emit_ok: false,
+      download_ok: false,
+      status_atual: waited.item?.statusAtual || waited.item?.descStatusAtual || null,
+      wait_error: 'Pré-postagem não chegou ao status Pré-postado a tempo (PPN-288).',
+    };
+  }
+
   const emitted = await requestRotuloAssincronoPdf(token, prepostagemId);
   if (!emitted.ok) {
     return {
-      code: '',
+      code,
       idRecibo: emitted.idRecibo || '',
       label_url: null,
       label_base64: '',
-      raw: { emitir: emitted },
+      raw: { status: waited.item, emitir: emitted },
       emit_ok: false,
       download_ok: false,
+      status_atual: waited.item?.statusAtual || waited.item?.descStatusAtual || null,
     };
   }
 
   let downloaded = { ok: false, status: null, data: null, base64: '' };
   if (emitted.idRecibo) {
     downloaded = await downloadRotuloAssincrono(token, emitted.idRecibo);
+    // Se ainda PPN-288, espera mais um pouco e tenta de novo
+    const msg = typeof downloaded.data === 'object'
+      ? String(downloaded.data?.mensagem || downloaded.data?.message || '')
+      : '';
+    if (!downloaded.ok && /PPN-288|Pendente/i.test(msg)) {
+      await sleep(2500);
+      await waitUntilPrePostado(token, prepostagemId, { attempts: 6 });
+      downloaded = await downloadRotuloAssincrono(token, emitted.idRecibo, { attempts: 6 });
+    }
   }
 
-  let code = extractTrackingCodeFromPayload(emitted.data)
+  code = extractTrackingCodeFromPayload(emitted.data)
     || extractTrackingCodeFromPayload(downloaded.data)
+    || code
     || '';
-  let refreshed = null;
-  for (let attempt = 0; attempt < 6; attempt += 1) {
-    if (attempt > 0) await sleep(800 * attempt);
-    refreshed = await fetchPrePostagemById(token, prepostagemId);
-    code = extractTrackingCodeFromPayload(refreshed) || code;
-    if (code) break;
+
+  let refreshed = waited.item;
+  if (!code) {
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      if (attempt > 0) await sleep(800 * attempt);
+      refreshed = await fetchPrePostagemById(token, prepostagemId);
+      code = extractTrackingCodeFromPayload(refreshed) || code;
+      if (code) break;
+    }
   }
 
   return {
@@ -481,13 +574,15 @@ async function emitRotuloAndResolveCode(token, prepostagemId) {
     label_base64: downloaded.base64 || '',
     label_url: null,
     raw: {
+      status: waited.item,
       emitir: emitted.data,
       download: downloaded.data,
       prepostagem: refreshed,
     },
     emit_ok: true,
     download_ok: downloaded.ok,
-    status_atual: refreshed?.statusAtual || refreshed?.descStatusAtual || null,
+    status_atual: refreshed?.statusAtual || refreshed?.descStatusAtual
+      || waited.item?.statusAtual || waited.item?.descStatusAtual || null,
   };
 }
 
@@ -955,13 +1050,15 @@ export async function generateCorreiosTrackingCode(order) {
     const rotulo = await emitRotuloAndResolveCode(token, prepostagemId);
     if (!rotulo.emit_ok) {
       await cancelPrePostagem(token, { id: prepostagemId });
-      const apiMsg = extractCorreiosError(rotulo.raw?.emitir?.data || rotulo.raw?.emitir, rotulo.raw?.emitir?.status);
+      const apiMsg = rotulo.wait_error
+        || extractCorreiosError(rotulo.raw?.emitir?.data || rotulo.raw?.emitir, rotulo.raw?.emitir?.status);
       throwCorreiosError({
         message: 'Não foi possível emitir o rótulo da pré-postagem.',
         details: [
           apiMsg,
           `ID da pré-postagem: ${prepostagemId}`,
-          'A pré-postagem de teste foi cancelada automaticamente.',
+          rotulo.status_atual != null ? `Status: ${rotulo.status_atual}` : null,
+          'A pré-postagem foi cancelada automaticamente.',
         ].filter(Boolean),
         step: 'emitir_rotulo',
         status: rotulo.raw?.emitir?.status || null,
