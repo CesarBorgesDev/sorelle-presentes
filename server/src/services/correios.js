@@ -565,6 +565,29 @@ async function tryAppendRodonavesOption(quote, { packageInfo, invoiceValue }) {
   return quote;
 }
 
+async function tryAppendMelhorEnvioOptions(quote, { packageInfo, invoiceValue }) {
+  try {
+    const { getMelhorEnvioConfig, quoteMelhorEnvioShipping } = await import('./melhorEnvio.js');
+    const meConfig = await getMelhorEnvioConfig();
+    if (!meConfig.enabled || !meConfig.isReady) return quote;
+
+    const options = await quoteMelhorEnvioShipping({
+      originZip: quote.origin_zip,
+      destinationZip: quote.destination_zip,
+      packageInfo,
+      invoiceValue,
+      config: meConfig,
+    });
+
+    if (options.length > 0) {
+      quote.options = [...quote.options, ...options];
+    }
+  } catch (err) {
+    console.warn('[Melhor Envio] Cotação indisponível:', err.message);
+  }
+  return quote;
+}
+
 export async function quoteCorreiosShipping({ destinationZip, packageInfo, config = null, invoiceValue = 0 }) {
   const cfg = config || await getCorreiosConfig();
 
@@ -591,12 +614,15 @@ export async function quoteCorreiosShipping({ destinationZip, packageInfo, confi
     }
   }
 
-  return tryAppendRodonavesOption(quote, { packageInfo, invoiceValue });
+  quote = await tryAppendRodonavesOption(quote, { packageInfo, invoiceValue });
+  return tryAppendMelhorEnvioOptions(quote, { packageInfo, invoiceValue });
 }
 
 export async function resolveShippingQuote({ destinationZip, serviceId, packageInfo, invoiceValue = 0 }) {
   const quote = await quoteCorreiosShipping({ destinationZip, packageInfo, invoiceValue });
-  const selected = quote.options.find((o) => o.id === serviceId && o.available);
+  const selected = quote.options.find(
+    (o) => (o.id === serviceId || o.service_code === serviceId) && o.available
+  );
 
   if (!selected) {
     throw new Error('Opção de frete inválida ou indisponível');

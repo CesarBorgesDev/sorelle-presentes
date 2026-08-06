@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/api/apiClient';
 import {
   Settings, Key, Sparkles, Loader2, CheckCircle2,
   CreditCard, Circle, ExternalLink, AlertCircle, Truck, ShoppingBag, Store,
-  Plus, Trash2, ScanBarcode,
+  Plus, Trash2, ScanBarcode, Link2, Unlink,
 } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { PRODUCT_SORT_OPTIONS } from '@/hooks/useProductSort';
@@ -20,6 +21,9 @@ const CIELO_DOCS_URL = 'https://docs.cielo.com.br/ecommerce-cielo/page/explore-a
 const CIELO_CHECKOUT_DOCS_URL = 'https://developercielo.github.io/manual/checkout-cielo';
 const SIPAG_DOCS_URL = 'https://www.sipag.com.br/servicos.html';
 const MERCADO_PAGO_DOCS_URL = 'https://www.mercadopago.com.br/developers/pt/docs/checkout-pro/landing';
+const MELHOR_ENVIO_DOCS_URL = 'https://docs.melhorenvio.com.br/docs/criando-um-novo-aplicativo';
+const MELHOR_ENVIO_AREA_DEV_SANDBOX = 'https://sandbox.melhorenvio.com.br/painel/integracoes/area-dev';
+const MELHOR_ENVIO_AREA_DEV_PROD = 'https://melhorenvio.com.br/painel/integracoes/area-dev';
 
 function RequirementItem({ item }) {
   const Icon = item.done ? CheckCircle2 : item.manual ? AlertCircle : Circle;
@@ -47,6 +51,12 @@ function RequirementItem({ item }) {
 
 export default function AdminSettings() {
   const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialMainTab = searchParams.get('tab') || 'checkout';
+  const initialFreteTab = searchParams.get('sub') || 'retirada';
+  const [mainTab, setMainTab] = useState(initialMainTab);
+  const [freteTab, setFreteTab] = useState(initialFreteTab);
+  const [meOauthBanner, setMeOauthBanner] = useState(null);
   const [pollinationsKey, setPollinationsKey] = useState('');
   const [hfToken, setHfToken] = useState('');
   const [stableHordeKey, setStableHordeKey] = useState('');
@@ -118,6 +128,14 @@ export default function AdminSettings() {
   const [rodonavesPassword, setRodonavesPassword] = useState('');
   const [rodonavesCnpj, setRodonavesCnpj] = useState('');
   const [rodonavesLabel, setRodonavesLabel] = useState('Rodonaves');
+  const [meEnabled, setMeEnabled] = useState(false);
+  const [meEnvironment, setMeEnvironment] = useState('sandbox');
+  const [meClientId, setMeClientId] = useState('');
+  const [meClientSecret, setMeClientSecret] = useState('');
+  const [meUserAgentEmail, setMeUserAgentEmail] = useState('');
+  const [meRedirectUri, setMeRedirectUri] = useState('');
+  const [meTestZip, setMeTestZip] = useState('01310100');
+  const [meTestResult, setMeTestResult] = useState(null);
   const [storePickupEnabled, setStorePickupEnabled] = useState(true);
   const [storePickupLabel, setStorePickupLabel] = useState('Retirar na loja');
   const [storePickupAddress, setStorePickupAddress] = useState('Sacramento - MG');
@@ -198,6 +216,13 @@ export default function AdminSettings() {
       setRodonavesCnpj(data.rodonaves.cnpj || '');
       setRodonavesLabel(data.rodonaves.label || 'Rodonaves');
     }
+    if (data?.melhor_envio) {
+      setMeEnabled(Boolean(data.melhor_envio.enabled));
+      setMeEnvironment(data.melhor_envio.environment || 'sandbox');
+      setMeClientId(data.melhor_envio.client_id || '');
+      setMeUserAgentEmail(data.melhor_envio.user_agent_email || '');
+      setMeRedirectUri(data.melhor_envio.redirect_uri || '');
+    }
     if (data?.store_pickup) {
       setStorePickupEnabled(Boolean(data.store_pickup.enabled));
       setStorePickupLabel(data.store_pickup.label || 'Retirar na loja');
@@ -205,7 +230,29 @@ export default function AdminSettings() {
       setStorePickupInstructions(data.store_pickup.instructions || '');
       setStorePickupDeadlineDays(String(data.store_pickup.deadline_days || 3));
     }
-  }, [data?.image_model, data?.product_sort_order, data?.cielo, data?.payment, data?.sipag, data?.mercado_pago, data?.correios, data?.rodonaves, data?.store_pickup]);
+  }, [data?.image_model, data?.product_sort_order, data?.cielo, data?.payment, data?.sipag, data?.mercado_pago, data?.correios, data?.rodonaves, data?.melhor_envio, data?.store_pickup]);
+
+  React.useEffect(() => {
+    const status = searchParams.get('melhor_envio');
+    if (!status) return;
+    if (status === 'connected') {
+      setMeOauthBanner({ ok: true, message: 'Melhor Envio conectado com sucesso.' });
+      queryClient.invalidateQueries({ queryKey: ['admin-settings'] });
+    } else if (status === 'error') {
+      setMeOauthBanner({
+        ok: false,
+        message: searchParams.get('message') || 'Falha ao conectar Melhor Envio.',
+      });
+    }
+    setMainTab('frete');
+    setFreteTab('melhor_envio');
+    const next = new URLSearchParams(searchParams);
+    next.delete('melhor_envio');
+    next.delete('message');
+    next.set('tab', 'frete');
+    next.set('sub', 'melhor_envio');
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams, queryClient]);
 
   const correiosTestMutation = useMutation({
     mutationFn: (payload) => api.settings.testCorreios(payload),
@@ -227,6 +274,42 @@ export default function AdminSettings() {
       details: err?.body?.details || [],
       next_steps: err?.body?.next_steps || [],
       raw: err?.body?.raw || err?.body || null,
+    }),
+  });
+
+  const meConnectMutation = useMutation({
+    mutationFn: () => api.melhorEnvio.getAuthorizeUrl(),
+    onSuccess: (result) => {
+      if (result?.url) window.location.href = result.url;
+    },
+    onError: (err) => {
+      setMeOauthBanner({
+        ok: false,
+        message: err?.body?.message || err.message || 'Não foi possível abrir a autorização',
+      });
+    },
+  });
+
+  const meDisconnectMutation = useMutation({
+    mutationFn: () => api.melhorEnvio.disconnect(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-settings'] });
+      setMeOauthBanner({ ok: true, message: 'Melhor Envio desconectado.' });
+    },
+    onError: (err) => {
+      setMeOauthBanner({
+        ok: false,
+        message: err?.body?.message || err.message || 'Erro ao desconectar',
+      });
+    },
+  });
+
+  const meTestMutation = useMutation({
+    mutationFn: (payload) => api.melhorEnvio.testQuote(payload),
+    onSuccess: (result) => setMeTestResult(result),
+    onError: (err) => setMeTestResult({
+      message: err?.body?.message || err.message || 'Falha na cotação de teste',
+      options: [],
     }),
   });
 
@@ -255,6 +338,7 @@ export default function AdminSettings() {
       setCorreiosPrePostagemApiPassword('');
       setCorreiosPostCard('');
       setRodonavesPassword('');
+      setMeClientSecret('');
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     },
@@ -302,6 +386,11 @@ export default function AdminSettings() {
       rodonaves_username: rodonavesUsername.trim(),
       rodonaves_cnpj: rodonavesCnpj.replace(/\D/g, ''),
       rodonaves_label: rodonavesLabel.trim() || 'Rodonaves',
+      melhor_envio_enabled: meEnabled,
+      melhor_envio_environment: meEnvironment,
+      melhor_envio_client_id: meClientId.trim(),
+      melhor_envio_user_agent_email: meUserAgentEmail.trim(),
+      melhor_envio_redirect_uri: meRedirectUri.trim(),
       store_pickup_enabled: storePickupEnabled,
       store_pickup_label: storePickupLabel.trim(),
       store_pickup_address: storePickupAddress.trim(),
@@ -336,12 +425,14 @@ export default function AdminSettings() {
     if (correiosContractDr.trim()) payload.correios_contract_dr = correiosContractDr.trim();
     if (carrierPrice.trim()) payload.shipping_carrier_price = carrierPrice.trim().replace(',', '.');
     if (rodonavesPassword.trim()) payload.rodonaves_password = rodonavesPassword.trim();
+    if (meClientSecret.trim()) payload.melhor_envio_client_secret = meClientSecret.trim();
     mutation.mutate(payload);
   };
 
   const payment = data?.payment;
   const correios = data?.correios;
   const rodonaves = data?.rodonaves;
+  const melhorEnvio = data?.melhor_envio;
   const checkoutOptions = payment?.checkout_options || [
     { id: 'pix', label: 'PIX', hint: 'Cielo ou chave manual' },
     { id: 'cartao_credito', label: 'Cartão de crédito', hint: 'Checkout Cielo' },
@@ -379,7 +470,16 @@ export default function AdminSettings() {
         </div>
       ) : (
         <form onSubmit={handleSubmit}>
-          <Tabs defaultValue="checkout" className="w-full">
+          <Tabs
+            value={mainTab}
+            onValueChange={(value) => {
+              setMainTab(value);
+              const next = new URLSearchParams(searchParams);
+              next.set('tab', value);
+              setSearchParams(next, { replace: true });
+            }}
+            className="w-full"
+          >
             <TabsList className="w-full h-auto flex flex-wrap justify-start gap-1 p-1 mb-6 bg-secondary/60">
               <TabsTrigger value="checkout" className="gap-1.5 font-body text-xs sm:text-sm px-3 py-2">
                 <ShoppingBag className="w-3.5 h-3.5" />
@@ -683,11 +783,21 @@ export default function AdminSettings() {
               <div>
                 <h2 className="font-display text-lg tracking-wide text-foreground">Frete e retirada</h2>
                 <p className="font-body text-sm text-muted-foreground mt-1">
-                  Correios (PAC/SEDEX), transportadora própria, Rodonaves e retirada na loja.
+                  Correios (PAC/SEDEX), transportadora própria, Rodonaves, Melhor Envio e retirada na loja.
                 </p>
               </div>
 
-              <Tabs defaultValue="retirada" className="w-full">
+              <Tabs
+                value={freteTab}
+                onValueChange={(value) => {
+                  setFreteTab(value);
+                  const next = new URLSearchParams(searchParams);
+                  next.set('tab', 'frete');
+                  next.set('sub', value);
+                  setSearchParams(next, { replace: true });
+                }}
+                className="w-full"
+              >
                 <TabsList className="w-full h-auto flex flex-wrap justify-start gap-1 p-1 mb-6 bg-secondary/40">
                   <TabsTrigger value="retirada" className="gap-1.5 font-body text-xs sm:text-sm px-3 py-2">
                     <Store className="w-3.5 h-3.5" />
@@ -709,6 +819,9 @@ export default function AdminSettings() {
                   </TabsTrigger>
                   <TabsTrigger value="rodonaves" className="gap-1.5 font-body text-xs sm:text-sm px-3 py-2">
                     Rodonaves
+                  </TabsTrigger>
+                  <TabsTrigger value="melhor_envio" className="gap-1.5 font-body text-xs sm:text-sm px-3 py-2">
+                    Melhor Envio
                   </TabsTrigger>
                 </TabsList>
 
@@ -1440,6 +1553,204 @@ export default function AdminSettings() {
                       </div>
                     </div>
                   )}
+                </TabsContent>
+
+                <TabsContent value="melhor_envio" className="space-y-4 mt-0 focus-visible:outline-none">
+                  <div>
+                    <h3 className="font-display text-base tracking-wide text-foreground">Melhor Envio</h3>
+                    <p className="font-body text-sm text-muted-foreground mt-1">
+                      Cotação no checkout e geração de etiqueta no pedido (além de Correios/Rodonaves).
+                      Cadastre o app em Integrações → Área Dev (sandbox ou produção) com a mesma Redirect URI.
+                    </p>
+                    <div className="flex flex-wrap gap-3 mt-2">
+                      <a
+                        href={MELHOR_ENVIO_DOCS_URL}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 font-body text-xs text-primary hover:underline"
+                      >
+                        Como criar o aplicativo
+                        <ExternalLink className="w-3 h-3" />
+                      </a>
+                      <a
+                        href={meEnvironment === 'production' ? MELHOR_ENVIO_AREA_DEV_PROD : MELHOR_ENVIO_AREA_DEV_SANDBOX}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 font-body text-xs text-primary hover:underline"
+                      >
+                        Área Dev ({meEnvironment === 'production' ? 'produção' : 'sandbox'})
+                        <ExternalLink className="w-3 h-3" />
+                      </a>
+                    </div>
+                  </div>
+
+                  {meOauthBanner && (
+                    <div className={`flex items-start gap-2 p-3 rounded-sm border ${
+                      meOauthBanner.ok
+                        ? 'bg-green-500/10 border-green-500/30 text-green-800 dark:text-green-300'
+                        : 'bg-amber-500/10 border-amber-500/30 text-amber-800 dark:text-amber-300'
+                    }`}>
+                      {meOauthBanner.ok ? <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0" /> : <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />}
+                      <p className="font-body text-xs">{meOauthBanner.message}</p>
+                    </div>
+                  )}
+
+                  <div className={`flex items-center gap-2 px-3 py-2 rounded-sm text-sm font-body ${
+                    melhorEnvio?.is_ready
+                      ? 'bg-green-500/10 text-green-700 dark:text-green-400'
+                      : melhorEnvio?.connected
+                        ? 'bg-amber-500/10 text-amber-700 dark:text-amber-400'
+                        : 'bg-secondary/50 text-muted-foreground'
+                  }`}>
+                    {melhorEnvio?.is_ready ? <CheckCircle2 className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
+                    {melhorEnvio?.is_ready
+                      ? 'Pronto — cotação e etiquetas habilitadas'
+                      : melhorEnvio?.connected
+                        ? 'Conectado — habilite e salve para usar no checkout'
+                        : 'Desconectado — configure o app e conecte via OAuth'}
+                    {melhorEnvio?.token_expires_at ? (
+                      <span className="ml-auto text-xs opacity-80">
+                        Token até {new Date(melhorEnvio.token_expires_at).toLocaleDateString('pt-BR')}
+                      </span>
+                    ) : null}
+                  </div>
+
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={meEnabled}
+                      onChange={(e) => setMeEnabled(e.target.checked)}
+                      className="rounded border-border"
+                    />
+                    <span className="font-body text-sm text-foreground">Oferecer Melhor Envio no checkout</span>
+                  </label>
+
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div>
+                      <label className={labelClass}>Ambiente</label>
+                      <select
+                        className={inputClass}
+                        value={meEnvironment}
+                        onChange={(e) => setMeEnvironment(e.target.value)}
+                      >
+                        <option value="sandbox">Sandbox</option>
+                        <option value="production">Produção</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className={labelClass}>E-mail User-Agent *</label>
+                      <input
+                        type="email"
+                        className={inputClass}
+                        value={meUserAgentEmail}
+                        onChange={(e) => setMeUserAgentEmail(e.target.value)}
+                        placeholder="contato@suaempresa.com.br"
+                      />
+                      <p className="font-body text-xs text-muted-foreground mt-1">
+                        Obrigatório pela API: Sorelle Presentes (este e-mail).
+                      </p>
+                    </div>
+                    <div>
+                      <label className={labelClass}>Client ID *</label>
+                      <input
+                        type="text"
+                        className={inputClass}
+                        value={meClientId}
+                        onChange={(e) => setMeClientId(e.target.value)}
+                        autoComplete="off"
+                      />
+                    </div>
+                    <div>
+                      <label className={labelClass}>Client Secret *</label>
+                      <input
+                        type="password"
+                        className={inputClass}
+                        value={meClientSecret}
+                        onChange={(e) => setMeClientSecret(e.target.value)}
+                        placeholder={melhorEnvio?.has_client_secret ? melhorEnvio.client_secret_masked || 'Secret salvo' : 'Secret do app'}
+                        autoComplete="new-password"
+                      />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label className={labelClass}>Redirect URI *</label>
+                      <input
+                        type="url"
+                        className={inputClass}
+                        value={meRedirectUri}
+                        onChange={(e) => setMeRedirectUri(e.target.value)}
+                        placeholder="https://seu-dominio.com/api/melhor-envio/callback"
+                      />
+                      <p className="font-body text-xs text-muted-foreground mt-1">
+                        Deve ser idêntica à cadastrada no app Melhor Envio. Padrão: APP_PUBLIC_URL/api/melhor-envio/callback.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap gap-3">
+                    <button
+                      type="button"
+                      onClick={() => meConnectMutation.mutate()}
+                      disabled={meConnectMutation.isPending || !meClientId.trim()}
+                      className="inline-flex items-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground rounded-sm font-body text-sm hover:opacity-90 disabled:opacity-50"
+                    >
+                      {meConnectMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Link2 className="w-4 h-4" />}
+                      Conectar Melhor Envio
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => meDisconnectMutation.mutate()}
+                      disabled={meDisconnectMutation.isPending || !melhorEnvio?.connected}
+                      className="inline-flex items-center gap-2 px-4 py-2.5 border border-border rounded-sm font-body text-sm hover:bg-secondary disabled:opacity-50"
+                    >
+                      {meDisconnectMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Unlink className="w-4 h-4" />}
+                      Desconectar
+                    </button>
+                  </div>
+
+                  <div className="p-4 border border-border rounded-sm space-y-3 bg-secondary/20">
+                    <p className="font-body text-xs text-muted-foreground uppercase tracking-wider">Testar cotação</p>
+                    <div className="flex flex-wrap gap-3 items-end">
+                      <div className="min-w-[140px]">
+                        <label className={labelClass}>CEP destino</label>
+                        <input
+                          type="text"
+                          className={inputClass}
+                          value={meTestZip}
+                          onChange={(e) => setMeTestZip(e.target.value.replace(/\D/g, '').slice(0, 8))}
+                          placeholder="01310100"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => meTestMutation.mutate({ destination_zip: meTestZip })}
+                        disabled={meTestMutation.isPending || meTestZip.length !== 8}
+                        className="inline-flex items-center gap-2 px-4 py-2.5 border border-border rounded-sm font-body text-sm hover:bg-secondary disabled:opacity-50"
+                      >
+                        {meTestMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Truck className="w-4 h-4" />}
+                        Testar cotação
+                      </button>
+                    </div>
+                    {meTestResult && (
+                      <div className="space-y-2">
+                        <p className="font-body text-sm text-foreground">{meTestResult.message}</p>
+                        {Array.isArray(meTestResult.options) && meTestResult.options.length > 0 && (
+                          <ul className="space-y-1">
+                            {meTestResult.options.map((opt) => (
+                              <li key={opt.id} className="font-body text-xs text-muted-foreground">
+                                <span className="text-foreground">{opt.label}</span>
+                                {' — '}
+                                R$ {Number(opt.price).toFixed(2)}
+                                {' · '}
+                                {opt.deadline_days} dias
+                                {' · '}
+                                <span className="font-mono">{opt.service_code}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </TabsContent>
               </Tabs>
             </TabsContent>

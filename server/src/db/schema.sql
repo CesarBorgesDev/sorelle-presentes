@@ -53,8 +53,8 @@ CREATE TABLE IF NOT EXISTS orders (
   subtotal NUMERIC(10, 2) DEFAULT 0,
   wrapping_cost NUMERIC(10, 2) DEFAULT 0,
   shipping_cost NUMERIC(10, 2) DEFAULT 0,
-  shipping_service_code VARCHAR(20),
-  shipping_service_name VARCHAR(50),
+  shipping_service_code VARCHAR(64),
+  shipping_service_name VARCHAR(100),
   shipping_deadline_days INTEGER,
   total NUMERIC(10, 2) NOT NULL,
   status VARCHAR(30) NOT NULL DEFAULT 'pendente'
@@ -156,6 +156,11 @@ ALTER TABLE orders ADD COLUMN IF NOT EXISTS shipping_deadline_days INTEGER;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS tracking_code VARCHAR(30);
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS shipping_label_url TEXT;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS correios_prepostagem_id TEXT;
+ALTER TABLE orders ALTER COLUMN shipping_service_code TYPE VARCHAR(64);
+ALTER TABLE orders ALTER COLUMN shipping_service_name TYPE VARCHAR(100);
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS melhor_envio_cart_id TEXT;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS melhor_envio_order_id TEXT;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS melhor_envio_protocol TEXT;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS shipped_at TIMESTAMPTZ;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS cielo_authorization_code VARCHAR(64);
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS cielo_payment_id VARCHAR(64);

@@ -8,6 +8,10 @@ import {
   buildCorreiosCodePrerequisites,
   generateCorreiosTrackingCode,
 } from '../services/correiosPrePostagem.js';
+import {
+  generateMelhorEnvioLabel,
+  isMelhorEnvioServiceCode,
+} from '../services/melhorEnvio.js';
 import { getInvoiceTypeConfig, saveInvoiceFile } from '../services/invoiceUpload.js';
 import { streamOrderInvoice, withInvoiceFlags, withInvoiceFlagsList } from '../services/invoiceAccess.js';
 
@@ -96,6 +100,56 @@ router.post('/:id/etiqueta', async (req, res) => {
   } catch (err) {
     console.error('Erro ao gerar etiqueta:', err);
     res.status(500).json({ message: err.message || 'Erro ao gerar etiqueta' });
+  }
+});
+
+router.post('/:id/melhor-envio/etiqueta', async (req, res) => {
+  try {
+    const order = await loadOrderOr404(req.params.id, res);
+    if (!order) return;
+
+    if (!isMelhorEnvioServiceCode(order.shipping_service_code)) {
+      return res.status(400).json({
+        message: 'Este pedido não usa frete Melhor Envio. Selecione uma opção ME no checkout.',
+      });
+    }
+
+    const generated = await generateMelhorEnvioLabel(order);
+
+    const result = await pool.query(
+      `UPDATE orders
+       SET tracking_code = COALESCE($1, tracking_code),
+           shipping_label_url = COALESCE($2, shipping_label_url),
+           melhor_envio_cart_id = COALESCE($3, melhor_envio_cart_id),
+           melhor_envio_order_id = COALESCE($4, melhor_envio_order_id),
+           melhor_envio_protocol = COALESCE($5, melhor_envio_protocol),
+           status = CASE WHEN status IN ('confirmado', 'em_preparo', 'pendente') THEN 'enviado' ELSE status END,
+           shipped_at = COALESCE(shipped_at, NOW()),
+           updated_date = NOW()
+       WHERE id = $6
+       RETURNING *`,
+      [
+        generated.tracking_code,
+        generated.label_url,
+        generated.cart_id,
+        generated.order_id,
+        generated.protocol,
+        order.id,
+      ]
+    );
+
+    res.json({
+      message: 'Etiqueta Melhor Envio gerada com sucesso',
+      tracking_code: generated.tracking_code,
+      label_url: generated.label_url,
+      protocol: generated.protocol,
+      melhor_envio_cart_id: generated.cart_id,
+      melhor_envio_order_id: generated.order_id,
+      order: withInvoiceFlags(rowToEntity(result.rows[0])),
+    });
+  } catch (err) {
+    console.error('Erro ao gerar etiqueta Melhor Envio:', err);
+    res.status(400).json({ message: err.message || 'Erro ao gerar etiqueta Melhor Envio' });
   }
 });
 

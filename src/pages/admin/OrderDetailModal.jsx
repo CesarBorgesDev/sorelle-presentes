@@ -30,14 +30,20 @@ export default function OrderDetailModal({ order, onClose, onUpdated, onDeleted 
   const [trackingError, setTrackingError] = useState('');
   const [trackingCodeError, setTrackingCodeError] = useState(null);
   const [labelUrl, setLabelUrl] = useState(order.shipping_label_url || '');
+  const [meProtocol, setMeProtocol] = useState(order.melhor_envio_protocol || '');
+  const [meLabelError, setMeLabelError] = useState('');
   const [hasInvoicePdf, setHasInvoicePdf] = useState(Boolean(order.has_invoice_pdf));
   const [hasInvoiceXml, setHasInvoiceXml] = useState(Boolean(order.has_invoice_xml));
+
+  const isMelhorEnvioOrder = String(order.shipping_service_code || '').startsWith('me:');
 
   useEffect(() => {
     setTrackingCode(order.tracking_code || '');
     setPaymentStatus(order.payment_status || 'aguardando_pagamento');
     setCieloAuthorization(order.cielo_authorization_code || '');
     setLabelUrl(order.shipping_label_url || '');
+    setMeProtocol(order.melhor_envio_protocol || '');
+    setMeLabelError('');
     setHasInvoicePdf(Boolean(order.has_invoice_pdf));
     setHasInvoiceXml(Boolean(order.has_invoice_xml));
     setTracking(null);
@@ -82,6 +88,24 @@ export default function OrderDetailModal({ order, onClose, onUpdated, onDeleted 
     },
   });
 
+  const meLabelMutation = useMutation({
+    mutationFn: () => api.orderShipping.generateMelhorEnvioLabel(order.id),
+    onSuccess: (result) => {
+      setMeLabelError('');
+      if (result.label_url) setLabelUrl(result.label_url);
+      if (result.tracking_code) setTrackingCode(result.tracking_code);
+      if (result.protocol) setMeProtocol(result.protocol);
+      queryClient.invalidateQueries({ queryKey: ['orders'] });
+      if (result.order) onUpdated?.(result.order);
+      if (result.label_url) {
+        window.open(result.label_url, '_blank', 'noopener,noreferrer');
+      }
+    },
+    onError: (err) => {
+      setMeLabelError(err?.body?.message || err.message || 'Falha ao gerar etiqueta Melhor Envio');
+    },
+  });
+
   const trackMutation = useMutation({
     mutationFn: () => api.orderShipping.track(order.id),
     onSuccess: (result) => {
@@ -101,6 +125,7 @@ export default function OrderDetailModal({ order, onClose, onUpdated, onDeleted 
     queryKey: ['correios-preflight', order.id],
     queryFn: () => api.orderShipping.preflightTrackingCode(order.id),
     staleTime: 30_000,
+    enabled: !isMelhorEnvioOrder,
   });
 
   const trackingCodeMutation = useMutation({
@@ -344,7 +369,23 @@ export default function OrderDetailModal({ order, onClose, onUpdated, onDeleted 
 
           <div className="space-y-4 p-4 rounded-sm border border-border">
             <div>
-              <h3 className="font-display text-base tracking-wide text-foreground">Envio Correios</h3>
+              <h3 className="font-display text-base tracking-wide text-foreground">
+                {isMelhorEnvioOrder ? 'Envio Melhor Envio' : 'Envio Correios'}
+              </h3>
+              {isMelhorEnvioOrder ? (
+                <>
+                  <p className="font-body text-xs text-muted-foreground mt-2">
+                    Frete cotado via Melhor Envio ({order.shipping_service_name || order.shipping_service_code}).
+                    Gera etiqueta comprando saldo da carteira ME (cart → checkout → generate → print).
+                  </p>
+                  {meProtocol ? (
+                    <p className="font-body text-xs text-muted-foreground mt-1">
+                      Protocolo: <span className="font-mono text-foreground">{meProtocol}</span>
+                    </p>
+                  ) : null}
+                </>
+              ) : (
+                <>
               <ol className="mt-2 space-y-1 font-body text-xs text-muted-foreground list-decimal pl-4">
                 <li>
                   Configure{' '}
@@ -364,8 +405,11 @@ export default function OrderDetailModal({ order, onClose, onUpdated, onDeleted 
               <p className="font-body text-[11px] text-muted-foreground mt-2">
                 Fluxo oficial: criar pré-postagem → emitir rótulo PDF → obter código. Pode marcar o pedido como Enviado.
               </p>
+                </>
+              )}
             </div>
 
+            {!isMelhorEnvioOrder && (
             <div className="rounded-sm border border-border/80 bg-secondary/20 p-3 space-y-2">
               <div className="flex items-center justify-between gap-2">
                 <p className="font-body text-xs uppercase tracking-wider text-muted-foreground">
@@ -407,6 +451,7 @@ export default function OrderDetailModal({ order, onClose, onUpdated, onDeleted 
                 </p>
               )}
             </div>
+            )}
 
             <div>
               <label className="block font-body text-xs text-muted-foreground tracking-wider uppercase mb-2">
@@ -420,7 +465,14 @@ export default function OrderDetailModal({ order, onClose, onUpdated, onDeleted 
               />
             </div>
 
-            {trackingCodeError && (
+            {meLabelError && (
+              <div className="flex items-start gap-2 p-3 rounded-sm border border-destructive/30 bg-destructive/5">
+                <AlertCircle className="w-4 h-4 mt-0.5 shrink-0 text-destructive" />
+                <p className="font-body text-xs text-destructive">{meLabelError}</p>
+              </div>
+            )}
+
+            {!isMelhorEnvioOrder && trackingCodeError && (
               <div className="p-3 rounded-sm border border-destructive/40 bg-destructive/5 space-y-2">
                 <div className="flex items-start gap-2">
                   <AlertCircle className="w-4 h-4 mt-0.5 shrink-0 text-destructive" />
@@ -464,26 +516,41 @@ export default function OrderDetailModal({ order, onClose, onUpdated, onDeleted 
             )}
 
             <div className="flex flex-wrap gap-3">
-              <button
-                type="button"
-                title={
-                  canGenerateCorreiosCode
-                    ? 'Gerar código pela API de pré-postagem'
-                    : 'Complete o checklist acima antes de gerar'
-                }
-                onClick={() => {
-                  setTrackingCodeError(null);
-                  trackingCodeMutation.mutate();
-                }}
-                disabled={trackingCodeMutation.isPending || preflightLoading || !canGenerateCorreiosCode}
-                className="inline-flex items-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground rounded-sm font-body text-sm hover:opacity-90 disabled:opacity-50"
-              >
-                {trackingCodeMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <ScanBarcode className="w-4 h-4" />}
-                Gerar código Correios
-              </button>
+              {isMelhorEnvioOrder ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMeLabelError('');
+                    meLabelMutation.mutate();
+                  }}
+                  disabled={meLabelMutation.isPending}
+                  className="inline-flex items-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground rounded-sm font-body text-sm hover:opacity-90 disabled:opacity-50"
+                >
+                  {meLabelMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Printer className="w-4 h-4" />}
+                  Gerar etiqueta Melhor Envio
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  title={
+                    canGenerateCorreiosCode
+                      ? 'Gerar código pela API de pré-postagem'
+                      : 'Complete o checklist acima antes de gerar'
+                  }
+                  onClick={() => {
+                    setTrackingCodeError(null);
+                    trackingCodeMutation.mutate();
+                  }}
+                  disabled={trackingCodeMutation.isPending || preflightLoading || !canGenerateCorreiosCode}
+                  className="inline-flex items-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground rounded-sm font-body text-sm hover:opacity-90 disabled:opacity-50"
+                >
+                  {trackingCodeMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <ScanBarcode className="w-4 h-4" />}
+                  Gerar código Correios
+                </button>
+              )}
               {labelUrl && (
                 <a
-                  href={resolveMediaUrl(labelUrl)}
+                  href={labelUrl.startsWith('http') ? labelUrl : resolveMediaUrl(labelUrl)}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-2 px-4 py-2.5 border border-border rounded-sm font-body text-sm hover:bg-secondary"
@@ -492,15 +559,17 @@ export default function OrderDetailModal({ order, onClose, onUpdated, onDeleted 
                   <ExternalLink className="w-4 h-4" />
                 </a>
               )}
-              <button
-                type="button"
-                onClick={() => labelMutation.mutate()}
-                disabled={labelMutation.isPending}
-                className="inline-flex items-center gap-2 px-4 py-2.5 border border-border rounded-sm font-body text-sm hover:bg-secondary disabled:opacity-50"
-              >
-                {labelMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Printer className="w-4 h-4" />}
-                {trackingCode ? 'Atualizar etiqueta' : 'Gerar etiqueta'}
-              </button>
+              {!isMelhorEnvioOrder && (
+                <button
+                  type="button"
+                  onClick={() => labelMutation.mutate()}
+                  disabled={labelMutation.isPending}
+                  className="inline-flex items-center gap-2 px-4 py-2.5 border border-border rounded-sm font-body text-sm hover:bg-secondary disabled:opacity-50"
+                >
+                  {labelMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Printer className="w-4 h-4" />}
+                  {trackingCode ? 'Atualizar etiqueta' : 'Gerar etiqueta'}
+                </button>
+              )}
               <button
                 type="button"
                 onClick={saveShippingPayment}

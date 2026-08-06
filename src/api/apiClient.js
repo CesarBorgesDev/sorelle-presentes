@@ -321,6 +321,26 @@ const settings = {
   },
 };
 
+const melhorEnvio = {
+  async getAuthorizeUrl() {
+    return apiFetch('/melhor-envio/authorize-url');
+  },
+
+  async disconnect() {
+    return apiFetch('/melhor-envio/disconnect', {
+      method: 'POST',
+      body: JSON.stringify({}),
+    });
+  },
+
+  async testQuote(data = {}) {
+    return apiFetch('/melhor-envio/test', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+};
+
 const pages = {
   get(slug) {
     return apiFetch(`/pages/${slug}`);
@@ -430,6 +450,13 @@ const orderShipping = {
 
   generateTrackingCode(orderId) {
     return apiFetch(`/orders/${orderId}/codigo-correios`, {
+      method: 'POST',
+      body: JSON.stringify({}),
+    });
+  },
+
+  generateMelhorEnvioLabel(orderId) {
+    return apiFetch(`/orders/${orderId}/melhor-envio/etiqueta`, {
       method: 'POST',
       body: JSON.stringify({}),
     });
@@ -618,6 +645,7 @@ const categoriesApi = {
 export const api = {
   auth,
   settings,
+  melhorEnvio,
   pages,
   homeBanners,
   images,

@@ -19,6 +19,7 @@ import { getCorreiosConfig } from '../services/correios.js';
 import { clearCorreiosTokenCache, testCorreiosApiConnection } from '../services/correiosAuth.js';
 import { testCorreiosPrePostagem } from '../services/correiosPrePostagem.js';
 import { getRodonavesConfig } from '../services/rodonaves.js';
+import { getMelhorEnvioConfig } from '../services/melhorEnvio.js';
 
 const router = Router();
 
@@ -43,6 +44,7 @@ async function buildSettingsResponse(message) {
   const pixHolderName = await getSetting('pix_holder_name');
   const correiosConfig = await getCorreiosConfig();
   const rodonavesConfig = await getRodonavesConfig();
+  const melhorEnvioConfig = await getMelhorEnvioConfig();
 
   return {
     ...(message ? { message } : {}),
@@ -111,6 +113,19 @@ async function buildSettingsResponse(message) {
       has_password: Boolean(rodonavesConfig.password),
       password_masked: maskToken(rodonavesConfig.password),
       cnpj: rodonavesConfig.cnpj,
+    },
+    melhor_envio: {
+      enabled: melhorEnvioConfig.enabled,
+      environment: melhorEnvioConfig.environment,
+      client_id: melhorEnvioConfig.clientId,
+      has_client_secret: Boolean(melhorEnvioConfig.clientSecret),
+      client_secret_masked: maskToken(melhorEnvioConfig.clientSecret),
+      redirect_uri: melhorEnvioConfig.redirectUri,
+      user_agent_email: melhorEnvioConfig.userAgentEmail,
+      has_app: melhorEnvioConfig.hasApp,
+      connected: melhorEnvioConfig.connected,
+      is_ready: melhorEnvioConfig.isReady,
+      token_expires_at: melhorEnvioConfig.tokenExpiresAt,
     },
     store_pickup: await getStorePickupConfig(),
     cielo: {
@@ -283,6 +298,12 @@ router.put('/', requireAuth, requireAdmin, async (req, res) => {
       rodonaves_password,
       rodonaves_cnpj,
       rodonaves_label,
+      melhor_envio_enabled,
+      melhor_envio_environment,
+      melhor_envio_client_id,
+      melhor_envio_client_secret,
+      melhor_envio_user_agent_email,
+      melhor_envio_redirect_uri,
       image_model,
       product_sort_order,
       store_pickup_enabled,
@@ -574,6 +595,28 @@ router.put('/', requireAuth, requireAdmin, async (req, res) => {
 
     if (rodonaves_label !== undefined) {
       await setSetting('rodonaves_label', String(rodonaves_label).trim());
+    }
+
+    if (melhor_envio_enabled !== undefined) {
+      await setSetting('melhor_envio_enabled', melhor_envio_enabled ? 'true' : 'false');
+    }
+    if (melhor_envio_environment !== undefined) {
+      const env = String(melhor_envio_environment).trim().toLowerCase() === 'production'
+        ? 'production'
+        : 'sandbox';
+      await setSetting('melhor_envio_environment', env);
+    }
+    if (melhor_envio_client_id !== undefined) {
+      await setSetting('melhor_envio_client_id', String(melhor_envio_client_id).trim());
+    }
+    if (melhor_envio_client_secret !== undefined && melhor_envio_client_secret !== '') {
+      await setSetting('melhor_envio_client_secret', String(melhor_envio_client_secret).trim());
+    }
+    if (melhor_envio_user_agent_email !== undefined) {
+      await setSetting('melhor_envio_user_agent_email', String(melhor_envio_user_agent_email).trim());
+    }
+    if (melhor_envio_redirect_uri !== undefined) {
+      await setSetting('melhor_envio_redirect_uri', String(melhor_envio_redirect_uri).trim());
     }
 
     if (image_model !== undefined && image_model !== '') {

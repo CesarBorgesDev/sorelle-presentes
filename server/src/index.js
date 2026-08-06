@@ -20,6 +20,7 @@ import pagesRoutes from './routes/pages.js';
 import homeBannersRoutes from './routes/homeBanners.js';
 import brandRoutes from './routes/brands.js';
 import categoryRoutes from './routes/categories.js';
+import melhorEnvioRoutes from './routes/melhorEnvio.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -74,6 +75,7 @@ app.use('/api/pages', pagesRoutes);
 app.use('/api/home-banners', homeBannersRoutes);
 app.use('/api/brands', brandRoutes);
 app.use('/api/categories', categoryRoutes);
+app.use('/api/melhor-envio', melhorEnvioRoutes);
 
 app.use((_req, res) => {
   res.status(404).json({ message: 'Rota não encontrada' });

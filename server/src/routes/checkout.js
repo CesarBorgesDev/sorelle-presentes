@@ -204,6 +204,9 @@ async function createOrderFromCart({ userId, customer, paymentMethod, shipping }
       'aguardando_pagamento',
       [
         customer.customer_zip_code ? `CEP: ${customer.customer_zip_code}` : null,
+        customer.customer_document
+          ? `CPF: ${String(customer.customer_document).replace(/\D/g, '')}`
+          : null,
         pixDiscount > 0 ? `Desconto PIX: R$ ${pixDiscount.toFixed(2)}` : null,
       ].filter(Boolean).join(' | ') || null,
     ]
