@@ -117,20 +117,25 @@ export default function OrderDetailModal({ order, onClose, onUpdated, onDeleted 
     onError: (err) => {
       const body = err?.body || {};
       const message = body.message || err.message || 'Erro ao gerar código Correios';
-      const details = Array.isArray(body.details)
-        ? body.details.filter(Boolean)
-        : Array.isArray(body.msgs)
-          ? body.msgs.filter(Boolean)
-          : [];
+      const details = [
+        ...(Array.isArray(body.details) ? body.details : []),
+        ...(Array.isArray(body.msgs) ? body.msgs : []),
+        body.causa,
+      ].filter((item) => item && item !== 'null' && item !== 'undefined');
 
-      // Evita mostrar só "null" / genérico sem contexto
       const safeMessage = !message || message === 'null' || message === 'undefined'
-        ? 'Não foi possível gerar o código Correios.'
+        ? (details[0] || 'Não foi possível gerar o código Correios.')
         : message;
+
+      const uniqueDetails = [...new Set(
+        details
+          .map((item) => String(item).trim())
+          .filter((item) => item && item !== safeMessage && !safeMessage.includes(item))
+      )];
 
       setTrackingCodeError({
         message: safeMessage,
-        details: details.filter((item) => item && item !== safeMessage),
+        details: uniqueDetails,
         step: body.step || null,
       });
     },

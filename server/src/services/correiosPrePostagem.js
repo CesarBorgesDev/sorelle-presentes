@@ -27,7 +27,8 @@ function truncate(value, max) {
 }
 
 function formatMoney(value) {
-  return Number(value || 0).toFixed(2);
+  const num = Number(value || 0);
+  return (Number.isFinite(num) ? Math.max(0, num) : 0).toFixed(2);
 }
 
 function splitPhone(phone) {
@@ -39,6 +40,43 @@ function splitPhone(phone) {
     };
   }
   return { ddd: '', number: digits };
+}
+
+/** Telefone fixo Correios: DDD 2 dígitos + número 8 dígitos. Celular: DDD + 9 dígitos. */
+function buildCorreiosPhoneFields(phone) {
+  const ddd = onlyDigits(phone?.ddd).slice(0, 2);
+  const number = onlyDigits(phone?.number);
+  if (ddd.length !== 2 || number.length < 8) return {};
+
+  // Celular (9 dígitos)
+  if (number.length >= 9) {
+    return {
+      dddCelular: ddd,
+      celular: number.slice(-9),
+    };
+  }
+
+  return {
+    dddTelefone: ddd,
+    telefone: number.slice(-8),
+  };
+}
+
+function normalizeStreetNumber(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return 'S/N';
+  const cleaned = raw.replace(/^n[ºo°.]?\s*/i, '').trim();
+  return truncate(cleaned || 'S/N', 6);
+}
+
+function isValidEmail(email) {
+  const value = String(email || '').trim();
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
+function dimensionCm(value, min) {
+  const n = Math.max(min, Math.round(Number(value) || min));
+  return String(Math.min(999, n));
 }
 
 function parseRecipientAddress(order) {
@@ -325,62 +363,66 @@ async function getPrePostagemConfig() {
 }
 
 function buildPrePostagemPayload(order, { sender, recipient, packageInfo, serviceCode }) {
-  const phone = sender.phone.number.length >= 8
-    ? {
-        dddTelefone: sender.phone.ddd,
-        telefone: sender.phone.number.slice(-8),
-      }
-    : {};
+  const senderPhone = buildCorreiosPhoneFields(sender.phone);
+  const recipientPhone = buildCorreiosPhoneFields(splitPhone(order.customer_phone));
+  const recipientEmail = truncate(order.customer_email, 255);
+  const senderEmail = truncate(sender.email, 255);
+  const weightGrams = String(Math.min(999999, Math.max(1, Math.round(Number(packageInfo.weightKg) * 1000))));
 
   return {
     remetente: {
-      nome: sender.name,
-      email: sender.email,
-      ...(sender.cnpj ? { cpfCnpj: sender.cnpj } : {}),
-      ...phone,
+      nome: truncate(sender.name, 50),
+      ...(isValidEmail(senderEmail) ? { email: senderEmail } : {}),
+      ...(sender.cnpj && (sender.cnpj.length === 11 || sender.cnpj.length === 14)
+        ? { cpfCnpj: sender.cnpj }
+        : {}),
+      ...senderPhone,
       endereco: {
-        cep: sender.zip,
-        logradouro: sender.street,
-        numero: sender.number,
-        complemento: sender.complement || undefined,
-        bairro: sender.district,
-        cidade: sender.city,
-        uf: sender.state,
+        cep: onlyDigits(sender.zip).slice(0, 8),
+        logradouro: truncate(sender.street, 50),
+        numero: normalizeStreetNumber(sender.number),
+        ...(sender.complement ? { complemento: truncate(sender.complement, 30) } : {}),
+        bairro: truncate(sender.district || 'Centro', 30),
+        cidade: truncate(sender.city, 30),
+        uf: truncate(sender.state, 2).toUpperCase(),
       },
     },
     destinatario: {
       nome: truncate(order.customer_name, 50),
-      email: truncate(order.customer_email, 255) || undefined,
+      ...(isValidEmail(recipientEmail) ? { email: recipientEmail } : {}),
+      ...recipientPhone,
       endereco: {
-        cep: recipient.zip,
+        cep: onlyDigits(recipient.zip).slice(0, 8),
         logradouro: truncate(recipient.street, 50),
-        numero: truncate(recipient.number, 6),
-        complemento: truncate(recipient.complement, 30) || undefined,
-        bairro: truncate(recipient.district, 30),
+        numero: normalizeStreetNumber(recipient.number),
+        ...(recipient.complement ? { complemento: truncate(recipient.complement, 30) } : {}),
+        bairro: truncate(recipient.district || 'Centro', 30),
         cidade: truncate(recipient.city, 30),
         uf: truncate(recipient.state, 2).toUpperCase(),
-        regiao: truncate(recipient.city, 50),
+        // Schema exige regiao; em postagem nacional usamos a cidade
+        regiao: truncate(recipient.city || recipient.state || 'BR', 50),
       },
     },
-    codigoServico: serviceCode,
-    pesoInformado: String(Math.max(1, Math.round(packageInfo.weightKg * 1000))),
+    codigoServico: String(serviceCode || '').trim(),
+    pesoInformado: weightGrams,
     codigoFormatoObjetoInformado: '2',
-    alturaInformada: String(Math.max(2, Math.round(packageInfo.height))),
-    larguraInformada: String(Math.max(11, Math.round(packageInfo.width))),
-    comprimentoInformado: String(Math.max(16, Math.round(packageInfo.length))),
-    cienteObjetoNaoProibido: 1,
+    alturaInformada: dimensionCm(packageInfo.height, 2),
+    larguraInformada: dimensionCm(packageInfo.width, 11),
+    comprimentoInformado: dimensionCm(packageInfo.length, 16),
+    // Schema exige string "0" | "1" (não número)
+    cienteObjetoNaoProibido: '1',
     logisticaReversa: 'N',
     itensDeclaracaoConteudo: buildDeclarationItems(order),
-    controleCliente: truncate(order.id, 30),
+    pedidoExternoOrigem: truncate(order.id, 25),
     observacao: truncate(`Pedido ${order.id}`, 50),
   };
 }
 
 function collectCorreiosMessages(value, bag = [], depth = 0) {
-  if (value == null || depth > 4) return bag;
+  if (value == null || depth > 5) return bag;
 
-  if (typeof value === 'string') {
-    const text = value.trim();
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+    const text = String(value).trim();
     if (text && text !== 'null' && text !== 'undefined' && !bag.includes(text)) {
       bag.push(text);
     }
@@ -393,8 +435,20 @@ function collectCorreiosMessages(value, bag = [], depth = 0) {
   }
 
   if (typeof value === 'object') {
-    for (const key of ['msgs', 'message', 'causa', 'msg', 'erro', 'error', 'detail', 'details']) {
+    for (const key of [
+      'msgs', 'message', 'causa', 'msg', 'erro', 'error', 'detail', 'details',
+      'mensagem', 'descricao', 'description', 'title',
+    ]) {
       if (value[key] != null) collectCorreiosMessages(value[key], bag, depth + 1);
+    }
+    // Objetos de validação tipo { campo: "msg" }
+    if (!value.msgs && !value.message && !value.causa) {
+      for (const [key, nested] of Object.entries(value)) {
+        if (['date', 'method', 'path', 'stackTrace', 'status', 'raw'].includes(key)) continue;
+        if (typeof nested === 'string' || Array.isArray(nested)) {
+          collectCorreiosMessages(nested, bag, depth + 1);
+        }
+      }
     }
   }
 
@@ -403,7 +457,7 @@ function collectCorreiosMessages(value, bag = [], depth = 0) {
 
 function extractCorreiosError(body, status, fallback = 'Erro na API de pré-postagem') {
   const messages = collectCorreiosMessages(body);
-  if (messages.length > 0) return messages.join('; ');
+  if (messages.length > 0) return messages.join(' | ');
   if (status) return `${fallback} (HTTP ${status})`;
   return fallback;
 }
@@ -411,12 +465,22 @@ function extractCorreiosError(body, status, fallback = 'Erro na API de pré-post
 function throwCorreiosError({ message, details = [], step = null, status = null, raw = null }) {
   const uniqueDetails = [...new Set(
     details
-      .flatMap((item) => collectCorreiosMessages(item))
+      .flatMap((item) => {
+        if (typeof item === 'string') return [item];
+        return collectCorreiosMessages(item);
+      })
       .map((item) => String(item).trim())
       .filter((item) => item && item !== 'null' && item !== 'undefined')
   )];
 
-  const err = new Error(message || uniqueDetails[0] || 'Erro ao gerar código Correios');
+  // Se a mensagem genérica não traz o motivo, usa o primeiro detalhe da API no título
+  let finalMessage = message || uniqueDetails[0] || 'Erro ao gerar código Correios';
+  const apiDetail = uniqueDetails.find((d) => d !== finalMessage && !d.startsWith('Serviço enviado') && !d.startsWith('Confira '));
+  if (apiDetail && /recusaram|não foi possível|Erro na API/i.test(finalMessage)) {
+    finalMessage = `${finalMessage.replace(/\.$/, '')}: ${apiDetail}`;
+  }
+
+  const err = new Error(finalMessage);
   err.code = 'CORREIOS_PREPOSTAGEM';
   err.details = uniqueDetails;
   err.step = step;
@@ -460,12 +524,29 @@ export async function generateCorreiosTrackingCode(order) {
     });
 
     if (!created.ok) {
+      const apiMsg = extractCorreiosError(created.data, created.status);
+      console.error('[Correios] Pré-postagem recusada', {
+        status: created.status,
+        serviceCode,
+        apiMsg,
+        body: created.data,
+        payloadSummary: {
+          codigoServico: payload.codigoServico,
+          pesoInformado: payload.pesoInformado,
+          remetenteCep: payload.remetente?.endereco?.cep,
+          destinatarioCep: payload.destinatario?.endereco?.cep,
+          cienteObjetoNaoProibido: payload.cienteObjetoNaoProibido,
+        },
+      });
       throwCorreiosError({
         message: 'Os Correios recusaram a criação da pré-postagem.',
         details: [
-          extractCorreiosError(created.data, created.status),
+          apiMsg,
+          `HTTP ${created.status}`,
           `Serviço enviado: ${serviceCode}`,
-          'Confira remetente, destinatário, CEP e se o serviço está liberado no cartão/contrato.',
+          `CEP remetente: ${payload.remetente?.endereco?.cep || '-'}`,
+          `CEP destinatário: ${payload.destinatario?.endereco?.cep || '-'}`,
+          'Confira remetente (aba Remetente), destinatário do pedido e se o serviço está liberado no cartão/contrato no CWS.',
         ],
         step: 'criar_prepostagem',
         status: created.status,
