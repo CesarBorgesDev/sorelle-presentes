@@ -224,7 +224,9 @@ export default function AdminSettings() {
       ok: false,
       message: err?.body?.message || err.message || 'Falha ao testar pré-postagem',
       steps: err?.body?.steps || [],
+      details: err?.body?.details || [],
       next_steps: err?.body?.next_steps || [],
+      raw: err?.body?.raw || err?.body || null,
     }),
   });
 
@@ -1101,11 +1103,33 @@ export default function AdminSettings() {
                                   <> · chave pré-postagem: {step.used_prepostagem_key ? 'sim' : 'geral'}</>
                                 )}
                                 {step.error && (
-                                  <span className="block mt-0.5 text-destructive">{step.error}</span>
+                                  <span className="block mt-0.5 text-destructive break-words">{step.error}</span>
+                                )}
+                                {Array.isArray(step.details) && step.details.length > 0 && (
+                                  <ul className="mt-1 list-disc pl-4 space-y-0.5 text-destructive/90">
+                                    {step.details.map((detail) => (
+                                      <li key={detail} className="break-words">{detail}</li>
+                                    ))}
+                                  </ul>
                                 )}
                               </li>
                             ))}
                           </ul>
+                        )}
+                        {Array.isArray(correiosPrePostagemTestResult.details)
+                          && correiosPrePostagemTestResult.details.length > 0 && (
+                          <ul className="list-disc pl-4 space-y-1 font-body text-xs text-destructive">
+                            {correiosPrePostagemTestResult.details.map((detail) => (
+                              <li key={detail} className="break-words">{detail}</li>
+                            ))}
+                          </ul>
+                        )}
+                        {correiosPrePostagemTestResult.raw && !correiosPrePostagemTestResult.ok && (
+                          <pre className="mt-1 max-h-40 overflow-auto rounded-sm bg-background/60 p-2 font-mono text-[10px] text-muted-foreground whitespace-pre-wrap break-words">
+                            {typeof correiosPrePostagemTestResult.raw === 'string'
+                              ? correiosPrePostagemTestResult.raw
+                              : JSON.stringify(correiosPrePostagemTestResult.raw, null, 2)}
+                          </pre>
                         )}
                         {Array.isArray(correiosPrePostagemTestResult.next_steps)
                           && correiosPrePostagemTestResult.next_steps.length > 0 && (

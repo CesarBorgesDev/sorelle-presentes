@@ -670,15 +670,12 @@ function buildPrePostagemPayload(order, {
   recipient,
   packageInfo,
   serviceCode,
-  contractCtx = null,
 }) {
   const senderPhone = buildCorreiosPhoneFields(sender.phone);
   const recipientPhone = buildCorreiosPhoneFields(splitPhone(order.customer_phone));
   const recipientEmail = truncate(order.customer_email, 255);
   const senderEmail = truncate(sender.email, 255);
   const weightGrams = String(Math.min(999999, Math.max(1, Math.round(Number(packageInfo.weightKg) * 1000))));
-  const postCard = onlyDigits(contractCtx?.postCard || '').slice(0, 20);
-  const contractNumber = truncate(contractCtx?.contract || '', 20);
 
   return {
     remetente: {
@@ -715,8 +712,6 @@ function buildPrePostagemPayload(order, {
       },
     },
     codigoServico: String(serviceCode || '').trim(),
-    ...(postCard ? { numeroCartaoPostagem: postCard } : {}),
-    ...(contractNumber ? { numeroContrato: contractNumber } : {}),
     pesoInformado: weightGrams,
     codigoFormatoObjetoInformado: '2',
     alturaInformada: dimensionCm(packageInfo.height, 2),
@@ -772,6 +767,20 @@ function extractCorreiosError(body, status, fallback = 'Erro na API de pré-post
   const messages = collectCorreiosMessages(body)
     .filter((m) => !/^ApiNegocioRuntimeException:?$/i.test(m));
   if (messages.length > 0) return messages.join(' | ');
+  // Fallback: serializa body curto para não perder o motivo do 400
+  if (body != null && typeof body === 'object' && Object.keys(body).length > 0) {
+    try {
+      const snap = JSON.stringify(body);
+      if (snap && snap !== '{}' && snap.length < 800) {
+        return `${fallback}${status ? ` (HTTP ${status})` : ''}: ${snap}`;
+      }
+    } catch {
+      // ignore
+    }
+  }
+  if (typeof body === 'string' && body.trim()) {
+    return cleanCorreiosMessage(body) || `${fallback}${status ? ` (HTTP ${status})` : ''}`;
+  }
   if (status) return `${fallback} (HTTP ${status})`;
   return fallback;
 }
@@ -876,7 +885,6 @@ export async function generateCorreiosTrackingCode(order) {
     }
 
     const config = await getPrePostagemConfig();
-    const contractCtx = await getCorreiosContractContext();
     const sender = await getSenderConfig();
     const recipient = parseRecipientAddress(order);
     validatePrePostagemSetup({ sender, recipient, order, config });
@@ -900,7 +908,6 @@ export async function generateCorreiosTrackingCode(order) {
       recipient,
       packageInfo,
       serviceCode,
-      contractCtx,
     });
 
     const created = await correiosApiFetch('/v1/prepostagens', {
@@ -1216,7 +1223,6 @@ export async function testCorreiosPrePostagem({
       length: 20,
     },
     serviceCode: code,
-    contractCtx,
   });
   payload.observacao = truncate('TESTE ADMIN — cancelar', 50);
 
@@ -1228,6 +1234,23 @@ export async function testCorreiosPrePostagem({
 
   if (!created.ok) {
     const apiMsg = extractCorreiosError(created.data, created.status, 'API de pré-postagem recusou o teste');
+    const details = collectCorreiosMessages(created.data)
+      .filter((m) => !/^ApiNegocioRuntimeException:?$/i.test(m));
+    console.error('[Correios] Teste pré-postagem recusado', {
+      status: created.status,
+      serviceCode: code,
+      apiMsg,
+      body: created.data,
+      payloadSummary: {
+        codigoServico: payload.codigoServico,
+        pesoInformado: payload.pesoInformado,
+        remetenteCep: payload.remetente?.endereco?.cep,
+        destinatarioCep: payload.destinatario?.endereco?.cep,
+        remetenteCidade: payload.remetente?.endereco?.cidade,
+        destinatarioCidade: payload.destinatario?.endereco?.cidade,
+        cienteObjetoNaoProibido: payload.cienteObjetoNaoProibido,
+      },
+    });
     steps.push({
       name: 'criar_prepostagem',
       ok: false,
@@ -1235,14 +1258,17 @@ export async function testCorreiosPrePostagem({
       endpoint: 'POST /prepostagem/v1/prepostagens',
       error: apiMsg,
       service_code: code,
+      details,
     });
     return {
       ok: false,
       message: apiMsg,
       step_label: STEP_LABELS.criar_prepostagem,
       steps,
+      details,
       next_steps: nextStepsForStep('criar_prepostagem', apiMsg),
       credentials,
+      raw: created.data,
     };
   }
 
