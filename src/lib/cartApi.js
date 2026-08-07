@@ -1,37 +1,78 @@
 import { api } from '@/api/apiClient';
 import { guestCart } from '@/lib/guestCart';
 
-function isAuthenticated() {
+function hasToken() {
   return Boolean(api.auth.getToken());
+}
+
+function clearInvalidToken() {
+  api.auth.setToken(null);
+}
+
+function isUnauthorized(err) {
+  return err?.status === 401 || err?.status === 403;
 }
 
 export const cartApi = {
   async list() {
-    if (isAuthenticated()) {
-      return api.entities.CartItem.list();
+    if (!hasToken()) {
+      return guestCart.list();
     }
-    return guestCart.list();
+    try {
+      const items = await api.entities.CartItem.list();
+      return Array.isArray(items) ? items : [];
+    } catch (err) {
+      if (isUnauthorized(err)) {
+        clearInvalidToken();
+        return guestCart.list();
+      }
+      throw err;
+    }
   },
 
   async create(data) {
-    if (isAuthenticated()) {
-      return api.entities.CartItem.create(data);
+    if (!hasToken()) {
+      return guestCart.add(data);
     }
-    return guestCart.add(data);
+    try {
+      return await api.entities.CartItem.create(data);
+    } catch (err) {
+      if (isUnauthorized(err)) {
+        clearInvalidToken();
+        return guestCart.add(data);
+      }
+      throw err;
+    }
   },
 
   async update(id, data) {
-    if (isAuthenticated()) {
-      return api.entities.CartItem.update(id, data);
+    if (!hasToken()) {
+      return guestCart.update(id, data);
     }
-    return guestCart.update(id, data);
+    try {
+      return await api.entities.CartItem.update(id, data);
+    } catch (err) {
+      if (isUnauthorized(err)) {
+        clearInvalidToken();
+        return guestCart.update(id, data);
+      }
+      throw err;
+    }
   },
 
   async delete(id) {
-    if (isAuthenticated()) {
-      return api.entities.CartItem.delete(id);
+    if (!hasToken()) {
+      return guestCart.remove(id);
     }
-    return guestCart.remove(id);
+    try {
+      return await api.entities.CartItem.delete(id);
+    } catch (err) {
+      if (isUnauthorized(err)) {
+        clearInvalidToken();
+        return guestCart.remove(id);
+      }
+      throw err;
+    }
   },
 
   async mergeGuestCartToServer() {

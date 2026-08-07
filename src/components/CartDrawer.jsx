@@ -5,18 +5,12 @@ import { Button } from '@/components/ui/button';
 import { Minus, Plus, X, Package } from 'lucide-react';
 import { cartApi } from '@/lib/cartApi';
 import { useAuth } from '@/lib/AuthContext';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 
-export default function CartDrawer({ open, onClose }) {
+export default function CartDrawer({ open, onClose, items = [] }) {
   const queryClient = useQueryClient();
   const { isAuthenticated } = useAuth();
   const navigate = useNavigate();
-
-  const { data: items = [] } = useQuery({
-    queryKey: ['cart'],
-    queryFn: () => cartApi.list(),
-    enabled: open,
-  });
 
   const updateMutation = useMutation({
     mutationFn: ({ id, data }) => cartApi.update(id, data),
@@ -28,7 +22,7 @@ export default function CartDrawer({ open, onClose }) {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['cart'] }),
   });
 
-  const subtotal = items.reduce((sum, item) => sum + item.price * (item.quantity || 1), 0);
+  const subtotal = items.reduce((sum, item) => sum + Number(item.price || 0) * (item.quantity || 1), 0);
   const total = subtotal;
 
   const handleCheckout = (e) => {
@@ -40,7 +34,12 @@ export default function CartDrawer({ open, onClose }) {
   };
 
   return (
-    <Sheet open={open} onOpenChange={onClose}>
+    <Sheet
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen) onClose();
+      }}
+    >
       <SheetContent className="w-full sm:max-w-lg bg-background flex flex-col">
         <SheetHeader className="border-b border-border pb-4">
           <SheetTitle className="font-display text-xl tracking-wider">Seu Carrinho</SheetTitle>
@@ -73,7 +72,7 @@ export default function CartDrawer({ open, onClose }) {
                       </button>
                     </div>
                     <p className="font-body text-sm text-foreground mt-1">
-                      R$ {item.price?.toFixed(2).replace('.', ',')}
+                      R$ {Number(item.price || 0).toFixed(2).replace('.', ',')}
                     </p>
                     <div className="flex items-center gap-2 mt-2">
                       <button

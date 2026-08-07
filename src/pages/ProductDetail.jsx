@@ -57,6 +57,7 @@ export default function ProductDetail() {
   const { isAuthenticated } = useAuth();
   const [quantity, setQuantity] = useState(1);
   const [added, setAdded] = useState(false);
+  const [cartError, setCartError] = useState('');
   const [wishlisted, setWishlisted] = useState(false);
   const [activeImage, setActiveImage] = useState(0);
   const [lightboxOpen, setLightboxOpen] = useState(false);
@@ -133,10 +134,16 @@ export default function ProductDetail() {
 
   const addToCartMutation = useMutation({
     mutationFn: (data) => cartApi.create(data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['cart'] });
+    onSuccess: async () => {
+      setCartError('');
+      const items = await cartApi.list();
+      queryClient.setQueriesData({ queryKey: ['cart'] }, items);
+      await queryClient.invalidateQueries({ queryKey: ['cart'] });
       setAdded(true);
       setTimeout(() => setAdded(false), 2000);
+    },
+    onError: (err) => {
+      setCartError(err.message || 'Não foi possível adicionar ao carrinho');
     },
   });
 
@@ -164,6 +171,7 @@ export default function ProductDetail() {
       return;
     }
 
+    setCartError('');
     const variantLabel = buildVariantLabel(selectedColor?.name, selectedSize);
     const displayName = variantLabel ? `${product.name} - ${variantLabel}` : product.name;
     const displayImage = getVariantImages(product, selectedColorId, selectedSize)[0] || product.image_url;
@@ -511,6 +519,10 @@ export default function ProductDetail() {
                 <span className="flex items-center gap-2"><ShoppingBag className="w-4 h-4" /> Adicionar ao Carrinho</span>
               )}
             </Button>
+
+            {cartError && (
+              <p className="font-body text-sm text-destructive mt-3 text-center">{cartError}</p>
+            )}
 
             <Button
               type="button"

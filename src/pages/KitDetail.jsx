@@ -42,8 +42,10 @@ export default function KitDetail() {
         });
       }
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['cart'] });
+    onSuccess: async () => {
+      const items = await cartApi.list();
+      queryClient.setQueriesData({ queryKey: ['cart'] }, items);
+      await queryClient.invalidateQueries({ queryKey: ['cart'] });
       setAddError('');
       setAdded(true);
       setTimeout(() => setAdded(false), 2500);
