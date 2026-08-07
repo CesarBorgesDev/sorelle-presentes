@@ -16,6 +16,7 @@ import {
 } from '../services/melhorEnvio.js';
 import { getInvoiceTypeConfig, saveInvoiceFile } from '../services/invoiceUpload.js';
 import { streamOrderInvoice, withInvoiceFlags, withInvoiceFlagsList } from '../services/invoiceAccess.js';
+import { verifyMercadoPagoOrderPayment } from '../services/mercadoPagoNotifications.js';
 
 const router = Router();
 
@@ -470,6 +471,24 @@ router.patch('/:id', async (req, res) => {
     res.json(rowToEntity(result.rows[0]));
   } catch (err) {
     res.status(500).json({ message: 'Erro ao atualizar pedido' });
+  }
+});
+
+router.post('/:id/verificar-pagamento-mercado-pago', async (req, res) => {
+  try {
+    const order = await loadOrderOr404(req.params.id, res);
+    if (!order) return;
+
+    const result = await verifyMercadoPagoOrderPayment(pool, order);
+    res.json({
+      ...result,
+      order: withInvoiceFlags(result.order),
+    });
+  } catch (err) {
+    const status = err.status || 500;
+    res.status(status).json({
+      message: err.message || 'Erro ao verificar pagamento no Mercado Pago',
+    });
   }
 });
 

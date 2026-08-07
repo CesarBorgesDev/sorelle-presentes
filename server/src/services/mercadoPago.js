@@ -224,6 +224,7 @@ export async function getMercadoPagoPayment(paymentId, configOverride) {
       paymentMethodId: payment.payment_method_id || null,
       paymentTypeId: payment.payment_type_id || null,
       statusDetail: payment.status_detail || null,
+      authorizationCode: payment.authorization_code || null,
       raw: payment,
     };
   } catch (err) {
@@ -252,6 +253,7 @@ export async function searchMercadoPagoPaymentsByExternalReference(externalRefer
       paymentMethodId: payment.payment_method_id || null,
       paymentTypeId: payment.payment_type_id || null,
       statusDetail: payment.status_detail || null,
+      authorizationCode: payment.authorization_code || null,
       raw: payment,
     }));
   } catch (err) {

@@ -52,7 +52,8 @@ export function verifyMercadoPagoWebhookSignature({
 export async function applyMercadoPagoPaymentUpdate(pool, order, paymentInfo) {
   if (!order?.id || !paymentInfo?.paymentStatus) return order;
   if (order.payment_status === paymentInfo.paymentStatus
-    && String(order.mercado_pago_payment_id || '') === String(paymentInfo.id || '')) {
+    && String(order.mercado_pago_payment_id || '') === String(paymentInfo.id || '')
+    && String(order.mercado_pago_authorization_code || '') === String(paymentInfo.authorizationCode || '')) {
     return order;
   }
 
@@ -66,13 +67,15 @@ export async function applyMercadoPagoPaymentUpdate(pool, order, paymentInfo) {
          END,
          mercado_pago_payment_id = COALESCE($2, mercado_pago_payment_id),
          mercado_pago_preference_id = COALESCE($3, mercado_pago_preference_id),
+         mercado_pago_authorization_code = COALESCE($4, mercado_pago_authorization_code),
          updated_date = NOW()
-     WHERE id = $4
+     WHERE id = $5
      RETURNING *`,
     [
       paymentInfo.paymentStatus,
       paymentInfo.id || null,
       paymentInfo.preferenceId || null,
+      paymentInfo.authorizationCode || null,
       order.id,
     ]
   );
@@ -100,30 +103,65 @@ export async function refreshMercadoPagoOrderStatus(pool, order) {
   if (now - last < REFRESH_THROTTLE_MS) return order;
   lastRefreshByOrder.set(order.id, now);
 
-  const config = await getMercadoPagoConfig();
-  if (!config.isReady) return order;
-
   try {
-    let paymentInfo = null;
-
-    if (order.mercado_pago_payment_id) {
-      paymentInfo = await getMercadoPagoPayment(order.mercado_pago_payment_id, config);
-    }
-
-    if (!paymentInfo) {
-      const payments = await searchMercadoPagoPaymentsByExternalReference(order.id, config);
-      // Prefer approved, otherwise most recent
-      paymentInfo = payments.find((p) => p.paymentStatus === 'pago')
-        || payments[0]
-        || null;
-    }
-
-    if (!paymentInfo?.paymentStatus) return order;
-    return applyMercadoPagoPaymentUpdate(pool, order, paymentInfo);
+    const result = await verifyMercadoPagoOrderPayment(pool, order);
+    return result.order || order;
   } catch (err) {
     console.error('[MercadoPago] Erro ao reconsultar pedido:', err.message);
     return order;
   }
+}
+
+/**
+ * Consulta forçada no Mercado Pago (admin): atualiza status e retorna código de autorização.
+ */
+export async function verifyMercadoPagoOrderPayment(pool, order) {
+  if (!order || order.payment_gateway !== 'mercado_pago') {
+    const err = new Error('Pedido não é do Mercado Pago');
+    err.status = 400;
+    throw err;
+  }
+
+  const config = await getMercadoPagoConfig();
+  if (!config.isReady) {
+    const err = new Error('Mercado Pago não configurado. Informe o Access Token no admin.');
+    err.status = 503;
+    throw err;
+  }
+
+  let paymentInfo = null;
+
+  if (order.mercado_pago_payment_id) {
+    paymentInfo = await getMercadoPagoPayment(order.mercado_pago_payment_id, config);
+  }
+
+  if (!paymentInfo) {
+    const payments = await searchMercadoPagoPaymentsByExternalReference(order.id, config);
+    paymentInfo = payments.find((p) => p.paymentStatus === 'pago')
+      || payments[0]
+      || null;
+  }
+
+  if (!paymentInfo) {
+    const err = new Error('Nenhum pagamento encontrado no Mercado Pago para este pedido');
+    err.status = 404;
+    throw err;
+  }
+
+  const updated = await applyMercadoPagoPaymentUpdate(pool, order, paymentInfo);
+  lastRefreshByOrder.set(order.id, Date.now());
+
+  return {
+    order: updated,
+    paid: paymentInfo.paymentStatus === 'pago',
+    payment_status: paymentInfo.paymentStatus,
+    mercado_pago_payment_id: paymentInfo.id || null,
+    authorization_code: paymentInfo.authorizationCode
+      || updated.mercado_pago_authorization_code
+      || null,
+    mp_status: paymentInfo.status || null,
+    status_detail: paymentInfo.statusDetail || null,
+  };
 }
 
 export async function handleMercadoPagoWebhook(pool, { body, query, headers }) {

@@ -573,6 +573,13 @@ const ordersApi = {
   stats() {
     return apiFetch('/orders/stats');
   },
+
+  verifyMercadoPagoPayment(orderId) {
+    return apiFetch(`/orders/${orderId}/verificar-pagamento-mercado-pago`, {
+      method: 'POST',
+      body: JSON.stringify({}),
+    });
+  },
 };
 
 const productKitsApi = {

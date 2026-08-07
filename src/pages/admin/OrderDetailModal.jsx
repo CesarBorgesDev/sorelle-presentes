@@ -26,6 +26,9 @@ export default function OrderDetailModal({ order, onClose, onUpdated, onDeleted 
   const [trackingCode, setTrackingCode] = useState(order.tracking_code || '');
   const [paymentStatus, setPaymentStatus] = useState(order.payment_status || 'aguardando_pagamento');
   const [cieloAuthorization, setCieloAuthorization] = useState(order.cielo_authorization_code || '');
+  const [mpAuthorization, setMpAuthorization] = useState(order.mercado_pago_authorization_code || '');
+  const [mpVerifyMessage, setMpVerifyMessage] = useState('');
+  const [mpVerifyError, setMpVerifyError] = useState('');
   const [tracking, setTracking] = useState(null);
   const [trackingError, setTrackingError] = useState('');
   const [trackingCodeError, setTrackingCodeError] = useState(null);
@@ -41,6 +44,9 @@ export default function OrderDetailModal({ order, onClose, onUpdated, onDeleted 
     setTrackingCode(order.tracking_code || '');
     setPaymentStatus(order.payment_status || 'aguardando_pagamento');
     setCieloAuthorization(order.cielo_authorization_code || '');
+    setMpAuthorization(order.mercado_pago_authorization_code || '');
+    setMpVerifyMessage('');
+    setMpVerifyError('');
     setLabelUrl(order.shipping_label_url || '');
     setMeProtocol(order.melhor_envio_protocol || '');
     setMeLabelError('');
@@ -244,6 +250,32 @@ export default function OrderDetailModal({ order, onClose, onUpdated, onDeleted 
 
   const canGenerateCorreiosCode = Boolean(correiosPreflight?.ready);
 
+  const verifyMpMutation = useMutation({
+    mutationFn: () => api.orders.verifyMercadoPagoPayment(order.id),
+    onSuccess: (result) => {
+      setMpVerifyError('');
+      const authCode = result.authorization_code || '';
+      setMpAuthorization(authCode);
+      if (result.payment_status) {
+        setPaymentStatus(result.payment_status);
+      }
+      const statusLabel = PAYMENT_STATUS_LABELS[result.payment_status] || result.payment_status || '—';
+      setMpVerifyMessage(
+        result.paid
+          ? `Pago confirmado. Autorização: ${authCode || 'não informada pelo MP'}`
+          : `Status no Mercado Pago: ${statusLabel}${authCode ? ` · Autorização: ${authCode}` : ''}`
+      );
+      queryClient.invalidateQueries({ queryKey: ['orders'] });
+      if (result.order) {
+        onUpdated?.(result.order);
+      }
+    },
+    onError: (err) => {
+      setMpVerifyMessage('');
+      setMpVerifyError(err.message || 'Não foi possível verificar o pagamento no Mercado Pago');
+    },
+  });
+
   function saveShippingPayment() {
     updateMutation.mutate({
       tracking_code: trackingCode.trim() || null,
@@ -344,7 +376,7 @@ export default function OrderDetailModal({ order, onClose, onUpdated, onDeleted 
                 {order.payment_gateway === 'sipag'
                   ? 'Autorização SiPag'
                   : order.payment_gateway === 'mercado_pago'
-                    ? 'ID pagamento Mercado Pago'
+                    ? 'Autorização Mercado Pago'
                     : 'Autorização Cielo'}
               </label>
               <input
@@ -353,7 +385,7 @@ export default function OrderDetailModal({ order, onClose, onUpdated, onDeleted 
                   order.payment_gateway === 'sipag'
                     ? (order.sipag_authorization_code || cieloAuthorization)
                     : order.payment_gateway === 'mercado_pago'
-                      ? (order.mercado_pago_payment_id || '')
+                      ? mpAuthorization
                       : cieloAuthorization
                 }
                 onChange={(e) => setCieloAuthorization(e.target.value)}
@@ -361,6 +393,32 @@ export default function OrderDetailModal({ order, onClose, onUpdated, onDeleted 
                 readOnly={order.payment_gateway === 'sipag' || order.payment_gateway === 'mercado_pago'}
               />
             </div>
+            {order.payment_gateway === 'mercado_pago' && (
+              <div className="md:col-span-2 space-y-2">
+                <button
+                  type="button"
+                  onClick={() => verifyMpMutation.mutate()}
+                  disabled={verifyMpMutation.isPending}
+                  className="inline-flex items-center gap-2 h-10 px-4 rounded-sm border border-border bg-background font-body text-sm hover:bg-secondary disabled:opacity-60"
+                >
+                  {verifyMpMutation.isPending ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <CheckCircle2 className="w-4 h-4" />
+                  )}
+                  Verificar pagamento Mercado Pago
+                </button>
+                {mpVerifyMessage && (
+                  <p className="font-body text-xs text-green-700 dark:text-green-400">{mpVerifyMessage}</p>
+                )}
+                {mpVerifyError && (
+                  <p className="font-body text-xs text-destructive flex items-start gap-1.5">
+                    <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                    {mpVerifyError}
+                  </p>
+                )}
+              </div>
+            )}
           </div>
 
           <div>

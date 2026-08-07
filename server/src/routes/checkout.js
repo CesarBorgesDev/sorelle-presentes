@@ -544,7 +544,7 @@ router.get('/pedido/:id', requireAuth, async (req, res) => {
               shipping_cost, shipping_service_code, shipping_service_name, shipping_deadline_days,
               tracking_code, shipping_label_url, cielo_authorization_code, gateway_order_number,
               cielo_payment_id, sipag_payment_id, sipag_authorization_code,
-              mercado_pago_preference_id, mercado_pago_payment_id,
+              mercado_pago_preference_id, mercado_pago_payment_id, mercado_pago_authorization_code,
               boleto_url, boleto_digitable_line,
               customer_name, customer_address, items, created_date, updated_date, shipped_at
        FROM orders WHERE id = $1 AND LOWER(customer_email) = LOWER($2)`,
