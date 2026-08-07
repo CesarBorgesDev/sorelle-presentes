@@ -1,6 +1,7 @@
 import React, { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { api, logApiError } from "@/api/apiClient";
+import { cartApi } from "@/lib/cartApi";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -9,11 +10,14 @@ import AuthLayout from "@/components/AuthLayout";
 import GoogleIcon from "@/components/GoogleIcon";
 
 export default function Register() {
+  const [searchParams] = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const returnUrl = searchParams.get('returnUrl') || '/';
+  const loginHref = `/login?returnUrl=${encodeURIComponent(returnUrl)}`;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -25,7 +29,8 @@ export default function Register() {
     setLoading(true);
     try {
       await api.auth.register({ email, password });
-      window.location.href = "/";
+      await cartApi.mergeGuestCartToServer();
+      window.location.href = returnUrl;
     } catch (err) {
       logApiError("Falha ao criar conta", err, { email });
       setError(err.message || "Falha ao criar conta");
@@ -46,7 +51,7 @@ export default function Register() {
       footer={
         <>
           Já tem uma conta?{" "}
-          <Link to="/login" className="text-primary font-medium hover:underline">
+          <Link to={loginHref} className="text-primary font-medium hover:underline">
             Entrar
           </Link>
         </>

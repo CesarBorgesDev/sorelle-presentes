@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/api/apiClient';
+import { cartApi } from '@/lib/cartApi';
 import { useAuth } from '@/lib/AuthContext';
 import { motion } from 'framer-motion';
 import { ArrowLeft, Minus, Plus, ShoppingBag, Check, Heart, ChevronDown, ChevronLeft, ChevronRight, Expand } from 'lucide-react';
@@ -131,7 +132,7 @@ export default function ProductDetail() {
   }, [maxQuantity, quantity]);
 
   const addToCartMutation = useMutation({
-    mutationFn: (data) => api.entities.CartItem.create(data),
+    mutationFn: (data) => cartApi.create(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['cart'] });
       setAdded(true);
@@ -159,10 +160,6 @@ export default function ProductDetail() {
 
   const handleAddToCart = () => {
     if (!product) return;
-    if (!isAuthenticated) {
-      navigate('/login');
-      return;
-    }
     if (availability.requiresSelection) {
       return;
     }

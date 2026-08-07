@@ -292,12 +292,13 @@ async function startCheckout(req, res) {
     shipping,
   });
 
+  await pool.query('DELETE FROM cart_items WHERE user_id = $1', [req.user.id]);
+
   if (providerInfo.provider === 'test') {
     await pool.query(
       `UPDATE orders SET payment_status = 'pago', status = 'confirmado', updated_date = NOW() WHERE id = $1`,
       [order.id]
     );
-    await pool.query('DELETE FROM cart_items WHERE user_id = $1', [req.user.id]);
 
     return res.json({
       type: 'test',
@@ -319,8 +320,6 @@ async function startCheckout(req, res) {
   }
 
   if (providerInfo.provider === 'pay_at_pickup') {
-    await pool.query('DELETE FROM cart_items WHERE user_id = $1', [req.user.id]);
-
     const message = paymentMethod === 'dinheiro'
       ? 'Pedido registrado. Leve o valor em dinheiro na retirada.'
       : 'Pedido registrado. Pague na loja ao retirar seu pedido.';

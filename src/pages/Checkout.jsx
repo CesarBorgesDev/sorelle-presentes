@@ -1,7 +1,9 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/api/apiClient';
+import { cartApi } from '@/lib/cartApi';
+import { guestCart } from '@/lib/guestCart';
 import { useAuth } from '@/lib/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Loader2, ArrowLeft, Truck, FlaskConical, CreditCard, QrCode, FileText, Store, Banknote, Wallet } from 'lucide-react';
@@ -31,6 +33,7 @@ function formatZip(value) {
 
 export default function Checkout() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { user, isAuthenticated } = useAuth();
   const [error, setError] = useState('');
   const [deliveryMode, setDeliveryMode] = useState('delivery');
@@ -60,7 +63,7 @@ export default function Checkout() {
 
   const { data: items = [], isLoading: cartLoading } = useQuery({
     queryKey: ['cart'],
-    queryFn: () => api.entities.CartItem.list(),
+    queryFn: () => cartApi.list(),
     enabled: isAuthenticated,
   });
 
@@ -179,6 +182,8 @@ export default function Checkout() {
   const checkoutMutation = useMutation({
     mutationFn: (data) => api.checkout.start(data),
     onSuccess: (result) => {
+      guestCart.clear();
+      queryClient.invalidateQueries({ queryKey: ['cart'] });
       if (result.type === 'manual_pix') {
         navigate(result.redirect_url || `/pagamento/pix?pedido=${result.order_id}`);
         return;
@@ -202,7 +207,12 @@ export default function Checkout() {
     return (
       <div className="max-w-lg mx-auto px-4 py-20 text-center">
         <p className="font-body text-muted-foreground mb-4">Faça login para finalizar sua compra.</p>
-        <Link to="/login" className="text-primary hover:underline font-body">Entrar</Link>
+        <Link
+          to={`/login?returnUrl=${encodeURIComponent('/checkout')}`}
+          className="text-primary hover:underline font-body"
+        >
+          Entrar
+        </Link>
       </div>
     );
   }

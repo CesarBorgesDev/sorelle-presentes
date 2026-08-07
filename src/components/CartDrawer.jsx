@@ -1,34 +1,43 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Minus, Plus, X, Package } from 'lucide-react';
-import { api } from '@/api/apiClient';
+import { cartApi } from '@/lib/cartApi';
 import { useAuth } from '@/lib/AuthContext';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 export default function CartDrawer({ open, onClose }) {
   const queryClient = useQueryClient();
   const { isAuthenticated } = useAuth();
+  const navigate = useNavigate();
 
   const { data: items = [] } = useQuery({
     queryKey: ['cart'],
-    queryFn: () => api.entities.CartItem.list(),
-    enabled: isAuthenticated && open,
+    queryFn: () => cartApi.list(),
+    enabled: open,
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, data }) => api.entities.CartItem.update(id, data),
+    mutationFn: ({ id, data }) => cartApi.update(id, data),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['cart'] }),
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id) => api.entities.CartItem.delete(id),
+    mutationFn: (id) => cartApi.delete(id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['cart'] }),
   });
 
   const subtotal = items.reduce((sum, item) => sum + item.price * (item.quantity || 1), 0);
   const total = subtotal;
+
+  const handleCheckout = (e) => {
+    onClose();
+    if (!isAuthenticated) {
+      e.preventDefault();
+      navigate(`/login?returnUrl=${encodeURIComponent('/checkout')}`);
+    }
+  };
 
   return (
     <Sheet open={open} onOpenChange={onClose}>
@@ -66,7 +75,6 @@ export default function CartDrawer({ open, onClose }) {
                     <p className="font-body text-sm text-foreground mt-1">
                       R$ {item.price?.toFixed(2).replace('.', ',')}
                     </p>
-                    {/* Quantity */}
                     <div className="flex items-center gap-2 mt-2">
                       <button
                         onClick={() => updateMutation.mutate({ id: item.id, data: { quantity: Math.max(1, (item.quantity || 1) - 1) } })}
@@ -99,7 +107,7 @@ export default function CartDrawer({ open, onClose }) {
                 </div>
               </div>
               <Button asChild className="w-full bg-foreground text-background hover:bg-foreground/90 font-body tracking-wider uppercase text-sm py-6">
-                <Link to="/checkout" onClick={onClose}>Finalizar Compra</Link>
+                <Link to="/checkout" onClick={handleCheckout}>Finalizar Compra</Link>
               </Button>
             </SheetFooter>
           </>

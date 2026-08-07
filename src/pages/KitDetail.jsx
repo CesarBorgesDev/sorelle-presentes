@@ -1,8 +1,8 @@
 import React, { useMemo, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/api/apiClient';
-import { useAuth } from '@/lib/AuthContext';
+import { cartApi } from '@/lib/cartApi';
 import { motion } from 'framer-motion';
 import { ArrowLeft, Check, ShoppingBag, Tag } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -12,8 +12,6 @@ import { resolveMediaUrl } from '@/lib/resolveMediaUrl';
 
 export default function KitDetail() {
   const { id } = useParams();
-  const navigate = useNavigate();
-  const { isAuthenticated } = useAuth();
   const queryClient = useQueryClient();
   const [added, setAdded] = useState(false);
   const [addError, setAddError] = useState('');
@@ -35,7 +33,7 @@ export default function KitDetail() {
   const addKitMutation = useMutation({
     mutationFn: async () => {
       for (const { product, cartPrice } of pricedItems) {
-        await api.entities.CartItem.create({
+        await cartApi.create({
           product_id: product.id,
           product_name: product.name,
           product_image: product.image_url,
@@ -56,10 +54,6 @@ export default function KitDetail() {
   });
 
   const handleAddKit = () => {
-    if (!isAuthenticated) {
-      navigate('/login');
-      return;
-    }
     if (!canPurchase) return;
     setAddError('');
     addKitMutation.mutate();

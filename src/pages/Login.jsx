@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { api } from '@/api/apiClient';
+import { cartApi } from '@/lib/cartApi';
 import { useAuth } from "@/lib/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,6 +17,8 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const returnUrl = searchParams.get('returnUrl') || '/';
+  const registerHref = `/register?returnUrl=${encodeURIComponent(returnUrl)}`;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -24,7 +27,7 @@ export default function Login() {
     try {
       await api.auth.loginViaEmailPassword(email, password);
       await checkUserAuth();
-      const returnUrl = searchParams.get('returnUrl') || '/';
+      await cartApi.mergeGuestCartToServer();
       window.location.href = returnUrl;
     } catch (err) {
       setError(err.message || "E-mail ou senha inválidos");
@@ -34,7 +37,7 @@ export default function Login() {
   };
 
   const handleGoogle = () => {
-    api.auth.loginWithProvider("google", "/");
+    api.auth.loginWithProvider("google", returnUrl);
   };
 
   return (
@@ -45,7 +48,7 @@ export default function Login() {
       footer={
         <>
           Não tem uma conta?{" "}
-          <Link to="/register" className="text-primary font-medium hover:underline">
+          <Link to={registerHref} className="text-primary font-medium hover:underline">
             Crie uma
           </Link>
         </>

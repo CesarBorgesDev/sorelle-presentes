@@ -4,7 +4,7 @@ import { QueryClientProvider } from '@tanstack/react-query'
 
 import { queryClientInstance } from '@/lib/query-client'
 
-import { BrowserRouter as Router, Route, Routes, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
 
 import PageNotFound from './lib/PageNotFound';
 
@@ -108,7 +108,7 @@ function AppRoutes() {
 
         <Route path="/trocas-e-devolucoes" element={<InstitutionalPage pageSlug="trocas-e-devolucoes" />} />
 
-        <Route element={<ProtectedRoute unauthenticatedElement={<Navigate to="/login" replace />} />}>
+        <Route element={<ProtectedRoute />}>
           <Route path="/checkout" element={<Checkout />} />
           <Route path="/conta" element={<Account />} />
           <Route path="/pagamento/retorno" element={<PaymentReturn />} />
@@ -119,7 +119,7 @@ function AppRoutes() {
 
 
 
-      <Route element={<ProtectedRoute unauthenticatedElement={<Navigate to="/login" replace />} />}>
+      <Route element={<ProtectedRoute />}>
 
         <Route element={<AdminRoute />}>
 
