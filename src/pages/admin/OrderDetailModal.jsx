@@ -254,7 +254,9 @@ export default function OrderDetailModal({ order, onClose, onUpdated, onDeleted 
     mutationFn: () => api.orders.verifyMercadoPagoPayment(order.id),
     onSuccess: (result) => {
       setMpVerifyError('');
-      const authCode = result.authorization_code || '';
+      const authCode = result.authorization_code
+        || result.order?.mercado_pago_authorization_code
+        || '';
       setMpAuthorization(authCode);
       if (result.payment_status) {
         setPaymentStatus(result.payment_status);
@@ -399,14 +401,14 @@ export default function OrderDetailModal({ order, onClose, onUpdated, onDeleted 
                   type="button"
                   onClick={() => verifyMpMutation.mutate()}
                   disabled={verifyMpMutation.isPending}
-                  className="inline-flex items-center gap-2 h-10 px-4 rounded-sm border border-border bg-background font-body text-sm hover:bg-secondary disabled:opacity-60"
+                  className="inline-flex items-center gap-2 h-10 px-4 rounded-sm border border-border bg-foreground text-background font-body text-sm hover:bg-foreground/90 disabled:opacity-60"
                 >
                   {verifyMpMutation.isPending ? (
                     <Loader2 className="w-4 h-4 animate-spin" />
                   ) : (
                     <CheckCircle2 className="w-4 h-4" />
                   )}
-                  Verificar pagamento Mercado Pago
+                  Verificar se foi pago
                 </button>
                 {mpVerifyMessage && (
                   <p className="font-body text-xs text-green-700 dark:text-green-400">{mpVerifyMessage}</p>

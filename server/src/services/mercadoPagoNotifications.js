@@ -148,19 +148,27 @@ export async function verifyMercadoPagoOrderPayment(pool, order) {
     throw err;
   }
 
+  // Garante authorization_code mesmo se o mapper antigo não trouxe o campo
+  if (!paymentInfo.authorizationCode && paymentInfo.raw?.authorization_code) {
+    paymentInfo.authorizationCode = paymentInfo.raw.authorization_code;
+  }
+
   const updated = await applyMercadoPagoPaymentUpdate(pool, order, paymentInfo);
   lastRefreshByOrder.set(order.id, Date.now());
+
+  const authorizationCode = paymentInfo.authorizationCode
+    || updated.mercado_pago_authorization_code
+    || null;
 
   return {
     order: updated,
     paid: paymentInfo.paymentStatus === 'pago',
     payment_status: paymentInfo.paymentStatus,
     mercado_pago_payment_id: paymentInfo.id || null,
-    authorization_code: paymentInfo.authorizationCode
-      || updated.mercado_pago_authorization_code
-      || null,
+    authorization_code: authorizationCode,
     mp_status: paymentInfo.status || null,
     status_detail: paymentInfo.statusDetail || null,
+    gateway: 'mercado_pago',
   };
 }
 

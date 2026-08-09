@@ -479,12 +479,19 @@ router.post('/:id/verificar-pagamento-mercado-pago', async (req, res) => {
     const order = await loadOrderOr404(req.params.id, res);
     if (!order) return;
 
+    if (order.payment_gateway !== 'mercado_pago') {
+      return res.status(400).json({
+        message: 'Este pedido não foi pago via Mercado Pago',
+      });
+    }
+
     const result = await verifyMercadoPagoOrderPayment(pool, order);
     res.json({
       ...result,
       order: withInvoiceFlags(result.order),
     });
   } catch (err) {
+    console.error('[Orders] Verificar pagamento MP:', err.message);
     const status = err.status || 500;
     res.status(status).json({
       message: err.message || 'Erro ao verificar pagamento no Mercado Pago',
