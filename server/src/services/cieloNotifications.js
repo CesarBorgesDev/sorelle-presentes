@@ -103,17 +103,17 @@ async function findAndUpdateOrder(pool, payload) {
 
   const result = await pool.query(
     `UPDATE orders SET
-      payment_status = $1,
+      payment_status = $1::varchar(30),
       status = CASE
-        WHEN $2 THEN 'confirmado'
-        WHEN $1 = 'recusado' OR $1 = 'cancelado' THEN 'cancelado'
+        WHEN $2::boolean THEN 'confirmado'
+        WHEN $1::varchar(30) IN ('recusado', 'cancelado') THEN 'cancelado'
         ELSE status
       END,
-      cielo_authorization_code = COALESCE($3, cielo_authorization_code),
-      cielo_payment_id = COALESCE($4, cielo_payment_id),
+      cielo_authorization_code = COALESCE($3::varchar, cielo_authorization_code),
+      cielo_payment_id = COALESCE($4::varchar, cielo_payment_id),
       updated_date = NOW()
-    WHERE ($5::text IS NOT NULL AND gateway_order_number = $5)
-       OR ($4::text IS NOT NULL AND cielo_payment_id = $4)
+    WHERE ($5::text IS NOT NULL AND gateway_order_number = $5::varchar)
+       OR ($4::text IS NOT NULL AND cielo_payment_id = $4::varchar)
     RETURNING id, customer_email, payment_status`,
     [paymentStatus, isPaid, authorizationCode, paymentId, merchantOrderNumber]
   );
@@ -188,16 +188,16 @@ export async function refreshCieloOrderStatus(pool, order) {
 
   const result = await pool.query(
     `UPDATE orders SET
-      payment_status = $1,
+      payment_status = $1::varchar(30),
       status = CASE
-        WHEN $2 THEN 'confirmado'
-        WHEN $1 = 'recusado' OR $1 = 'cancelado' THEN 'cancelado'
+        WHEN $2::boolean THEN 'confirmado'
+        WHEN $1::varchar(30) IN ('recusado', 'cancelado') THEN 'cancelado'
         ELSE status
       END,
-      cielo_authorization_code = COALESCE($3, cielo_authorization_code),
-      cielo_payment_id = COALESCE($4, cielo_payment_id),
+      cielo_authorization_code = COALESCE($3::varchar, cielo_authorization_code),
+      cielo_payment_id = COALESCE($4::varchar, cielo_payment_id),
       updated_date = NOW()
-    WHERE id = $5
+    WHERE id = $5::uuid
     RETURNING *`,
     [paymentStatus, isPaid, authorizationCode, paymentId, order.id]
   );

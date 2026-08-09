@@ -12,12 +12,12 @@ export async function applySipagPaymentUpdate(pool, order, inquiry) {
 
   const result = await pool.query(
     `UPDATE orders
-     SET payment_status = $1,
-         status = CASE WHEN $1 = 'pago' AND status = 'pendente' THEN 'confirmado' ELSE status END,
-         sipag_authorization_code = COALESCE($2, sipag_authorization_code),
-         sipag_payment_id = COALESCE($3, sipag_payment_id),
+     SET payment_status = $1::varchar(30),
+         status = CASE WHEN $1::varchar(30) = 'pago' AND status = 'pendente' THEN 'confirmado' ELSE status END,
+         sipag_authorization_code = COALESCE($2::varchar, sipag_authorization_code),
+         sipag_payment_id = COALESCE($3::varchar, sipag_payment_id),
          updated_date = NOW()
-     WHERE id = $4
+     WHERE id = $4::uuid
      RETURNING *`,
     [
       inquiry.paymentStatus,

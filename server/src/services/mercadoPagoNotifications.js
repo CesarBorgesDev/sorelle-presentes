@@ -59,17 +59,17 @@ export async function applyMercadoPagoPaymentUpdate(pool, order, paymentInfo) {
 
   const result = await pool.query(
     `UPDATE orders
-     SET payment_status = $1,
+     SET payment_status = $1::varchar(30),
          status = CASE
-           WHEN $1 = 'pago' AND status = 'pendente' THEN 'confirmado'
-           WHEN $1 = 'recusado' OR $1 = 'cancelado' THEN 'cancelado'
+           WHEN $1::varchar(30) = 'pago' AND status = 'pendente' THEN 'confirmado'
+           WHEN $1::varchar(30) IN ('recusado', 'cancelado') THEN 'cancelado'
            ELSE status
          END,
-         mercado_pago_payment_id = COALESCE($2, mercado_pago_payment_id),
-         mercado_pago_preference_id = COALESCE($3, mercado_pago_preference_id),
-         mercado_pago_authorization_code = COALESCE($4, mercado_pago_authorization_code),
+         mercado_pago_payment_id = COALESCE($2::varchar, mercado_pago_payment_id),
+         mercado_pago_preference_id = COALESCE($3::varchar, mercado_pago_preference_id),
+         mercado_pago_authorization_code = COALESCE($4::varchar, mercado_pago_authorization_code),
          updated_date = NOW()
-     WHERE id = $5
+     WHERE id = $5::uuid
      RETURNING *`,
     [
       paymentInfo.paymentStatus,
