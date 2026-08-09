@@ -8,7 +8,8 @@ services:
     container_name: sorelle-db
     restart: unless-stopped
     ports:
-      - "5432:5432"
+      # 5433 no host evita conflito com outros Postgres locais; na rede Docker continua db:5432
+      - "5433:5432"
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres

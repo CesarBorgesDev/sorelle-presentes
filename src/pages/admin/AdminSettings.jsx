@@ -5,7 +5,7 @@ import { api } from '@/api/apiClient';
 import {
   Settings, Key, Sparkles, Loader2, CheckCircle2,
   CreditCard, Circle, ExternalLink, AlertCircle, Truck, ShoppingBag, Store,
-  Plus, Trash2, ScanBarcode, Link2, Unlink,
+  Plus, Trash2, ScanBarcode, Link2, Unlink, Download,
 } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { PRODUCT_SORT_OPTIONS } from '@/hooks/useProductSort';
@@ -144,6 +144,8 @@ export default function AdminSettings() {
   const [model, setModel] = useState('flux');
   const [productSortOrder, setProductSortOrder] = useState('name');
   const [saved, setSaved] = useState(false);
+  const [backupError, setBackupError] = useState('');
+  const [backupMessage, setBackupMessage] = useState('');
 
   const { data, isLoading } = useQuery({
     queryKey: ['admin-settings'],
@@ -311,6 +313,27 @@ export default function AdminSettings() {
       message: err?.body?.message || err.message || 'Falha na cotação de teste',
       options: [],
     }),
+  });
+
+  const backupMutation = useMutation({
+    mutationFn: () => api.settings.downloadBackup(),
+    onSuccess: ({ blob, filename }) => {
+      setBackupError('');
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename || `sorelle-backup-${new Date().toISOString().slice(0, 10)}.tar.gz`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      setBackupMessage('Backup baixado com sucesso.');
+      setTimeout(() => setBackupMessage(''), 4000);
+    },
+    onError: (err) => {
+      setBackupMessage('');
+      setBackupError(err.message || 'Não foi possível gerar o backup');
+    },
   });
 
   const mutation = useMutation({
@@ -530,6 +553,42 @@ export default function AdminSettings() {
                     <option key={option.value} value={option.value}>{option.label}</option>
                   ))}
                 </select>
+              </div>
+
+              <div className="pt-6 border-t border-border space-y-3">
+                <div>
+                  <h2 className="font-display text-lg tracking-wide text-foreground">Backup</h2>
+                  <p className="font-body text-sm text-muted-foreground mt-1">
+                    Baixa um arquivo com o banco de dados (SQL) e a pasta de uploads (imagens, etiquetas e notas).
+                    Guarde em local seguro — contém dados sensíveis.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setBackupError('');
+                    setBackupMessage('');
+                    backupMutation.mutate();
+                  }}
+                  disabled={backupMutation.isPending}
+                  className="inline-flex items-center gap-2 h-10 px-4 rounded-sm border border-border bg-foreground text-background font-body text-sm hover:bg-foreground/90 disabled:opacity-60"
+                >
+                  {backupMutation.isPending ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Download className="w-4 h-4" />
+                  )}
+                  {backupMutation.isPending ? 'Gerando backup...' : 'Baixar backup'}
+                </button>
+                {backupMessage && (
+                  <p className="font-body text-xs text-green-700 dark:text-green-400">{backupMessage}</p>
+                )}
+                {backupError && (
+                  <p className="font-body text-xs text-destructive flex items-start gap-1.5">
+                    <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                    {backupError}
+                  </p>
+                )}
               </div>
             </TabsContent>
 

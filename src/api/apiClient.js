@@ -319,6 +319,10 @@ const settings = {
       body: JSON.stringify(data),
     });
   },
+
+  async downloadBackup() {
+    return apiFetchBlob('/backup');
+  },
 };
 
 const melhorEnvio = {
