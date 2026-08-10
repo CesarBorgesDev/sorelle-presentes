@@ -45,6 +45,9 @@ services:
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin123}
       CHECKOUT_PAYMENT_METHOD: ${CHECKOUT_PAYMENT_METHOD:-test}
       CORREIOS_FALLBACK: ${CORREIOS_FALLBACK:-estimate}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      GOOGLE_CALLBACK_URL: ${GOOGLE_CALLBACK_URL:-http://localhost:3000/api/auth/google/callback}
     volumes:
       - backend_uploads:/app/uploads
     depends_on:

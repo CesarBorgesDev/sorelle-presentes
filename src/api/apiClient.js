@@ -277,8 +277,14 @@ const auth = {
     });
   },
 
-  loginWithProvider() {
-    throw new Error('Login com Google não disponível. Use e-mail e senha.');
+  loginWithProvider(provider = 'google', returnUrl = '/') {
+    if (provider !== 'google') {
+      throw new Error('Provedor de login não suportado');
+    }
+    const params = new URLSearchParams();
+    if (returnUrl) params.set('returnUrl', returnUrl);
+    const qs = params.toString();
+    window.location.href = `${getApiBase()}/auth/google${qs ? `?${qs}` : ''}`;
   },
 
   async verifyOtp() {

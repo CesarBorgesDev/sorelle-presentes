@@ -5,6 +5,7 @@ import { api } from '@/api/apiClient';
 import { cartApi } from '@/lib/cartApi';
 import { guestCart } from '@/lib/guestCart';
 import { useAuth } from '@/lib/AuthContext';
+import { completarCadastroUrl, isProfileComplete } from '@/lib/profile';
 import { Button } from '@/components/ui/button';
 import { Loader2, ArrowLeft, Truck, FlaskConical, CreditCard, QrCode, FileText, Store, Banknote, Wallet } from 'lucide-react';
 
@@ -76,19 +77,27 @@ export default function Checkout() {
   const storePickup = methodsData?.store_pickup;
   const pickupAvailable = Boolean(storePickup?.enabled);
 
-  const { data: profile } = useQuery({
+  const { data: profile, isLoading: profileLoading } = useQuery({
     queryKey: ['account-profile'],
     queryFn: () => api.account.getProfile(),
     enabled: isAuthenticated,
   });
 
   useEffect(() => {
+    if (!isAuthenticated || profileLoading) return;
+    if (profile && !isProfileComplete(profile)) {
+      navigate(completarCadastroUrl('/checkout'), { replace: true });
+    }
+  }, [isAuthenticated, profile, profileLoading, navigate]);
+
+  useEffect(() => {
     if (!profile && !user) return;
     setForm((f) => ({
       ...f,
-      customer_name: f.customer_name || profile?.full_name || user?.full_name || '',
-      customer_phone: f.customer_phone || profile?.phone || user?.phone || '',
-      customer_document: f.customer_document || profile?.document || user?.document || '',
+      customer_name: profile?.full_name || user?.full_name || f.customer_name || '',
+      customer_email: user?.email || profile?.email || f.customer_email || '',
+      customer_phone: profile?.phone || user?.phone || f.customer_phone || '',
+      customer_document: profile?.document || user?.document || f.customer_document || '',
     }));
   }, [profile, user]);
 
@@ -213,6 +222,19 @@ export default function Checkout() {
         >
           Entrar
         </Link>
+      </div>
+    );
+  }
+
+  if (profileLoading || (profile && !isProfileComplete(profile))) {
+    return (
+      <div className="max-w-lg mx-auto px-4 py-20 flex flex-col items-center gap-3">
+        <Loader2 className="w-8 h-8 animate-spin text-foreground" />
+        <p className="font-body text-sm text-muted-foreground">
+          {profile && !isProfileComplete(profile)
+            ? 'Complete seu cadastro para continuar...'
+            : 'Carregando seus dados...'}
+        </p>
       </div>
     );
   }

@@ -28,8 +28,12 @@ export default function Register() {
     }
     setLoading(true);
     try {
-      await api.auth.register({ email, password });
+      const result = await api.auth.register({ email, password });
       await cartApi.mergeGuestCartToServer();
+      if (result?.needs_profile !== false) {
+        window.location.href = `/completar-cadastro?returnUrl=${encodeURIComponent(returnUrl)}`;
+        return;
+      }
       window.location.href = returnUrl;
     } catch (err) {
       logApiError("Falha ao criar conta", err, { email });
@@ -40,7 +44,7 @@ export default function Register() {
   };
 
   const handleGoogle = () => {
-    setError("Login com Google não disponível. Use e-mail e senha.");
+    api.auth.loginWithProvider("google", returnUrl);
   };
 
   return (

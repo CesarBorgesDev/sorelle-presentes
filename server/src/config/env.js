@@ -11,6 +11,15 @@ function readInt(value, fallback) {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+function resolveGoogleCallbackUrl() {
+  const explicit = process.env.GOOGLE_CALLBACK_URL?.trim();
+  if (explicit) return explicit;
+  const publicUrl = (process.env.APP_PUBLIC_URL || process.env.FRONTEND_URL || 'http://localhost:3000')
+    .trim()
+    .replace(/\/$/, '');
+  return `${publicUrl}/api/auth/google/callback`;
+}
+
 export const config = {
   nodeEnv: process.env.NODE_ENV || 'development',
   host: process.env.HOST || '0.0.0.0',
@@ -23,7 +32,14 @@ export const config = {
   appPublicUrl: process.env.APP_PUBLIC_URL?.trim() || '',
   domain: process.env.DOMAIN?.trim() || 'sorellepresentes.com.br',
   isProduction: (process.env.NODE_ENV || 'development') === 'production',
+  googleClientId: process.env.GOOGLE_CLIENT_ID?.trim() || '',
+  googleClientSecret: process.env.GOOGLE_CLIENT_SECRET?.trim() || '',
+  googleCallbackUrl: resolveGoogleCallbackUrl(),
 };
+
+export function isGoogleAuthConfigured() {
+  return Boolean(config.googleClientId && config.googleClientSecret && config.googleCallbackUrl);
+}
 
 export function assertDatabaseConfig() {
   if (!config.databaseUrl) {

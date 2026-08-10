@@ -20,14 +20,25 @@ export default function Login() {
   const returnUrl = searchParams.get('returnUrl') || '/';
   const registerHref = `/register?returnUrl=${encodeURIComponent(returnUrl)}`;
 
+  React.useEffect(() => {
+    const oauthError = searchParams.get('error');
+    if (oauthError) {
+      setError(decodeURIComponent(oauthError));
+    }
+  }, [searchParams]);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
     setLoading(true);
     try {
-      await api.auth.loginViaEmailPassword(email, password);
+      const result = await api.auth.loginViaEmailPassword(email, password);
       await checkUserAuth();
       await cartApi.mergeGuestCartToServer();
+      if (result?.needs_profile) {
+        window.location.href = `/completar-cadastro?returnUrl=${encodeURIComponent(returnUrl)}`;
+        return;
+      }
       window.location.href = returnUrl;
     } catch (err) {
       setError(err.message || "E-mail ou senha inválidos");
