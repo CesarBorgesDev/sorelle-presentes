@@ -34,6 +34,7 @@ import { normalizeProductQuantity } from '../utils/productStock.js';
 import { resolveVariantAvailability, decrementProductVariantStock } from '../utils/productVariants.js';
 import { streamOrderInvoice, withInvoiceFlags, withInvoiceFlagsList } from '../services/invoiceAccess.js';
 import { STORE_PICKUP_ID, getStorePickupConfig, resolveStorePickupShipping, buildStorePickupOption } from '../services/storePickup.js';
+import { enrichOrderItems, enrichOrdersItems } from '../utils/enrichOrderItems.js';
 
 const router = Router();
 
@@ -101,7 +102,13 @@ async function resolveShippingForCheckout(userId, customerZip, shippingServiceId
 
 async function loadCart(userId) {
   const cartResult = await pool.query(
-    'SELECT * FROM cart_items WHERE user_id = $1 ORDER BY created_date DESC',
+    `SELECT ci.*,
+            p.internal_code AS product_internal_code,
+            p.sku AS product_sku
+     FROM cart_items ci
+     LEFT JOIN products p ON p.id = ci.product_id
+     WHERE ci.user_id = $1
+     ORDER BY ci.created_date DESC`,
     [userId]
   );
   return cartResult.rows;
@@ -171,13 +178,18 @@ async function createOrderFromCart({ userId, customer, paymentMethod, shipping }
     shipping.price,
     { pixDiscountPercent, applyPixDiscount: paymentMethod === 'pix' }
   );
-  const orderItems = cartItems.map((item) => ({
-    product_id: item.product_id,
-    product_name: item.product_name,
-    quantity: item.quantity || 1,
-    unit_price: Number(item.price),
-    total: Number(item.price) * Number(item.quantity || 1),
-  }));
+  const orderItems = cartItems.map((item) => {
+    const productCode = String(item.product_internal_code || item.product_sku || '').trim() || null;
+    return {
+      product_id: item.product_id,
+      product_name: item.product_name,
+      product_code: productCode,
+      sku: item.product_sku || null,
+      quantity: item.quantity || 1,
+      unit_price: Number(item.price),
+      total: Number(item.price) * Number(item.quantity || 1),
+    };
+  });
 
   const orderResult = await pool.query(
     `INSERT INTO orders (
@@ -530,7 +542,8 @@ router.get('/meus-pedidos', requireAuth, async (req, res) => {
       [req.user.email]
     );
 
-    res.json(withInvoiceFlagsList(rowsToEntities(result.rows)));
+    const orders = await enrichOrdersItems(pool, rowsToEntities(result.rows));
+    res.json(withInvoiceFlagsList(orders));
   } catch (err) {
     console.error('Erro ao listar pedidos do cliente:', err);
     res.status(500).json({ message: 'Erro ao carregar seus pedidos' });
@@ -566,7 +579,8 @@ router.get('/pedido/:id', requireAuth, async (req, res) => {
       }
     }
 
-    res.json(withInvoiceFlags(rowToEntity(order)));
+    const enriched = await enrichOrderItems(pool, rowToEntity(order));
+    res.json(withInvoiceFlags(enriched));
   } catch (err) {
     res.status(500).json({ message: 'Erro ao buscar pedido' });
   }

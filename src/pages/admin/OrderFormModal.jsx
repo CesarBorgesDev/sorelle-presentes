@@ -35,6 +35,8 @@ export default function OrderFormModal({ onClose }) {
         const prod = products.find(p => p.id === value);
         if (prod) {
           items[index].product_name = prod.name;
+          items[index].product_code = prod.internal_code || prod.sku || null;
+          items[index].sku = prod.sku || null;
           items[index].unit_price = prod.price;
           items[index].total = prod.price * items[index].quantity;
         }

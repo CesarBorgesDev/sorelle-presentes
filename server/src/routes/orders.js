@@ -17,6 +17,7 @@ import {
 import { getInvoiceTypeConfig, saveInvoiceFile } from '../services/invoiceUpload.js';
 import { streamOrderInvoice, withInvoiceFlags, withInvoiceFlagsList } from '../services/invoiceAccess.js';
 import { verifyMercadoPagoOrderPayment } from '../services/mercadoPagoNotifications.js';
+import { enrichOrderItems, enrichOrdersItems } from '../utils/enrichOrderItems.js';
 
 const router = Router();
 
@@ -36,7 +37,7 @@ async function loadOrderOr404(id, res) {
     res.status(404).json({ message: 'Pedido não encontrado' });
     return null;
   }
-  return rowToEntity(result.rows[0]);
+  return enrichOrderItems(pool, rowToEntity(result.rows[0]));
 }
 
 router.get('/', async (req, res) => {
@@ -47,7 +48,8 @@ router.get('/', async (req, res) => {
       `SELECT * FROM orders ORDER BY ${column} ${direction} LIMIT $1`,
       [parseInt(limit) || 100]
     );
-    res.json(withInvoiceFlagsList(rowsToEntities(result.rows)));
+    const orders = await enrichOrdersItems(pool, rowsToEntities(result.rows));
+    res.json(withInvoiceFlagsList(orders));
   } catch (err) {
     res.status(500).json({ message: 'Erro ao listar pedidos' });
   }

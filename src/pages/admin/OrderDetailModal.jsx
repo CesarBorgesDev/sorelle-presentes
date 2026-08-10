@@ -14,6 +14,7 @@ import {
   formatOrderDate,
   formatMoney,
 } from '@/lib/orderLabels';
+import { getOrderItemCatalogPath, getOrderItemCode } from '@/lib/orderItemDisplay';
 import {
   AlertCircle, CheckCircle2, Circle, ExternalLink, Loader2, Printer, ScanBarcode, Trash2, X,
 } from 'lucide-react';
@@ -437,17 +438,39 @@ export default function OrderDetailModal({ order, onClose, onUpdated, onDeleted 
             <div>
               <p className="font-body text-xs text-muted-foreground tracking-wider uppercase mb-3">Itens</p>
               <div className="space-y-2">
-                {items.map((item, i) => (
-                  <div key={i} className="flex justify-between items-center py-2 border-b border-border last:border-0">
-                    <div>
-                      <p className="font-body text-sm text-foreground">{item.product_name}</p>
-                      <p className="font-body text-xs text-muted-foreground">
-                        Qtd: {item.quantity} × {formatMoney(item.unit_price)}
-                      </p>
+                {items.map((item, i) => {
+                  const code = getOrderItemCode(item);
+                  const catalogPath = getOrderItemCatalogPath(item);
+                  return (
+                    <div key={i} className="flex justify-between items-start gap-3 py-2 border-b border-border last:border-0">
+                      <div className="min-w-0">
+                        <p className="font-body text-sm text-foreground">{item.product_name}</p>
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-0.5">
+                          {code && (
+                            <span className="font-mono text-xs text-muted-foreground">
+                              Cód. {code}
+                            </span>
+                          )}
+                          {catalogPath && (
+                            <Link
+                              to={catalogPath}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 font-body text-xs text-primary hover:underline"
+                            >
+                              Ver no catálogo
+                              <ExternalLink className="w-3 h-3" />
+                            </Link>
+                          )}
+                        </div>
+                        <p className="font-body text-xs text-muted-foreground mt-0.5">
+                          Qtd: {item.quantity} × {formatMoney(item.unit_price)}
+                        </p>
+                      </div>
+                      <p className="font-body text-sm text-foreground shrink-0">{formatMoney(item.total)}</p>
                     </div>
-                    <p className="font-body text-sm text-foreground">{formatMoney(item.total)}</p>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}
