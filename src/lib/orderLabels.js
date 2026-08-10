@@ -52,3 +52,22 @@ export function formatOrderDate(dateStr) {
 export function formatMoney(value) {
   return `R$ ${Number(value || 0).toFixed(2).replace('.', ',')}`;
 }
+
+/** Desconto do pedido (salvo ou inferido: subtotal + frete + embalagem − total). */
+export function getOrderDiscount(order) {
+  if (!order) return 0;
+  const stored = Number(order.discount_amount);
+  if (Number.isFinite(stored) && stored > 0) return stored;
+
+  const subtotal = Number(order.subtotal) || 0;
+  const wrapping = Number(order.wrapping_cost) || 0;
+  const shipping = Number(order.shipping_cost) || 0;
+  const total = Number(order.total) || 0;
+  const discount = Math.round((subtotal + wrapping + shipping - total) * 100) / 100;
+  return discount > 0 ? discount : 0;
+}
+
+export function getOrderDiscountLabel(order) {
+  if (order?.payment_method === 'pix') return 'Desconto PIX';
+  return 'Desconto';
+}

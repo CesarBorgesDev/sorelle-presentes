@@ -194,10 +194,10 @@ async function createOrderFromCart({ userId, customer, paymentMethod, shipping }
   const orderResult = await pool.query(
     `INSERT INTO orders (
       customer_name, customer_email, customer_phone, customer_address,
-      items, subtotal, wrapping_cost, shipping_cost, shipping_service_code,
-      shipping_service_name, shipping_deadline_days, total, status, payment_method,
-      payment_status, notes
-    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING *`,
+      items, subtotal, wrapping_cost, shipping_cost, discount_amount,
+      shipping_service_code, shipping_service_name, shipping_deadline_days,
+      total, status, payment_method, payment_status, notes
+    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) RETURNING *`,
     [
       customer.customer_name.trim(),
       customer.customer_email.trim().toLowerCase(),
@@ -207,6 +207,7 @@ async function createOrderFromCart({ userId, customer, paymentMethod, shipping }
       subtotal,
       0,
       shippingCost,
+      pixDiscount,
       shipping.service_code,
       shipping.label,
       shipping.deadline_days,
@@ -219,7 +220,9 @@ async function createOrderFromCart({ userId, customer, paymentMethod, shipping }
         customer.customer_document
           ? `CPF: ${String(customer.customer_document).replace(/\D/g, '')}`
           : null,
-        pixDiscount > 0 ? `Desconto PIX: R$ ${pixDiscount.toFixed(2)}` : null,
+        pixDiscount > 0
+          ? `Desconto PIX (${pixDiscountPercent}%): R$ ${pixDiscount.toFixed(2)}`
+          : null,
       ].filter(Boolean).join(' | ') || null,
     ]
   );
@@ -533,8 +536,9 @@ router.get('/meus-pedidos', requireAuth, async (req, res) => {
   try {
     const result = await pool.query(
       `SELECT id, status, payment_status, payment_method, total, subtotal, wrapping_cost,
-              shipping_cost, shipping_service_name, shipping_deadline_days, tracking_code,
-              shipping_label_url, cielo_authorization_code, items, created_date, updated_date
+              shipping_cost, discount_amount, shipping_service_name, shipping_deadline_days,
+              tracking_code, shipping_label_url, cielo_authorization_code, items,
+              created_date, updated_date
        FROM orders
        WHERE LOWER(customer_email) = LOWER($1)
        ORDER BY created_date DESC
@@ -554,9 +558,9 @@ router.get('/pedido/:id', requireAuth, async (req, res) => {
   try {
     const result = await pool.query(
       `SELECT id, status, payment_status, payment_method, payment_gateway, total, subtotal, wrapping_cost,
-              shipping_cost, shipping_service_code, shipping_service_name, shipping_deadline_days,
-              tracking_code, shipping_label_url, cielo_authorization_code, gateway_order_number,
-              cielo_payment_id, sipag_payment_id, sipag_authorization_code,
+              shipping_cost, discount_amount, shipping_service_code, shipping_service_name,
+              shipping_deadline_days, tracking_code, shipping_label_url, cielo_authorization_code,
+              gateway_order_number, cielo_payment_id, sipag_payment_id, sipag_authorization_code,
               mercado_pago_preference_id, mercado_pago_payment_id, mercado_pago_authorization_code,
               boleto_url, boleto_digitable_line,
               customer_name, customer_address, items, created_date, updated_date, shipped_at

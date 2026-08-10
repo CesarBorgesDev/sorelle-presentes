@@ -13,6 +13,8 @@ import {
   PAYMENT_METHOD_LABELS,
   formatOrderDate,
   formatMoney,
+  getOrderDiscount,
+  getOrderDiscountLabel,
 } from '@/lib/orderLabels';
 import { getOrderItemCatalogPath, getOrderItemCode } from '@/lib/orderItemDisplay';
 
@@ -34,6 +36,7 @@ export default function CustomerOrderDetail({ order, onClose }) {
   if (!order) return null;
 
   const items = Array.isArray(order.items) ? order.items : [];
+  const discount = getOrderDiscount(order);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -168,8 +171,14 @@ export default function CustomerOrderDetail({ order, onClose }) {
                 <span>{formatMoney(order.shipping_cost)}</span>
               </div>
             )}
+            {discount > 0 && (
+              <div className="flex justify-between text-emerald-700 dark:text-emerald-400">
+                <span>{getOrderDiscountLabel(order)}</span>
+                <span>- {formatMoney(discount)}</span>
+              </div>
+            )}
             <div className="flex justify-between font-medium text-foreground pt-1">
-              <span>Total</span>
+              <span>{order.payment_status === 'pago' ? 'Total recebido' : 'Total'}</span>
               <span>{formatMoney(order.total)}</span>
             </div>
           </div>

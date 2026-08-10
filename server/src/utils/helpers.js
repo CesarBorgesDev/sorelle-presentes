@@ -8,7 +8,8 @@ export function parseSort(sortParam) {
 }
 
 const NUMERIC_FIELDS = [
-  'price', 'original_price', 'subtotal', 'wrapping_cost', 'total',
+  'price', 'original_price', 'subtotal', 'wrapping_cost', 'shipping_cost',
+  'discount_amount', 'total',
   'commission_rate', 'commission_value', 'order_total', 'total_sales',
   'total_commission', 'quantity', 'sort_order',
 ];

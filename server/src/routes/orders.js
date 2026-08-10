@@ -23,7 +23,8 @@ const router = Router();
 
 const ALLOWED_FIELDS = [
   'customer_name', 'customer_email', 'customer_phone', 'customer_address',
-  'items', 'subtotal', 'wrapping_cost', 'shipping_cost', 'shipping_service_code',
+  'items', 'subtotal', 'wrapping_cost', 'shipping_cost', 'discount_amount',
+  'shipping_service_code',
   'shipping_service_name', 'shipping_deadline_days', 'total', 'status', 'payment_method',
   'payment_status', 'gateway_order_number', 'notes', 'tracking_code', 'shipping_label_url',
   'correios_prepostagem_id', 'shipped_at', 'cielo_authorization_code', 'cielo_payment_id',

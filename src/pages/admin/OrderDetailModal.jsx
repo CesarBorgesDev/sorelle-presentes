@@ -13,6 +13,8 @@ import {
   PAYMENT_METHOD_LABELS,
   formatOrderDate,
   formatMoney,
+  getOrderDiscount,
+  getOrderDiscountLabel,
 } from '@/lib/orderLabels';
 import { getOrderItemCatalogPath, getOrderItemCode } from '@/lib/orderItemDisplay';
 import {
@@ -298,6 +300,7 @@ export default function OrderDetailModal({ order, onClose, onUpdated, onDeleted 
   }
 
   const items = Array.isArray(order.items) ? order.items : [];
+  const discount = getOrderDiscount(order);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -485,6 +488,12 @@ export default function OrderDetailModal({ order, onClose, onUpdated, onDeleted 
           )}
 
           <div className="pt-2 border-t border-border space-y-1.5">
+            {Number(order.subtotal) > 0 && (
+              <div className="flex justify-between font-body text-sm">
+                <span className="text-muted-foreground">Subtotal</span>
+                <span>{formatMoney(order.subtotal)}</span>
+              </div>
+            )}
             {Number(order.wrapping_cost) > 0 && (
               <div className="flex justify-between font-body text-sm">
                 <span className="text-muted-foreground">Embalagem</span>
@@ -499,8 +508,14 @@ export default function OrderDetailModal({ order, onClose, onUpdated, onDeleted 
                 <span>{formatMoney(order.shipping_cost)}</span>
               </div>
             )}
-            <div className="flex justify-between font-body text-sm font-medium">
-              <span>Total</span>
+            {discount > 0 && (
+              <div className="flex justify-between font-body text-sm text-emerald-700 dark:text-emerald-400">
+                <span>{getOrderDiscountLabel(order)}</span>
+                <span>- {formatMoney(discount)}</span>
+              </div>
+            )}
+            <div className="flex justify-between font-body text-sm font-medium pt-1">
+              <span>{paymentStatus === 'pago' ? 'Total recebido' : 'Total'}</span>
               <span>{formatMoney(order.total)}</span>
             </div>
           </div>
