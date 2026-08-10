@@ -503,10 +503,18 @@ router.post('/:id/verificar-pagamento-mercado-pago', async (req, res) => {
 
 router.delete('/:id', async (req, res) => {
   try {
-    const result = await pool.query('DELETE FROM orders WHERE id = $1 RETURNING id', [req.params.id]);
-    if (result.rows.length === 0) {
+    const existing = await pool.query(
+      'SELECT id, payment_status FROM orders WHERE id = $1',
+      [req.params.id]
+    );
+    if (existing.rows.length === 0) {
       return res.status(404).json({ message: 'Pedido não encontrado' });
     }
+    if (existing.rows[0].payment_status === 'pago') {
+      return res.status(400).json({ message: 'Não é permitido excluir pedidos já pagos' });
+    }
+
+    await pool.query('DELETE FROM orders WHERE id = $1', [req.params.id]);
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ message: 'Erro ao excluir pedido' });

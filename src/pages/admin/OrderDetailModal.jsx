@@ -66,15 +66,24 @@ export default function OrderDetailModal({ order, onClose, onUpdated, onDeleted 
     },
   });
 
+  const isPaid = paymentStatus === 'pago';
+
   const deleteMutation = useMutation({
     mutationFn: () => api.entities.Order.delete(order.id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['orders'] });
       onDeleted?.();
     },
+    onError: (err) => {
+      window.alert(err?.message || 'Não foi possível excluir o pedido.');
+    },
   });
 
   const handleDelete = () => {
+    if (isPaid) {
+      window.alert('Não é permitido excluir pedidos já pagos.');
+      return;
+    }
     const label = order.customer_name || order.customer_email || 'este pedido';
     if (!window.confirm(`Excluir o pedido de ${label}? Esta ação não pode ser desfeita.`)) return;
     deleteMutation.mutate();
@@ -752,15 +761,21 @@ export default function OrderDetailModal({ order, onClose, onUpdated, onDeleted 
           )}
 
           <div className="pt-4 border-t border-border flex flex-wrap items-center justify-between gap-3">
-            <button
-              type="button"
-              onClick={handleDelete}
-              disabled={deleteMutation.isPending}
-              className="inline-flex items-center gap-2 px-4 py-2.5 border border-destructive/40 text-destructive rounded-sm font-body text-sm hover:bg-destructive/10 disabled:opacity-50"
-            >
-              {deleteMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-              Excluir pedido
-            </button>
+            {isPaid ? (
+              <p className="font-body text-xs text-muted-foreground">
+                Pedidos pagos não podem ser excluídos.
+              </p>
+            ) : (
+              <button
+                type="button"
+                onClick={handleDelete}
+                disabled={deleteMutation.isPending}
+                className="inline-flex items-center gap-2 px-4 py-2.5 border border-destructive/40 text-destructive rounded-sm font-body text-sm hover:bg-destructive/10 disabled:opacity-50"
+              >
+                {deleteMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                Excluir pedido
+              </button>
+            )}
             <button
               type="button"
               onClick={onClose}

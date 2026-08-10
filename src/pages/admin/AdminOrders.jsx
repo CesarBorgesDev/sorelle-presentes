@@ -37,11 +37,18 @@ export default function AdminOrders() {
 
   const handleDeleteOrder = (order, e) => {
     e?.stopPropagation();
+    if (order.payment_status === 'pago') {
+      window.alert('Não é permitido excluir pedidos já pagos.');
+      return;
+    }
     const label = order.customer_name || order.customer_email || 'este pedido';
     if (!window.confirm(`Excluir o pedido de ${label}? Esta ação não pode ser desfeita.`)) return;
     deleteMutation.mutate(order.id, {
       onSuccess: () => {
         if (detailOrder?.id === order.id) setDetailOrder(null);
+      },
+      onError: (err) => {
+        window.alert(err?.message || 'Não foi possível excluir o pedido.');
       },
     });
   };
@@ -159,15 +166,17 @@ export default function AdminOrders() {
                         >
                           Ver
                         </button>
-                        <button
-                          type="button"
-                          onClick={(e) => handleDeleteOrder(order, e)}
-                          disabled={deleteMutation.isPending}
-                          className="text-muted-foreground hover:text-destructive transition-colors disabled:opacity-50"
-                          title="Excluir pedido"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        {order.payment_status !== 'pago' && (
+                          <button
+                            type="button"
+                            onClick={(e) => handleDeleteOrder(order, e)}
+                            disabled={deleteMutation.isPending}
+                            className="text-muted-foreground hover:text-destructive transition-colors disabled:opacity-50"
+                            title="Excluir pedido"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
