@@ -386,41 +386,16 @@ export function applyVariantsToProductPayload(data = {}) {
 }
 
 export async function decrementProductVariantStock(pool, productId, colorId, size, amount) {
-  const result = await pool.query('SELECT variants FROM products WHERE id = $1', [productId]);
-  if (result.rows.length === 0) return;
-
-  const variants = ensureVariantStockMatrix(result.rows[0].variants);
-  if (!usesVariantStock(variants)) return;
-
-  const color = colorId ? String(colorId).trim() : null;
-  const selectedSize = size ? String(size).trim() : null;
+  const { changeProductStock } = await import('./stockInventory.js');
   const decrementBy = normalizeProductQuantity(amount);
+  if (decrementBy <= 0) return;
 
-  const stock = variants.stock.map((entry) => {
-    if ((entry.color_id || null) === color && (entry.size || null) === selectedSize) {
-      return {
-        ...entry,
-        quantity: Math.max(0, entry.quantity - decrementBy),
-      };
-    }
-    return entry;
+  await changeProductStock(pool, {
+    productId,
+    delta: -decrementBy,
+    variantColor: colorId,
+    variantSize: size,
+    type: 'venda',
+    note: 'Baixa de estoque',
   });
-
-  const nextVariants = { ...variants, stock };
-  const totalQuantity = getTotalVariantStock(nextVariants);
-
-  await pool.query(
-    `UPDATE products
-     SET variants = $1,
-         quantity = $2,
-         in_stock = $3,
-         updated_date = NOW()
-     WHERE id = $4`,
-    [
-      JSON.stringify(nextVariants),
-      totalQuantity,
-      syncProductInStock(totalQuantity),
-      productId,
-    ]
-  );
 }

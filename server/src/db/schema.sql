@@ -307,3 +307,26 @@ ON CONFLICT (key) DO NOTHING;
 
 -- Categoria de produto agora é validada pela tabela categories (constraint antiga removida)
 ALTER TABLE products DROP CONSTRAINT IF EXISTS products_category_check;
+
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS stock_consumed BOOLEAN NOT NULL DEFAULT FALSE;
+
+CREATE TABLE IF NOT EXISTS stock_movements (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  product_id UUID NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  order_id UUID REFERENCES orders(id) ON DELETE SET NULL,
+  type VARCHAR(30) NOT NULL
+    CHECK (type IN ('venda', 'cancelamento', 'ajuste', 'entrada')),
+  quantity_delta INTEGER NOT NULL,
+  quantity_before INTEGER NOT NULL,
+  quantity_after INTEGER NOT NULL,
+  variant_color VARCHAR(100),
+  variant_size VARCHAR(100),
+  note TEXT,
+  created_by UUID REFERENCES users(id) ON DELETE SET NULL,
+  created_date TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_stock_movements_product_date
+  ON stock_movements(product_id, created_date DESC);
+CREATE INDEX IF NOT EXISTS idx_stock_movements_order
+  ON stock_movements(order_id);

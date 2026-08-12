@@ -4,10 +4,11 @@ import { api } from '@/api/apiClient';
 import { buildInitialProductImages, buildProductImagePayload } from '@/lib/productImages';
 import ProductImagesEditor from './ProductImagesEditor';
 import ProductVariantsEditor from './ProductVariantsEditor';
+import ProductStockMovementsModal from './ProductStockMovementsModal';
 import { ensureVariantStockMatrix, getTotalSizeStock, usesSizeStock } from '@/lib/productVariants';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
-  X, Package, ImageIcon, Layers, FileText, Truck,
+  X, Package, ImageIcon, Layers, FileText, Truck, History,
 } from 'lucide-react';
 
 function parseOptionalNumber(value) {
@@ -68,6 +69,7 @@ export default function ProductFormModal({ product, onClose }) {
   const [checkingInternalCode, setCheckingInternalCode] = useState(false);
   const [submitError, setSubmitError] = useState('');
   const [activeTab, setActiveTab] = useState('geral');
+  const [stockMovementsOpen, setStockMovementsOpen] = useState(false);
 
   const set = (field, value) => {
     setForm((f) => ({ ...f, [field]: value }));
@@ -296,6 +298,16 @@ export default function ProductFormModal({ product, onClose }) {
                         ? 'Com grade de tamanhos, o estoque é controlado na aba Grade.'
                         : 'Com quantidade zero, o produto fica indisponível para venda.'}
                     </p>
+                    {isEditing && (
+                      <button
+                        type="button"
+                        onClick={() => setStockMovementsOpen(true)}
+                        className="mt-2 inline-flex items-center gap-1.5 font-body text-xs text-primary hover:underline"
+                      >
+                        <History className="w-3.5 h-3.5" />
+                        Ver movimentação de estoque
+                      </button>
+                    )}
                   </div>
 
                   <div className="md:col-span-2 flex items-center gap-3 pt-1">
@@ -408,20 +420,42 @@ export default function ProductFormModal({ product, onClose }) {
             <p className="px-6 font-body text-sm text-destructive shrink-0">{submitError}</p>
           )}
 
-          <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-border shrink-0 bg-card">
-            <button type="button" onClick={onClose} className="px-5 py-2.5 font-body text-sm text-muted-foreground hover:text-foreground tracking-wider transition-colors">
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              disabled={mutation.isPending || checkingInternalCode || Boolean(internalCodeError)}
-              className="px-6 py-2.5 bg-primary text-primary-foreground rounded-sm font-body text-sm tracking-wider hover:opacity-80 transition-opacity disabled:opacity-50"
-            >
-              {mutation.isPending ? 'Salvando...' : isEditing ? 'Salvar Alterações' : 'Criar Produto'}
-            </button>
+          <div className="flex items-center justify-between gap-3 px-6 py-4 border-t border-border shrink-0 bg-card">
+            <div>
+              {isEditing && (
+                <button
+                  type="button"
+                  onClick={() => setStockMovementsOpen(true)}
+                  className="inline-flex items-center gap-2 px-4 py-2.5 border border-border rounded-sm font-body text-sm text-foreground hover:bg-secondary"
+                >
+                  <History className="w-4 h-4" />
+                  Movimentação
+                </button>
+              )}
+            </div>
+            <div className="flex items-center gap-3">
+              <button type="button" onClick={onClose} className="px-5 py-2.5 font-body text-sm text-muted-foreground hover:text-foreground tracking-wider transition-colors">
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={mutation.isPending || checkingInternalCode || Boolean(internalCodeError)}
+                className="px-6 py-2.5 bg-primary text-primary-foreground rounded-sm font-body text-sm tracking-wider hover:opacity-80 transition-opacity disabled:opacity-50"
+              >
+                {mutation.isPending ? 'Salvando...' : isEditing ? 'Salvar Alterações' : 'Criar Produto'}
+              </button>
+            </div>
           </div>
         </form>
       </div>
+
+      {stockMovementsOpen && isEditing && (
+        <ProductStockMovementsModal
+          productId={product.id}
+          productName={form.name || product.name}
+          onClose={() => setStockMovementsOpen(false)}
+        />
+      )}
     </div>
   );
 }

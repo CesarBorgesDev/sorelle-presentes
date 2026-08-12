@@ -5,7 +5,9 @@ import { parseSort, rowToEntity, rowsToEntities } from '../utils/helpers.js';
 import { normalizeProductImages } from '../utils/productImages.js';
 import { normalizeProductStockFields } from '../utils/productStock.js';
 import { assertInternalCodeAvailable, findInternalCodeConflict } from '../utils/productInternalCode.js';
-import { applyVariantsToProductPayload } from '../utils/productVariants.js';
+import { applyVariantsToProductPayload, getTotalVariantStock, usesVariantStock, ensureVariantStockMatrix } from '../utils/productVariants.js';
+import { listProductStockMovements, recordStockAdjustment } from '../utils/stockInventory.js';
+import { normalizeProductQuantity } from '../utils/productStock.js';
 
 const router = Router();
 
@@ -92,6 +94,27 @@ router.get('/count', optionalAuth, async (_req, res) => {
   }
 });
 
+router.get('/:id/movimentacoes', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const product = await pool.query('SELECT id, name, quantity FROM products WHERE id = $1', [req.params.id]);
+    if (product.rows.length === 0) {
+      return res.status(404).json({ message: 'Produto não encontrado' });
+    }
+
+    const movements = await listProductStockMovements(pool, req.params.id, {
+      limit: req.query.limit,
+    });
+
+    res.json({
+      product: rowToEntity(product.rows[0]),
+      movements: rowsToEntities(movements),
+    });
+  } catch (err) {
+    console.error('Erro ao listar movimentações de estoque:', err);
+    res.status(500).json({ message: 'Erro ao listar movimentações de estoque' });
+  }
+});
+
 router.get('/:id', optionalAuth, async (req, res) => {
   try {
     const result = await pool.query('SELECT * FROM products WHERE id = $1', [req.params.id]);
@@ -103,6 +126,14 @@ router.get('/:id', optionalAuth, async (req, res) => {
     res.status(500).json({ message: 'Erro ao buscar produto' });
   }
 });
+
+function resolveStockTotal(productLike) {
+  const variants = ensureVariantStockMatrix(productLike?.variants);
+  if (usesVariantStock(variants)) {
+    return getTotalVariantStock(variants);
+  }
+  return normalizeProductQuantity(productLike?.quantity);
+}
 
 router.post('/', requireAuth, requireAdmin, async (req, res) => {
   try {
@@ -123,7 +154,20 @@ router.post('/', requireAuth, requireAdmin, async (req, res) => {
         JSON.stringify(data.variants || { colors: [], sizes: [], stock: [], size_specifications: {} }),
       ]
     );
-    res.status(201).json(rowToEntity(result.rows[0]));
+
+    const created = rowToEntity(result.rows[0]);
+    const initialQty = resolveStockTotal(created);
+    if (initialQty > 0) {
+      await recordStockAdjustment(pool, {
+        productId: created.id,
+        quantityBefore: 0,
+        quantityAfter: initialQty,
+        userId: req.user?.id,
+        note: 'Estoque inicial no cadastro do produto',
+      });
+    }
+
+    res.status(201).json(created);
   } catch (err) {
     console.error('Erro ao criar produto:', err);
     if (err.status === 409 || err.code === '23505') {
@@ -135,14 +179,19 @@ router.post('/', requireAuth, requireAdmin, async (req, res) => {
 
 router.patch('/:id', requireAuth, requireAdmin, async (req, res) => {
   try {
+    const beforeResult = await pool.query(
+      'SELECT id, quantity, variants FROM products WHERE id = $1',
+      [req.params.id]
+    );
+    if (beforeResult.rows.length === 0) {
+      return res.status(404).json({ message: 'Produto não encontrado' });
+    }
+    const quantityBefore = resolveStockTotal(beforeResult.rows[0]);
+
     const data = applyVariantsToProductPayload(normalizeProductStockFields({ ...req.body }));
 
     if (data.image_url !== undefined || data.images !== undefined) {
       const current = await pool.query('SELECT image_url, images FROM products WHERE id = $1', [req.params.id]);
-      if (current.rows.length === 0) {
-        return res.status(404).json({ message: 'Produto não encontrado' });
-      }
-
       const existing = current.rows[0];
       const normalized = normalizeProductImages({
         image_url: data.image_url !== undefined ? data.image_url : existing.image_url,
@@ -185,7 +234,21 @@ router.patch('/:id', requireAuth, requireAdmin, async (req, res) => {
     if (result.rows.length === 0) {
       return res.status(404).json({ message: 'Produto não encontrado' });
     }
-    res.json(rowToEntity(result.rows[0]));
+
+    const updated = rowToEntity(result.rows[0]);
+    const quantityAfter = resolveStockTotal(updated);
+
+    if (data.quantity !== undefined || data.variants !== undefined) {
+      await recordStockAdjustment(pool, {
+        productId: updated.id,
+        quantityBefore,
+        quantityAfter,
+        userId: req.user?.id,
+        note: 'Ajuste no cadastro do produto',
+      });
+    }
+
+    res.json(updated);
   } catch (err) {
     console.error('Erro ao atualizar produto:', err);
     if (err.status === 409 || err.code === '23505') {

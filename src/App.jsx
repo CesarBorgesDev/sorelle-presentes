@@ -54,6 +54,8 @@ import AdminCategories from '@/pages/admin/AdminCategories';
 
 import AdminOrders from '@/pages/admin/AdminOrders';
 
+import AdminCustomers from '@/pages/admin/AdminCustomers';
+
 import AdminAffiliates from '@/pages/admin/AdminAffiliates';
 
 import AdminSettings from '@/pages/admin/AdminSettings';
@@ -144,6 +146,8 @@ function AppRoutes() {
             <Route path="/admin/categorias" element={<AdminCategories />} />
 
             <Route path="/admin/pedidos" element={<AdminOrders />} />
+
+            <Route path="/admin/clientes" element={<AdminCustomers />} />
 
             <Route path="/admin/afiliados" element={<AdminAffiliates />} />
 

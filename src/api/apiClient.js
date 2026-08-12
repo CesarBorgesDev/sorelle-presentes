@@ -577,6 +577,10 @@ const productsApi = {
   count() {
     return apiFetch('/products/count');
   },
+  listStockMovements(productId, limit = 100) {
+    const params = new URLSearchParams({ limit: String(limit) });
+    return apiFetch(`/products/${productId}/movimentacoes?${params}`);
+  },
 };
 
 const ordersApi = {
@@ -588,6 +592,28 @@ const ordersApi = {
     return apiFetch(`/orders/${orderId}/verificar-pagamento-mercado-pago`, {
       method: 'POST',
       body: JSON.stringify({}),
+    });
+  },
+};
+
+const customersApi = {
+  list({ q = '', sort = '-created_date', limit = 200 } = {}) {
+    const params = new URLSearchParams({
+      sort,
+      limit: String(limit),
+    });
+    if (q?.trim()) params.set('q', q.trim());
+    return apiFetch(`/customers?${params}`);
+  },
+
+  get(id) {
+    return apiFetch(`/customers/${id}`);
+  },
+
+  update(id, data) {
+    return apiFetch(`/customers/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
     });
   },
 };
@@ -672,6 +698,7 @@ export const api = {
   account,
   products: productsApi,
   orders: ordersApi,
+  customers: customersApi,
   productKits: productKitsApi,
   brands: brandsApi,
   categories: categoriesApi,

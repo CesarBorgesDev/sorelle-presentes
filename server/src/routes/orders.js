@@ -18,6 +18,7 @@ import { getInvoiceTypeConfig, saveInvoiceFile } from '../services/invoiceUpload
 import { streamOrderInvoice, withInvoiceFlags, withInvoiceFlagsList } from '../services/invoiceAccess.js';
 import { verifyMercadoPagoOrderPayment } from '../services/mercadoPagoNotifications.js';
 import { enrichOrderItems, enrichOrdersItems } from '../utils/enrichOrderItems.js';
+import { restoreStockForOrder } from '../utils/stockInventory.js';
 
 const router = Router();
 
@@ -434,6 +435,8 @@ router.post('/', async (req, res) => {
 router.patch('/:id', async (req, res) => {
   try {
     const data = { ...req.body };
+    const existing = await loadOrderOr404(req.params.id, res);
+    if (!existing) return;
 
     if (data.tracking_code !== undefined) {
       data.tracking_code = normalizeTrackingCode(data.tracking_code) || null;
@@ -444,6 +447,10 @@ router.patch('/:id', async (req, res) => {
         data.shipped_at = new Date().toISOString();
       }
     }
+
+    const becomingCancelled = data.status === 'cancelado' && existing.status !== 'cancelado';
+    const becomingPaymentCancelled = data.payment_status === 'cancelado'
+      && existing.payment_status !== 'cancelado';
 
     const sets = [];
     const values = [];
@@ -471,9 +478,22 @@ router.patch('/:id', async (req, res) => {
     if (result.rows.length === 0) {
       return res.status(404).json({ message: 'Pedido não encontrado' });
     }
-    res.json(rowToEntity(result.rows[0]));
+
+    let order = rowToEntity(result.rows[0]);
+
+    if (becomingCancelled || becomingPaymentCancelled) {
+      await restoreStockForOrder(pool, order, {
+        userId: req.user?.id,
+        note: `Estorno — pedido ${String(order.id).slice(0, 8)} cancelado no admin`,
+      });
+      const refreshed = await pool.query('SELECT * FROM orders WHERE id = $1', [order.id]);
+      order = rowToEntity(refreshed.rows[0]);
+    }
+
+    res.json(await enrichOrderItems(pool, order));
   } catch (err) {
-    res.status(500).json({ message: 'Erro ao atualizar pedido' });
+    console.error('Erro ao atualizar pedido:', err);
+    res.status(500).json({ message: err.message || 'Erro ao atualizar pedido' });
   }
 });
 

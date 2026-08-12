@@ -31,10 +31,11 @@ import {
 } from '../services/mercadoPagoNotifications.js';
 import { trackCorreiosPackage } from '../services/correiosTracking.js';
 import { normalizeProductQuantity } from '../utils/productStock.js';
-import { resolveVariantAvailability, decrementProductVariantStock } from '../utils/productVariants.js';
+import { resolveVariantAvailability } from '../utils/productVariants.js';
 import { streamOrderInvoice, withInvoiceFlags, withInvoiceFlagsList } from '../services/invoiceAccess.js';
 import { STORE_PICKUP_ID, getStorePickupConfig, resolveStorePickupShipping, buildStorePickupOption } from '../services/storePickup.js';
 import { enrichOrderItems, enrichOrdersItems } from '../utils/enrichOrderItems.js';
+import { consumeStockForOrder, restoreStockForOrder } from '../utils/stockInventory.js';
 
 const router = Router();
 
@@ -142,23 +143,18 @@ async function validateCartStock(userId) {
   }
 }
 
-async function consumeCartStock(userId) {
-  const result = await pool.query(
-    `SELECT ci.product_id, ci.quantity, ci.variant_color, ci.variant_size
-     FROM cart_items ci
-     WHERE ci.user_id = $1`,
-    [userId]
+async function cancelOrderAndRestoreStock(orderId, userId = null) {
+  const result = await pool.query('SELECT * FROM orders WHERE id = $1', [orderId]);
+  if (result.rows.length === 0) return;
+  const order = rowToEntity(result.rows[0]);
+  await restoreStockForOrder(pool, order, {
+    userId,
+    note: `Estorno — falha no pagamento do pedido ${String(orderId).slice(0, 8)}`,
+  });
+  await pool.query(
+    `UPDATE orders SET status = 'cancelado', payment_status = 'cancelado', updated_date = NOW() WHERE id = $1`,
+    [orderId]
   );
-
-  for (const item of result.rows) {
-    await decrementProductVariantStock(
-      pool,
-      item.product_id,
-      item.variant_color,
-      item.variant_size,
-      item.quantity
-    );
-  }
 }
 
 async function createOrderFromCart({ userId, customer, paymentMethod, shipping }) {
@@ -188,6 +184,8 @@ async function createOrderFromCart({ userId, customer, paymentMethod, shipping }
       quantity: item.quantity || 1,
       unit_price: Number(item.price),
       total: Number(item.price) * Number(item.quantity || 1),
+      variant_color: item.variant_color || null,
+      variant_size: item.variant_size || null,
     };
   });
 
@@ -227,9 +225,9 @@ async function createOrderFromCart({ userId, customer, paymentMethod, shipping }
     ]
   );
 
-  await consumeCartStock(userId);
-
-  return rowToEntity(orderResult.rows[0]);
+  const order = rowToEntity(orderResult.rows[0]);
+  await consumeStockForOrder(pool, order, { userId });
+  return rowToEntity({ ...orderResult.rows[0], stock_consumed: true });
 }
 
 async function startCheckout(req, res) {
@@ -358,10 +356,7 @@ async function startCheckout(req, res) {
         config: sipagConfig,
       });
     } catch (err) {
-      await pool.query(
-        `UPDATE orders SET status = 'cancelado', payment_status = 'cancelado', updated_date = NOW() WHERE id = $1`,
-        [order.id]
-      );
+      await cancelOrderAndRestoreStock(order.id, req.user?.id);
       throw err;
     }
 
@@ -400,10 +395,7 @@ async function startCheckout(req, res) {
         config: mercadoPagoConfig,
       });
     } catch (err) {
-      await pool.query(
-        `UPDATE orders SET status = 'cancelado', payment_status = 'cancelado', updated_date = NOW() WHERE id = $1`,
-        [order.id]
-      );
+      await cancelOrderAndRestoreStock(order.id, req.user?.id);
       throw err;
     }
 
@@ -430,10 +422,7 @@ async function startCheckout(req, res) {
   }
 
   if (providerInfo.provider !== 'cielo') {
-    await pool.query(
-      `UPDATE orders SET status = 'cancelado', payment_status = 'cancelado', updated_date = NOW() WHERE id = $1`,
-      [order.id]
-    );
+    await cancelOrderAndRestoreStock(order.id, req.user?.id);
     throw new Error('Gateway de pagamento não configurado');
   }
 
@@ -463,10 +452,7 @@ async function startCheckout(req, res) {
       checkoutApiUrl: cieloConfig.checkoutApiUrl,
     }));
   } catch (err) {
-    await pool.query(
-      `UPDATE orders SET status = 'cancelado', payment_status = 'cancelado', updated_date = NOW() WHERE id = $1`,
-      [order.id]
-    );
+    await cancelOrderAndRestoreStock(order.id, req.user?.id);
     throw err;
   }
 
