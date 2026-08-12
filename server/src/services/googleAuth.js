@@ -95,12 +95,4 @@ export async function getGoogleProfileFromCode(code) {
   return fetchGoogleUserInfo(tokens.access_token);
 }
 
-export function isProfileComplete(user) {
-  if (!user) return false;
-  const doc = String(user.document || '').replace(/\D/g, '');
-  return Boolean(
-    String(user.full_name || '').trim()
-    && String(user.phone || '').replace(/\D/g, '').length >= 10
-    && doc.length >= 11
-  );
-}
+export { isProfileComplete } from '../utils/userProfile.js';

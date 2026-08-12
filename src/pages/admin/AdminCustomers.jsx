@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { Search, UserCircle } from 'lucide-react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Search, Trash2, UserCircle } from 'lucide-react';
 import { api } from '@/api/apiClient';
 import { formatMoney, formatOrderDate } from '@/lib/orderLabels';
 import CustomerDetailModal from './CustomerDetailModal';
 
 export default function AdminCustomers() {
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
   const [selectedId, setSelectedId] = useState(null);
 
@@ -13,6 +14,28 @@ export default function AdminCustomers() {
     queryKey: ['customers'],
     queryFn: () => api.customers.list({ limit: 500 }),
   });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id) => api.customers.delete(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['customers'] });
+      setSelectedId(null);
+    },
+    onError: (err) => {
+      window.alert(err?.message || 'Não foi possível excluir o cliente.');
+    },
+  });
+
+  const handleDeleteCustomer = (customer, e) => {
+    e?.stopPropagation();
+    if (Number(customer.orders_count) > 0) {
+      window.alert('Não é permitido excluir clientes com vendas ou pedidos registrados.');
+      return;
+    }
+    const label = customer.full_name || customer.email || 'este cliente';
+    if (!window.confirm(`Excluir o cliente ${label}? Esta ação não pode ser desfeita.`)) return;
+    deleteMutation.mutate(customer.id);
+  };
 
   const q = search.trim().toLowerCase();
   const filtered = customers.filter((c) => {
@@ -134,13 +157,26 @@ export default function AdminCustomers() {
                       </p>
                     </td>
                     <td className="px-6 py-4 text-right" onClick={(e) => e.stopPropagation()}>
-                      <button
-                        type="button"
-                        onClick={() => setSelectedId(customer.id)}
-                        className="font-body text-xs text-primary hover:opacity-70 tracking-wider"
-                      >
-                        Ver
-                      </button>
+                      <div className="inline-flex items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedId(customer.id)}
+                          className="font-body text-xs text-primary hover:opacity-70 tracking-wider"
+                        >
+                          Ver
+                        </button>
+                        {Number(customer.orders_count) === 0 && (
+                          <button
+                            type="button"
+                            onClick={(e) => handleDeleteCustomer(customer, e)}
+                            disabled={deleteMutation.isPending}
+                            className="text-muted-foreground hover:text-destructive transition-colors disabled:opacity-50"
+                            title="Excluir cliente"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -162,6 +198,7 @@ export default function AdminCustomers() {
           customerId={selectedId}
           onClose={() => setSelectedId(null)}
           onUpdated={() => setSelectedId((id) => id)}
+          onDeleted={() => setSelectedId(null)}
         />
       )}
     </div>

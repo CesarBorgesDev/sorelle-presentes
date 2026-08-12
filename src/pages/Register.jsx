@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { api, logApiError } from "@/api/apiClient";
 import { cartApi } from "@/lib/cartApi";
+import { formatZipCodeInput, onlyDigits, profileIncompleteMessage } from "@/lib/profile";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,32 +12,58 @@ import GoogleIcon from "@/components/GoogleIcon";
 
 export default function Register() {
   const [searchParams] = useSearchParams();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
+  const [form, setForm] = useState({
+    full_name: "",
+    email: "",
+    phone: "",
+    document: "",
+    zip_code: "",
+    address: "",
+    password: "",
+    confirmPassword: "",
+  });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const returnUrl = searchParams.get('returnUrl') || '/';
   const loginHref = `/login?returnUrl=${encodeURIComponent(returnUrl)}`;
 
+  const set = (field, value) => setForm((f) => ({ ...f, [field]: value }));
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
-    if (password !== confirmPassword) {
+    if (form.password !== form.confirmPassword) {
       setError("As senhas não coincidem");
       return;
     }
+
+    const payload = {
+      email: form.email.trim(),
+      password: form.password,
+      full_name: form.full_name.trim(),
+      phone: form.phone.trim(),
+      document: onlyDigits(form.document),
+      zip_code: onlyDigits(form.zip_code),
+      address: form.address.trim(),
+    };
+
+    const incomplete = profileIncompleteMessage(payload);
+    if (incomplete) {
+      setError(incomplete);
+      return;
+    }
+
     setLoading(true);
     try {
-      const result = await api.auth.register({ email, password });
+      const result = await api.auth.register(payload);
       await cartApi.mergeGuestCartToServer();
-      if (result?.needs_profile !== false) {
+      if (result?.needs_profile) {
         window.location.href = `/completar-cadastro?returnUrl=${encodeURIComponent(returnUrl)}`;
         return;
       }
       window.location.href = returnUrl;
     } catch (err) {
-      logApiError("Falha ao criar conta", err, { email });
+      logApiError("Falha ao criar conta", err, { email: form.email });
       setError(err.message || "Falha ao criar conta");
     } finally {
       setLoading(false);
@@ -51,7 +78,7 @@ export default function Register() {
     <AuthLayout
       icon={UserPlus}
       title="Crie sua conta"
-      subtitle="Cadastre-se para começar"
+      subtitle="Preencha todos os dados obrigatórios"
       footer={
         <>
           Já tem uma conta?{" "}
@@ -88,24 +115,79 @@ export default function Register() {
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="space-y-2">
-          <Label htmlFor="email">E-mail</Label>
+          <Label htmlFor="full_name">Nome completo *</Label>
+          <Input
+            id="full_name"
+            value={form.full_name}
+            onChange={(e) => set("full_name", e.target.value)}
+            className="h-12"
+            required
+            autoFocus
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="email">E-mail *</Label>
           <div className="relative">
             <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" aria-hidden="true" />
             <Input
               id="email"
               type="email"
               autoComplete="email"
-              autoFocus
               placeholder="voce@exemplo.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              value={form.email}
+              onChange={(e) => set("email", e.target.value)}
               className="pl-10 h-12"
               required
             />
           </div>
         </div>
         <div className="space-y-2">
-          <Label htmlFor="password">Senha</Label>
+          <Label htmlFor="phone">Telefone *</Label>
+          <Input
+            id="phone"
+            type="tel"
+            value={form.phone}
+            onChange={(e) => set("phone", e.target.value)}
+            placeholder="(11) 99999-9999"
+            className="h-12"
+            required
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="document">CPF *</Label>
+          <Input
+            id="document"
+            value={form.document}
+            onChange={(e) => set("document", e.target.value)}
+            placeholder="000.000.000-00"
+            className="h-12"
+            required
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="zip_code">CEP *</Label>
+          <Input
+            id="zip_code"
+            value={form.zip_code}
+            onChange={(e) => set("zip_code", formatZipCodeInput(e.target.value))}
+            placeholder="00000-000"
+            className="h-12"
+            required
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="address">Endereço *</Label>
+          <Input
+            id="address"
+            value={form.address}
+            onChange={(e) => set("address", e.target.value)}
+            placeholder="Rua, número, bairro, cidade, UF"
+            className="h-12"
+            required
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="password">Senha *</Label>
           <div className="relative">
             <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" aria-hidden="true" />
             <Input
@@ -113,8 +195,8 @@ export default function Register() {
               type="password"
               autoComplete="new-password"
               placeholder="••••••••"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              value={form.password}
+              onChange={(e) => set("password", e.target.value)}
               className="pl-10 h-12"
               required
               minLength={6}
@@ -122,7 +204,7 @@ export default function Register() {
           </div>
         </div>
         <div className="space-y-2">
-          <Label htmlFor="confirm">Confirmar Senha</Label>
+          <Label htmlFor="confirm">Confirmar senha *</Label>
           <div className="relative">
             <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" aria-hidden="true" />
             <Input
@@ -130,8 +212,8 @@ export default function Register() {
               type="password"
               autoComplete="new-password"
               placeholder="••••••••"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
+              value={form.confirmPassword}
+              onChange={(e) => set("confirmPassword", e.target.value)}
               className="pl-10 h-12"
               required
             />

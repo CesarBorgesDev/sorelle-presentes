@@ -2,6 +2,11 @@ import { Router } from 'express';
 import pool from '../config/db.js';
 import { requireAuth } from '../middleware/auth.js';
 import { rowToEntity, rowsToEntities } from '../utils/helpers.js';
+import {
+  normalizeDocument,
+  normalizeZipCode,
+  profileIncompleteMessage,
+} from '../utils/userProfile.js';
 
 const router = Router();
 
@@ -12,7 +17,7 @@ router.use(requireAuth);
 router.get('/profile', async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT id, email, role, full_name, phone, document, address, created_date, updated_date
+      `SELECT id, email, role, full_name, phone, document, address, zip_code, created_date, updated_date
        FROM users WHERE id = $1`,
       [req.user.id]
     );
@@ -28,21 +33,47 @@ router.get('/profile', async (req, res) => {
 
 router.patch('/profile', async (req, res) => {
   try {
-    const { full_name, phone, document, address } = req.body;
+    const { full_name, phone, document, address, zip_code } = req.body;
+
+    const current = await pool.query(
+      `SELECT id, email, full_name, phone, document, address, zip_code
+       FROM users WHERE id = $1`,
+      [req.user.id]
+    );
+    if (current.rows.length === 0) {
+      return res.status(404).json({ message: 'Usuário não encontrado' });
+    }
+
+    const next = {
+      email: current.rows[0].email,
+      full_name: full_name !== undefined ? String(full_name).trim() : current.rows[0].full_name,
+      phone: phone !== undefined ? String(phone).trim() : current.rows[0].phone,
+      document: document !== undefined ? normalizeDocument(document) : current.rows[0].document,
+      address: address !== undefined ? String(address).trim() : current.rows[0].address,
+      zip_code: zip_code !== undefined ? normalizeZipCode(zip_code) : current.rows[0].zip_code,
+    };
+
+    const incomplete = profileIncompleteMessage(next);
+    if (incomplete) {
+      return res.status(400).json({ message: incomplete });
+    }
+
     const result = await pool.query(
       `UPDATE users SET
-        full_name = COALESCE($1, full_name),
-        phone = COALESCE($2, phone),
-        document = COALESCE($3, document),
-        address = COALESCE($4, address),
+        full_name = $1,
+        phone = $2,
+        document = $3,
+        address = $4,
+        zip_code = $5,
         updated_date = NOW()
-      WHERE id = $5
-      RETURNING id, email, role, full_name, phone, document, address, created_date, updated_date`,
+      WHERE id = $6
+      RETURNING id, email, role, full_name, phone, document, address, zip_code, created_date, updated_date`,
       [
-        full_name?.trim() || null,
-        phone?.trim() || null,
-        document ? String(document).replace(/\D/g, '').slice(0, 14) : null,
-        address?.trim() || null,
+        next.full_name,
+        next.phone,
+        next.document,
+        next.address,
+        next.zip_code,
         req.user.id,
       ]
     );

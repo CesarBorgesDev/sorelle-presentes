@@ -62,6 +62,7 @@ router.get('/', async (req, res) => {
         OR LOWER(COALESCE(u.phone, '')) LIKE ${p}
         OR LOWER(COALESCE(u.document, '')) LIKE ${p}
         OR LOWER(COALESCE(u.address, '')) LIKE ${p}
+        OR LOWER(COALESCE(u.zip_code, '')) LIKE ${p}
       )`;
     }
 
@@ -76,6 +77,7 @@ router.get('/', async (req, res) => {
          u.phone,
          u.document,
          u.address,
+         u.zip_code,
          u.google_id,
          u.created_date,
          u.updated_date,
@@ -117,6 +119,7 @@ router.get('/:id', async (req, res) => {
          u.phone,
          u.document,
          u.address,
+         u.zip_code,
          u.google_id,
          u.created_date,
          u.updated_date,
@@ -176,8 +179,14 @@ router.patch('/:id', async (req, res) => {
       return res.status(404).json({ message: 'Cliente não encontrado' });
     }
 
-    const { full_name, phone, document, address } = req.body;
-    if (full_name === undefined && phone === undefined && document === undefined && address === undefined) {
+    const { full_name, phone, document, address, zip_code } = req.body;
+    if (
+      full_name === undefined
+      && phone === undefined
+      && document === undefined
+      && address === undefined
+      && zip_code === undefined
+    ) {
       return res.status(400).json({ message: 'Nenhum dado para atualizar' });
     }
 
@@ -194,12 +203,15 @@ router.patch('/:id', async (req, res) => {
       push('document', String(document).replace(/\D/g, '').slice(0, 14) || null);
     }
     if (address !== undefined) push('address', String(address).trim() || null);
+    if (zip_code !== undefined) {
+      push('zip_code', String(zip_code).replace(/\D/g, '').slice(0, 8) || null);
+    }
 
     values.push(req.params.id);
     const updateResult = await pool.query(
       `UPDATE users SET ${sets.join(', ')}, updated_date = NOW()
        WHERE id = $${values.length} AND role = 'user'
-       RETURNING id, email, full_name, phone, document, address, google_id, created_date, updated_date`,
+       RETURNING id, email, full_name, phone, document, address, zip_code, google_id, created_date, updated_date`,
       values
     );
 
@@ -207,6 +219,42 @@ router.patch('/:id', async (req, res) => {
   } catch (err) {
     console.error('Erro ao atualizar cliente:', err);
     res.status(500).json({ message: 'Erro ao atualizar cliente' });
+  }
+});
+
+router.delete('/:id', async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT
+         u.id,
+         u.email,
+         COALESCE(os.orders_count, 0)::int AS orders_count
+       FROM users u
+       LEFT JOIN LATERAL (
+         SELECT COUNT(*)::int AS orders_count
+         FROM orders o
+         WHERE LOWER(o.customer_email) = LOWER(u.email)
+       ) os ON TRUE
+       WHERE u.id = $1 AND u.role = 'user'`,
+      [req.params.id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: 'Cliente não encontrado' });
+    }
+
+    const customer = result.rows[0];
+    if (Number(customer.orders_count) > 0) {
+      return res.status(400).json({
+        message: 'Não é permitido excluir clientes com vendas ou pedidos registrados',
+      });
+    }
+
+    await pool.query('DELETE FROM users WHERE id = $1 AND role = \'user\'', [req.params.id]);
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Erro ao excluir cliente:', err);
+    res.status(500).json({ message: 'Erro ao excluir cliente' });
   }
 });
 

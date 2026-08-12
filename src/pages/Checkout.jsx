@@ -98,6 +98,9 @@ export default function Checkout() {
       customer_email: user?.email || profile?.email || f.customer_email || '',
       customer_phone: profile?.phone || user?.phone || f.customer_phone || '',
       customer_document: profile?.document || user?.document || f.customer_document || '',
+      customer_zip_code: profile?.zip_code
+        ? String(profile.zip_code).replace(/\D/g, '').replace(/(\d{5})(\d{0,3})/, (_, a, b) => (b ? `${a}-${b}` : a))
+        : f.customer_zip_code || '',
     }));
   }, [profile, user]);
 

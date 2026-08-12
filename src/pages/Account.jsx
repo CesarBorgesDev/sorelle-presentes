@@ -8,6 +8,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { isProductAvailable } from '@/lib/productStock';
 import {
+  formatZipCodeInput,
+  onlyDigits,
+  profileIncompleteMessage,
+} from '@/lib/profile';
+import {
   ORDER_STATUS_LABELS,
   ORDER_STATUS_COLORS,
   PAYMENT_STATUS_LABELS,
@@ -38,8 +43,10 @@ function ProfileForm({ profile, onSaved }) {
     full_name: '',
     phone: '',
     document: '',
+    zip_code: '',
     address: '',
   });
+  const [formError, setFormError] = useState('');
 
   useEffect(() => {
     if (profile) {
@@ -47,6 +54,7 @@ function ProfileForm({ profile, onSaved }) {
         full_name: profile.full_name || '',
         phone: profile.phone || '',
         document: profile.document || '',
+        zip_code: formatZipCodeInput(profile.zip_code || ''),
         address: profile.address || '',
       });
     }
@@ -57,21 +65,46 @@ function ProfileForm({ profile, onSaved }) {
     onSuccess: (updated) => {
       queryClient.setQueryData(['account-profile'], updated);
       queryClient.invalidateQueries({ queryKey: ['auth-me'] });
+      setFormError('');
       onSaved?.(updated);
+    },
+    onError: (err) => {
+      setFormError(err?.message || 'Erro ao salvar');
     },
   });
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    saveMutation.mutate(form);
+    setFormError('');
+    const payload = {
+      email: profile?.email || '',
+      full_name: form.full_name.trim(),
+      phone: form.phone.trim(),
+      document: onlyDigits(form.document),
+      zip_code: onlyDigits(form.zip_code),
+      address: form.address.trim(),
+    };
+    const incomplete = profileIncompleteMessage(payload);
+    if (incomplete) {
+      setFormError(incomplete);
+      return;
+    }
+    saveMutation.mutate({
+      full_name: payload.full_name,
+      phone: payload.phone,
+      document: payload.document,
+      zip_code: payload.zip_code,
+      address: payload.address,
+    });
   };
 
   return (
     <form onSubmit={handleSubmit} className="p-5 space-y-4">
       <div>
-        <label className="block font-body text-xs text-muted-foreground mb-1.5">Nome completo</label>
+        <label className="block font-body text-xs text-muted-foreground mb-1.5">Nome completo *</label>
         <input
           type="text"
+          required
           value={form.full_name}
           onChange={(e) => setForm((f) => ({ ...f, full_name: e.target.value }))}
           className="w-full px-3 py-2 border border-border rounded-sm font-body text-sm bg-background"
@@ -79,9 +112,19 @@ function ProfileForm({ profile, onSaved }) {
         />
       </div>
       <div>
-        <label className="block font-body text-xs text-muted-foreground mb-1.5">Telefone</label>
+        <label className="block font-body text-xs text-muted-foreground mb-1.5">E-mail *</label>
+        <input
+          type="email"
+          value={profile?.email || ''}
+          disabled
+          className="w-full px-3 py-2 border border-border rounded-sm font-body text-sm bg-secondary text-muted-foreground"
+        />
+      </div>
+      <div>
+        <label className="block font-body text-xs text-muted-foreground mb-1.5">Telefone *</label>
         <input
           type="tel"
+          required
           value={form.phone}
           onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
           className="w-full px-3 py-2 border border-border rounded-sm font-body text-sm bg-background"
@@ -89,9 +132,10 @@ function ProfileForm({ profile, onSaved }) {
         />
       </div>
       <div>
-        <label className="block font-body text-xs text-muted-foreground mb-1.5">CPF / CNPJ</label>
+        <label className="block font-body text-xs text-muted-foreground mb-1.5">CPF *</label>
         <input
           type="text"
+          required
           value={form.document}
           onChange={(e) => setForm((f) => ({ ...f, document: e.target.value }))}
           className="w-full px-3 py-2 border border-border rounded-sm font-body text-sm bg-background"
@@ -99,8 +143,20 @@ function ProfileForm({ profile, onSaved }) {
         />
       </div>
       <div>
-        <label className="block font-body text-xs text-muted-foreground mb-1.5">Endereço</label>
+        <label className="block font-body text-xs text-muted-foreground mb-1.5">CEP *</label>
+        <input
+          type="text"
+          required
+          value={form.zip_code}
+          onChange={(e) => setForm((f) => ({ ...f, zip_code: formatZipCodeInput(e.target.value) }))}
+          className="w-full px-3 py-2 border border-border rounded-sm font-body text-sm bg-background"
+          placeholder="00000-000"
+        />
+      </div>
+      <div>
+        <label className="block font-body text-xs text-muted-foreground mb-1.5">Endereço *</label>
         <textarea
+          required
           value={form.address}
           onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))}
           rows={3}
@@ -108,12 +164,12 @@ function ProfileForm({ profile, onSaved }) {
           placeholder="Rua, número, bairro, cidade, UF"
         />
       </div>
-      {saveMutation.isError && (
+      {(formError || saveMutation.isError) && (
         <p className="font-body text-sm text-destructive">
-          {saveMutation.error?.message || 'Erro ao salvar'}
+          {formError || saveMutation.error?.message || 'Erro ao salvar'}
         </p>
       )}
-      {saveMutation.isSuccess && (
+      {saveMutation.isSuccess && !formError && (
         <p className="font-body text-sm text-emerald-600">Dados salvos com sucesso.</p>
       )}
       <Button type="submit" disabled={saveMutation.isPending} className="gap-2">

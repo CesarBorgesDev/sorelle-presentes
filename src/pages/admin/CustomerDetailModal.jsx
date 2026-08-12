@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ExternalLink, Loader2, X } from 'lucide-react';
+import { ExternalLink, Loader2, Trash2, X } from 'lucide-react';
 import { api } from '@/api/apiClient';
 import {
   ORDER_STATUS_LABELS,
@@ -14,6 +14,7 @@ import {
   getOrderDiscount,
   getOrderDiscountLabel,
 } from '@/lib/orderLabels';
+import { formatZipCodeInput } from '@/lib/profile';
 import { getOrderItemCatalogPath, getOrderItemCode } from '@/lib/orderItemDisplay';
 import OrderDetailModal from './OrderDetailModal';
 
@@ -132,7 +133,7 @@ function OrderPurchaseCard({ order, onOpen }) {
   );
 }
 
-export default function CustomerDetailModal({ customerId, onClose, onUpdated }) {
+export default function CustomerDetailModal({ customerId, onClose, onUpdated, onDeleted }) {
   const queryClient = useQueryClient();
   const [tab, setTab] = useState('compras');
   const [editing, setEditing] = useState(false);
@@ -141,6 +142,7 @@ export default function CustomerDetailModal({ customerId, onClose, onUpdated }) 
     full_name: '',
     phone: '',
     document: '',
+    zip_code: '',
     address: '',
   });
 
@@ -156,6 +158,7 @@ export default function CustomerDetailModal({ customerId, onClose, onUpdated }) 
       full_name: customer.full_name || '',
       phone: customer.phone || '',
       document: customer.document || '',
+      zip_code: formatZipCodeInput(customer.zip_code || ''),
       address: customer.address || '',
     });
     setEditing(false);
@@ -175,17 +178,41 @@ export default function CustomerDetailModal({ customerId, onClose, onUpdated }) 
     },
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: () => api.customers.delete(customerId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['customers'] });
+      onDeleted?.();
+      onClose?.();
+    },
+    onError: (err) => {
+      window.alert(err?.message || 'Não foi possível excluir o cliente.');
+    },
+  });
+
   const handleSave = (e) => {
     e.preventDefault();
     saveMutation.mutate({
       full_name: form.full_name,
       phone: form.phone,
       document: form.document,
+      zip_code: form.zip_code,
       address: form.address,
     });
   };
 
+  const handleDelete = () => {
+    if (Number(customer?.orders_count) > 0) {
+      window.alert('Não é permitido excluir clientes com vendas ou pedidos registrados.');
+      return;
+    }
+    const label = customer?.full_name || customer?.email || 'este cliente';
+    if (!window.confirm(`Excluir o cliente ${label}? Esta ação não pode ser desfeita.`)) return;
+    deleteMutation.mutate();
+  };
+
   const orders = Array.isArray(customer?.orders) ? customer.orders : [];
+  const canDelete = customer && Number(customer.orders_count) === 0;
 
   return (
     <>
@@ -286,6 +313,7 @@ export default function CustomerDetailModal({ customerId, onClose, onUpdated }) 
                       <Field label="E-mail">{customer.email}</Field>
                       <Field label="Telefone">{customer.phone}</Field>
                       <Field label="CPF/CNPJ">{customer.document_formatted || customer.document}</Field>
+                      <Field label="CEP">{customer.zip_code ? formatZipCodeInput(customer.zip_code) : '—'}</Field>
                       <div className="md:col-span-2">
                         <Field label="Endereço">{customer.address}</Field>
                       </div>
@@ -295,7 +323,22 @@ export default function CustomerDetailModal({ customerId, onClose, onUpdated }) 
                       <Field label="Pedidos pagos">{customer.orders_paid_count}</Field>
                     </div>
 
-                    <div className="flex justify-end">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      {canDelete ? (
+                        <button
+                          type="button"
+                          onClick={handleDelete}
+                          disabled={deleteMutation.isPending}
+                          className="inline-flex items-center gap-2 px-4 py-2.5 border border-destructive/40 text-destructive rounded-sm font-body text-sm hover:bg-destructive/10 disabled:opacity-50"
+                        >
+                          {deleteMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                          Excluir cliente
+                        </button>
+                      ) : (
+                        <p className="font-body text-xs text-muted-foreground">
+                          Clientes com pedidos não podem ser excluídos.
+                        </p>
+                      )}
                       <button
                         type="button"
                         onClick={() => setEditing(true)}
@@ -350,6 +393,16 @@ export default function CustomerDetailModal({ customerId, onClose, onUpdated }) 
                           className="w-full px-3 py-2.5 bg-background border border-border rounded-sm font-body text-sm focus:outline-none focus:ring-1 focus:ring-ring"
                         />
                       </div>
+                    </div>
+                    <div>
+                      <label className="block font-body text-xs text-muted-foreground tracking-wider uppercase mb-2">
+                        CEP
+                      </label>
+                      <input
+                        value={form.zip_code}
+                        onChange={(e) => setForm((f) => ({ ...f, zip_code: formatZipCodeInput(e.target.value) }))}
+                        className="w-full px-3 py-2.5 bg-background border border-border rounded-sm font-body text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                      />
                     </div>
                     <div>
                       <label className="block font-body text-xs text-muted-foreground tracking-wider uppercase mb-2">

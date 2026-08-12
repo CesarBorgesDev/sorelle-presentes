@@ -3,7 +3,12 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/api/apiClient';
 import { useAuth } from '@/lib/AuthContext';
-import { isProfileComplete } from '@/lib/profile';
+import {
+  formatZipCodeInput,
+  isProfileComplete,
+  onlyDigits,
+  profileIncompleteMessage,
+} from '@/lib/profile';
 import AuthLayout from '@/components/AuthLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -21,6 +26,7 @@ export default function CompletarCadastro() {
     full_name: '',
     phone: '',
     document: '',
+    zip_code: '',
     address: '',
   });
   const [error, setError] = useState('');
@@ -39,13 +45,15 @@ export default function CompletarCadastro() {
 
   useEffect(() => {
     if (!profile && !user) return;
+    const source = profile || user;
     setForm({
-      full_name: profile?.full_name || user?.full_name || '',
-      phone: profile?.phone || user?.phone || '',
-      document: profile?.document || user?.document || '',
-      address: profile?.address || user?.address || '',
+      full_name: source.full_name || '',
+      phone: source.phone || '',
+      document: source.document || '',
+      zip_code: formatZipCodeInput(source.zip_code || ''),
+      address: source.address || '',
     });
-    if (isProfileComplete(profile || user)) {
+    if (isProfileComplete({ ...source, email: source.email || user?.email })) {
       navigate(returnUrl.startsWith('/') ? returnUrl : '/checkout', { replace: true });
     }
   }, [profile, user, navigate, returnUrl]);
@@ -56,7 +64,7 @@ export default function CompletarCadastro() {
       queryClient.setQueryData(['account-profile'], updated);
       await checkUserAuth();
       if (!isProfileComplete(updated)) {
-        setError('Preencha nome, telefone e CPF/CNPJ para continuar.');
+        setError(profileIncompleteMessage(updated) || 'Preencha todos os campos obrigatórios.');
         return;
       }
       window.location.href = returnUrl.startsWith('/') ? returnUrl : '/checkout';
@@ -72,16 +80,25 @@ export default function CompletarCadastro() {
     e.preventDefault();
     setError('');
     const payload = {
+      email: user?.email || profile?.email || '',
       full_name: form.full_name.trim(),
       phone: form.phone.trim(),
-      document: form.document.replace(/\D/g, ''),
-      address: form.address.trim() || null,
+      document: onlyDigits(form.document),
+      zip_code: onlyDigits(form.zip_code),
+      address: form.address.trim(),
     };
-    if (!isProfileComplete(payload)) {
-      setError('Preencha nome, telefone e CPF/CNPJ para continuar.');
+    const incomplete = profileIncompleteMessage(payload);
+    if (incomplete) {
+      setError(incomplete);
       return;
     }
-    mutation.mutate(payload);
+    mutation.mutate({
+      full_name: payload.full_name,
+      phone: payload.phone,
+      document: payload.document,
+      zip_code: payload.zip_code,
+      address: payload.address,
+    });
   };
 
   if (isLoadingAuth || profileLoading) {
@@ -96,7 +113,7 @@ export default function CompletarCadastro() {
     <AuthLayout
       icon={UserRound}
       title="Complete seu cadastro"
-      subtitle="Precisamos dos seus dados para finalizar pedidos"
+      subtitle="Preencha Nome, Endereço, Telefone, CEP e CPF para continuar"
       footer={
         <>
           <Link to="/conta" className="text-primary font-medium hover:underline">
@@ -130,35 +147,47 @@ export default function CompletarCadastro() {
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="phone">Telefone / WhatsApp *</Label>
+          <Label htmlFor="phone">Telefone *</Label>
           <Input
             id="phone"
             value={form.phone}
             onChange={(e) => set('phone', e.target.value)}
-            placeholder="11999999999"
+            placeholder="(11) 99999-9999"
             className="h-12"
             required
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="document">CPF ou CNPJ *</Label>
+          <Label htmlFor="document">CPF *</Label>
           <Input
             id="document"
             value={form.document}
             onChange={(e) => set('document', e.target.value)}
-            placeholder="00000000000"
+            placeholder="000.000.000-00"
             className="h-12"
             required
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="address">Endereço (opcional)</Label>
+          <Label htmlFor="zip_code">CEP *</Label>
+          <Input
+            id="zip_code"
+            value={form.zip_code}
+            onChange={(e) => set('zip_code', formatZipCodeInput(e.target.value))}
+            placeholder="00000-000"
+            className="h-12"
+            required
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="address">Endereço *</Label>
           <Input
             id="address"
             value={form.address}
             onChange={(e) => set('address', e.target.value)}
-            placeholder="Rua, número, bairro, cidade"
+            placeholder="Rua, número, bairro, cidade, UF"
             className="h-12"
+            required
           />
         </div>
         <Button type="submit" className="w-full h-12 font-medium" disabled={mutation.isPending}>

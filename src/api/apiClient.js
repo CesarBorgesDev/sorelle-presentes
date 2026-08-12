@@ -238,10 +238,10 @@ const auth = {
     return result;
   },
 
-  async register({ email, password }) {
+  async register(data) {
     const result = await apiFetch('/auth/register', {
       method: 'POST',
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify(data),
     });
     setToken(result.access_token);
     return result;
@@ -615,6 +615,10 @@ const customersApi = {
       method: 'PATCH',
       body: JSON.stringify(data),
     });
+  },
+
+  delete(id) {
+    return apiFetch(`/customers/${id}`, { method: 'DELETE' });
   },
 };
 

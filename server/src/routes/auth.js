@@ -10,6 +10,11 @@ import {
   getGoogleProfileFromCode,
   isProfileComplete,
 } from '../services/googleAuth.js';
+import {
+  normalizeDocument,
+  normalizeZipCode,
+  profileIncompleteMessage,
+} from '../utils/userProfile.js';
 
 const router = Router();
 
@@ -22,6 +27,7 @@ function publicUser(row) {
     phone: row.phone,
     document: row.document,
     address: row.address,
+    zip_code: row.zip_code,
     google_id: row.google_id || null,
     created_date: row.created_date,
   });
@@ -34,7 +40,7 @@ function frontendRedirect(path) {
 
 async function findOrCreateGoogleUser(profile) {
   const byGoogle = await pool.query(
-    `SELECT id, email, role, full_name, phone, document, address, google_id, created_date
+    `SELECT id, email, role, full_name, phone, document, address, zip_code, google_id, created_date
      FROM users WHERE google_id = $1`,
     [profile.googleId]
   );
@@ -43,7 +49,7 @@ async function findOrCreateGoogleUser(profile) {
   }
 
   const byEmail = await pool.query(
-    `SELECT id, email, role, full_name, phone, document, address, google_id, created_date
+    `SELECT id, email, role, full_name, phone, document, address, zip_code, google_id, created_date
      FROM users WHERE LOWER(email) = LOWER($1)`,
     [profile.email]
   );
@@ -55,7 +61,7 @@ async function findOrCreateGoogleUser(profile) {
            full_name = COALESCE(NULLIF(TRIM(full_name), ''), $2),
            updated_date = NOW()
        WHERE id = $3
-       RETURNING id, email, role, full_name, phone, document, address, google_id, created_date`,
+       RETURNING id, email, role, full_name, phone, document, address, zip_code, google_id, created_date`,
       [profile.googleId, profile.fullName, byEmail.rows[0].id]
     );
     return linked.rows[0];
@@ -64,7 +70,7 @@ async function findOrCreateGoogleUser(profile) {
   const created = await pool.query(
     `INSERT INTO users (email, password_hash, role, full_name, google_id)
      VALUES ($1, NULL, 'user', $2, $3)
-     RETURNING id, email, role, full_name, phone, document, address, google_id, created_date`,
+     RETURNING id, email, role, full_name, phone, document, address, zip_code, google_id, created_date`,
     [profile.email, profile.fullName, profile.googleId]
   );
   return created.rows[0];
@@ -72,7 +78,16 @@ async function findOrCreateGoogleUser(profile) {
 
 router.post('/register', async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const {
+      email,
+      password,
+      full_name,
+      phone,
+      document,
+      address,
+      zip_code,
+    } = req.body;
+
     if (!email || !password) {
       return res.status(400).json({ message: 'E-mail e senha são obrigatórios' });
     }
@@ -80,17 +95,39 @@ router.post('/register', async (req, res) => {
       return res.status(400).json({ message: 'A senha deve ter pelo menos 6 caracteres' });
     }
 
-    const existing = await pool.query('SELECT id FROM users WHERE email = $1', [email.toLowerCase()]);
+    const profileDraft = {
+      email: String(email).trim().toLowerCase(),
+      full_name: String(full_name || '').trim(),
+      phone: String(phone || '').trim(),
+      document: normalizeDocument(document),
+      address: String(address || '').trim(),
+      zip_code: normalizeZipCode(zip_code),
+    };
+
+    const incomplete = profileIncompleteMessage(profileDraft);
+    if (incomplete) {
+      return res.status(400).json({ message: incomplete });
+    }
+
+    const existing = await pool.query('SELECT id FROM users WHERE email = $1', [profileDraft.email]);
     if (existing.rows.length > 0) {
       return res.status(409).json({ message: 'Este e-mail já está cadastrado' });
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
     const result = await pool.query(
-      `INSERT INTO users (email, password_hash, role)
-       VALUES ($1, $2, $3)
-       RETURNING id, email, role, full_name, phone, document, address, google_id, created_date`,
-      [email.toLowerCase(), passwordHash, 'user']
+      `INSERT INTO users (email, password_hash, role, full_name, phone, document, address, zip_code)
+       VALUES ($1, $2, 'user', $3, $4, $5, $6, $7)
+       RETURNING id, email, role, full_name, phone, document, address, zip_code, google_id, created_date`,
+      [
+        profileDraft.email,
+        passwordHash,
+        profileDraft.full_name,
+        profileDraft.phone,
+        profileDraft.document,
+        profileDraft.address,
+        profileDraft.zip_code,
+      ]
     );
 
     const user = publicUser(result.rows[0]);
@@ -115,7 +152,7 @@ router.post('/login', async (req, res) => {
     }
 
     const result = await pool.query(
-      `SELECT id, email, password_hash, role, full_name, phone, document, address, google_id, created_date
+      `SELECT id, email, password_hash, role, full_name, phone, document, address, zip_code, google_id, created_date
        FROM users WHERE email = $1`,
       [email.toLowerCase()]
     );
@@ -203,7 +240,7 @@ router.get('/google/callback', async (req, res) => {
 router.get('/me', requireAuth, async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT id, email, role, full_name, phone, document, address, google_id, created_date
+      `SELECT id, email, role, full_name, phone, document, address, zip_code, google_id, created_date
        FROM users WHERE id = $1`,
       [req.user.id]
     );

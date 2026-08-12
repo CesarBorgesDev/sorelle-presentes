@@ -1,8 +1,21 @@
-/** Perfil mínimo para checkout / pedidos / cadastro. */
 export function onlyDigits(value) {
   return String(value || '').replace(/\D/g, '');
 }
 
+export function normalizeZipCode(value) {
+  const digits = onlyDigits(value).slice(0, 8);
+  return digits || null;
+}
+
+export function normalizeDocument(value) {
+  const digits = onlyDigits(value).slice(0, 14);
+  return digits || null;
+}
+
+/**
+ * Campos obrigatórios do cadastro de cliente:
+ * Nome, Endereço, Telefone, E-mail, CEP e CPF.
+ */
 export function getMissingProfileFields(user, { requireEmail = true } = {}) {
   if (!user) {
     return ['Nome', 'Endereço', 'Telefone', 'E-mail', 'CEP', 'CPF'];
@@ -29,19 +42,4 @@ export function profileIncompleteMessage(user, options) {
   const missing = getMissingProfileFields(user, options);
   if (missing.length === 0) return null;
   return `Preencha os campos obrigatórios: ${missing.join(', ')}.`;
-}
-
-export function formatZipCodeInput(value) {
-  const digits = onlyDigits(value).slice(0, 8);
-  if (digits.length <= 5) return digits;
-  return `${digits.slice(0, 5)}-${digits.slice(5)}`;
-}
-
-export function completarCadastroUrl(returnUrl = '/') {
-  const params = new URLSearchParams();
-  if (returnUrl && returnUrl !== '/') {
-    params.set('returnUrl', returnUrl);
-  }
-  const qs = params.toString();
-  return qs ? `/completar-cadastro?${qs}` : '/completar-cadastro';
 }
