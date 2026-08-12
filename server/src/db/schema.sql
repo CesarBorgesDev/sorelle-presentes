@@ -331,3 +331,13 @@ CREATE INDEX IF NOT EXISTS idx_stock_movements_product_date
   ON stock_movements(product_id, created_date DESC);
 CREATE INDEX IF NOT EXISTS idx_stock_movements_order
   ON stock_movements(order_id);
+
+CREATE TABLE IF NOT EXISTS site_visits (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  visitor_key VARCHAR(64) NOT NULL,
+  path TEXT,
+  created_date TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_site_visits_created ON site_visits(created_date DESC);
+CREATE INDEX IF NOT EXISTS idx_site_visits_visitor_created ON site_visits(visitor_key, created_date DESC);

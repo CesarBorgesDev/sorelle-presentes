@@ -3,6 +3,7 @@ import { getCieloConfig } from './cieloConfig.js';
 import { getSipagConfig, getPaymentGateway, PAYMENT_GATEWAYS } from './sipagConfig.js';
 import { getMercadoPagoConfig } from './mercadoPagoConfig.js';
 import { getInstallmentScale, resolveMaxInstallments } from './installmentScale.js';
+import { getInstallmentInterestRates } from './installmentInterest.js';
 
 export const PAYMENT_METHOD_DEFS = {
   pix: {
@@ -245,12 +246,14 @@ export async function getPublicPaymentConditions() {
   const cieloConfig = await getCieloConfig();
   const enabledMethods = await getEnabledPaymentMethodIds();
   const pixDiscountPercent = await getPixDiscountPercent();
+  const installmentInterestRates = await getInstallmentInterestRates();
   const installmentScale = await getInstallmentScale();
   const absoluteMax = cieloConfig.maxInstallments;
 
   return {
     max_installments: absoluteMax,
     installment_scale: installmentScale,
+    installment_interest_rates: installmentInterestRates,
     pix_discount_percent: pixDiscountPercent,
     checkout_method: await getCheckoutPaymentMethod(),
     payment_methods_enabled: enabledMethods,

@@ -10,6 +10,10 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { PRODUCT_SORT_OPTIONS } from '@/hooks/useProductSort';
 import { DEFAULT_INSTALLMENT_SCALE, normalizeInstallmentScale } from '@/lib/installmentScale';
+import {
+  DEFAULT_INSTALLMENT_INTEREST_RATES,
+  normalizeInstallmentInterestRates,
+} from '@/lib/installmentInterest';
 
 const MODELS = [
   { value: 'flux', label: 'Flux (fallback texto — gratuito)' },
@@ -92,6 +96,9 @@ export default function AdminSettings() {
   const [pixKey, setPixKey] = useState('');
   const [pixHolderName, setPixHolderName] = useState('');
   const [pixDiscountPercent, setPixDiscountPercent] = useState('0');
+  const [installmentInterestRates, setInstallmentInterestRates] = useState(() => (
+    DEFAULT_INSTALLMENT_INTEREST_RATES.map((tier) => ({ ...tier }))
+  ));
   const [installmentScale, setInstallmentScale] = useState(() => (
     DEFAULT_INSTALLMENT_SCALE.map((tier) => ({ ...tier }))
   ));
@@ -173,6 +180,9 @@ export default function AdminSettings() {
       setPaymentGateway(data.payment.payment_gateway || 'cielo');
       setPixHolderName(data.payment.pix_holder_name || '');
       setPixDiscountPercent(String(data.payment.pix_discount_percent ?? 0));
+      setInstallmentInterestRates(
+        normalizeInstallmentInterestRates(data.payment.installment_interest_rates)
+      );
       if (data.payment.max_installments) {
         setCieloMaxInstallments(String(data.payment.max_installments));
       }
@@ -391,6 +401,7 @@ export default function AdminSettings() {
       payment_methods_enabled: enabledPaymentMethods,
       pix_holder_name: pixHolderName.trim(),
       pix_discount_percent: pixDiscountPercent,
+      installment_interest_rates: normalizeInstallmentInterestRates(installmentInterestRates),
       installment_scale: normalizeInstallmentScale(installmentScale),
       correios_origin_zip: correiosOriginZip.replace(/\D/g, ''),
       correios_sender_name: correiosSenderName.trim(),
@@ -713,7 +724,7 @@ export default function AdminSettings() {
               <div>
                 <h3 className="font-display text-base tracking-wide text-foreground">Condições na loja</h3>
                 <p className="font-body text-xs text-muted-foreground mt-1">
-                  Escala de parcelamento por valor, teto do gateway e desconto PIX.
+                  Escala de parcelamento por valor, juros, teto do gateway e desconto PIX.
                 </p>
               </div>
 
@@ -833,6 +844,48 @@ export default function AdminSettings() {
                   <p className="font-body text-xs text-muted-foreground mt-1">
                     0 = sem desconto. Aplicado sobre os produtos no checkout PIX.
                   </p>
+                </div>
+              </div>
+
+              <div>
+                <label className={labelClass}>Taxa de juros por parcelamento (%)</label>
+                <p className="font-body text-xs text-muted-foreground mb-3">
+                  Informe o acréscimo percentual para cada opção de 1x a 10x. 0 = sem juros naquela parcela.
+                  Ex.: 3x com 5% → total = valor × 1,05 ÷ 3.
+                </p>
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                  {normalizeInstallmentInterestRates(installmentInterestRates).map((tier) => (
+                    <div key={tier.installments} className="p-3 border border-border rounded-sm bg-background">
+                      <label className={labelClass}>{tier.installments}x</label>
+                      <div className="relative">
+                        <input
+                          type="number"
+                          min={0}
+                          max={100}
+                          step={0.01}
+                          className={inputClass}
+                          value={tier.interest_percent}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            setInstallmentInterestRates((prev) => {
+                              const next = normalizeInstallmentInterestRates(prev).map((item) => (
+                                item.installments === tier.installments
+                                  ? {
+                                    ...item,
+                                    interest_percent: value === '' ? 0 : Number(value),
+                                  }
+                                  : item
+                              ));
+                              return next;
+                            });
+                          }}
+                        />
+                        <span className="absolute right-3 top-1/2 -translate-y-1/2 font-body text-xs text-muted-foreground">
+                          %
+                        </span>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>

@@ -596,6 +596,19 @@ const ordersApi = {
   },
 };
 
+const analyticsApi = {
+  trackVisit(data) {
+    return apiFetch('/analytics/visit', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  visitors() {
+    return apiFetch('/analytics/visitors');
+  },
+};
+
 const customersApi = {
   list({ q = '', sort = '-created_date', limit = 200 } = {}) {
     const params = new URLSearchParams({
@@ -702,6 +715,7 @@ export const api = {
   account,
   products: productsApi,
   orders: ordersApi,
+  analytics: analyticsApi,
   customers: customersApi,
   productKits: productKitsApi,
   brands: brandsApi,

@@ -1,7 +1,7 @@
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/api/apiClient';
-import { Package, ShoppingBag, TrendingUp, Clock } from 'lucide-react';
+import { Package, ShoppingBag, TrendingUp, Clock, Users, CalendarDays, CalendarRange, Calendar } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 const statusColors = {
@@ -24,6 +24,11 @@ export default function AdminDashboard() {
     queryFn: () => api.orders.stats(),
   });
 
+  const { data: visitorStats } = useQuery({
+    queryKey: ['analytics-visitors'],
+    queryFn: () => api.analytics.visitors(),
+  });
+
   const { data: recentOrders = [] } = useQuery({
     queryKey: ['orders-recent'],
     queryFn: () => api.entities.Order.list('-created_date', 5),
@@ -41,6 +46,13 @@ export default function AdminDashboard() {
     { label: 'Pedidos Pendentes', value: pendingOrders, icon: Clock, color: 'text-yellow-600' },
   ];
 
+  const visitorCards = [
+    { label: 'Visitantes no dia', value: visitorStats?.day ?? 0, icon: Users, color: 'text-sky-600' },
+    { label: 'Visitantes na semana', value: visitorStats?.week ?? 0, icon: CalendarDays, color: 'text-violet-600' },
+    { label: 'Visitantes no mês', value: visitorStats?.month ?? 0, icon: CalendarRange, color: 'text-teal-600' },
+    { label: 'Visitantes no ano', value: visitorStats?.year ?? 0, icon: Calendar, color: 'text-rose-600' },
+  ];
+
   return (
     <div>
       <div className="mb-8">
@@ -48,8 +60,20 @@ export default function AdminDashboard() {
         <p className="font-body text-muted-foreground mt-1">Visão geral da loja Sorelle</p>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
         {stats.map(({ label, value, icon: Icon, color }) => (
+          <div key={label} className="bg-card border border-border rounded-sm p-5">
+            <div className="flex items-center justify-between mb-3">
+              <p className="font-body text-xs text-muted-foreground tracking-wider uppercase">{label}</p>
+              <Icon className={`w-4 h-4 ${color}`} />
+            </div>
+            <p className="font-display text-2xl text-foreground">{value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        {visitorCards.map(({ label, value, icon: Icon, color }) => (
           <div key={label} className="bg-card border border-border rounded-sm p-5">
             <div className="flex items-center justify-between mb-3">
               <p className="font-body text-xs text-muted-foreground tracking-wider uppercase">{label}</p>

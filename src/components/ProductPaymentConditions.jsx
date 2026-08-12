@@ -4,15 +4,15 @@ import { CreditCard, QrCode } from 'lucide-react';
 import { api } from '@/api/apiClient';
 import { formatMoney } from '@/lib/orderLabels';
 import { resolveMaxInstallments } from '@/lib/installmentScale';
+import {
+  calcInstallmentAmount,
+  calcInstallmentTotal,
+  getInterestPercentForInstallments,
+} from '@/lib/installmentInterest';
 
 function calcPixPrice(price, discountPercent) {
   if (!discountPercent || discountPercent <= 0) return null;
   return Number(price) * (1 - discountPercent / 100);
-}
-
-function calcInstallmentValue(price, installments) {
-  if (!installments || installments < 2) return null;
-  return Number(price) / installments;
 }
 
 export default function ProductPaymentConditions({ price, originalPrice }) {
@@ -24,6 +24,7 @@ export default function ProductPaymentConditions({ price, originalPrice }) {
 
   if (!price) return null;
 
+  const interestRates = conditions?.installment_interest_rates;
   const maxInstallments = conditions?.shows_installments
     ? resolveMaxInstallments(
       price,
@@ -32,8 +33,12 @@ export default function ProductPaymentConditions({ price, originalPrice }) {
     )
     : 1;
 
+  const interestPercent = getInterestPercentForInstallments(interestRates, maxInstallments);
   const installmentValue = conditions?.shows_installments && maxInstallments >= 2
-    ? calcInstallmentValue(price, maxInstallments)
+    ? calcInstallmentAmount(price, maxInstallments, interestRates)
+    : null;
+  const installmentTotal = installmentValue != null
+    ? calcInstallmentTotal(price, maxInstallments, interestRates)
     : null;
   const pixPrice = conditions?.shows_pix_discount
     ? calcPixPrice(price, conditions.pix_discount_percent)
@@ -50,8 +55,15 @@ export default function ProductPaymentConditions({ price, originalPrice }) {
             <span className="text-primary">{formatMoney(installmentValue)}</span>
           </p>
           <p className="font-body text-sm text-muted-foreground mt-1">
-            sem juros no cartão de crédito
+            {interestPercent > 0
+              ? `com juros de ${interestPercent}% no cartão de crédito`
+              : 'sem juros no cartão de crédito'}
           </p>
+          {interestPercent > 0 && installmentTotal != null && (
+            <p className="font-body text-xs text-muted-foreground mt-0.5">
+              Total parcelado: {formatMoney(installmentTotal)}
+            </p>
+          )}
         </div>
       ) : (
         <div className="flex items-center gap-3 mb-4">

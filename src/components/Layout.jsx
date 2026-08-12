@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
-import { Outlet } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import { Outlet, useLocation } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { cartApi } from '@/lib/cartApi';
 import { useAuth } from '@/lib/AuthContext';
+import { trackSiteVisit } from '@/lib/siteAnalytics';
 import Navbar from './Navbar';
 import Footer from './Footer';
 import CartDrawer from './CartDrawer';
@@ -10,6 +11,11 @@ import CartDrawer from './CartDrawer';
 export default function Layout() {
   const [cartOpen, setCartOpen] = useState(false);
   const { isAuthenticated, authChecked } = useAuth();
+  const location = useLocation();
+
+  useEffect(() => {
+    trackSiteVisit(location.pathname);
+  }, [location.pathname]);
 
   const { data: cartItems = [] } = useQuery({
     queryKey: ['cart', isAuthenticated],
