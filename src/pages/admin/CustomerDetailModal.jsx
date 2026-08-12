@@ -255,6 +255,11 @@ export default function CustomerDetailModal({ customerId, onClose, onUpdated, on
                       Login Google
                     </span>
                   )}
+                  {customer.data_from_last_order && (
+                    <span className="text-xs px-3 py-1 rounded-full font-body bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300">
+                      Dados complementados pela última compra
+                    </span>
+                  )}
                   <span className="text-xs px-3 py-1 rounded-full font-body bg-secondary text-muted-foreground">
                     {customer.orders_count} compra(s)
                   </span>

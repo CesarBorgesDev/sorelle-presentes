@@ -7,6 +7,7 @@ import {
   normalizeZipCode,
   profileIncompleteMessage,
 } from '../utils/userProfile.js';
+import { enrichCustomerFromLastOrder } from '../utils/enrichCustomerFromOrder.js';
 
 const router = Router();
 
@@ -24,7 +25,19 @@ router.get('/profile', async (req, res) => {
     if (result.rows.length === 0) {
       return res.status(404).json({ message: 'Usuário não encontrado' });
     }
-    res.json(rowToEntity(result.rows[0]));
+
+    const profile = rowToEntity(result.rows[0]);
+    const lastOrderResult = await pool.query(
+      `SELECT customer_name, customer_phone, customer_address, notes
+       FROM orders
+       WHERE LOWER(customer_email) = LOWER($1)
+       ORDER BY created_date DESC
+       LIMIT 1`,
+      [profile.email]
+    );
+
+    const enriched = enrichCustomerFromLastOrder(profile, lastOrderResult.rows[0] || null);
+    res.json(enriched);
   } catch (err) {
     console.error('Erro ao buscar perfil:', err);
     res.status(500).json({ message: 'Erro ao carregar perfil' });

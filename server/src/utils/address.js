@@ -62,6 +62,14 @@ export function extractZipFromNotes(notes) {
 }
 
 /**
+ * Extrai CPF/CNPJ de notes do pedido (ex.: "CPF: 12345678901 | CEP: ...").
+ */
+export function extractDocumentFromNotes(notes) {
+  const match = String(notes || '').match(/CPF:\s*(\d{11}|\d{14})/i);
+  return match ? match[1].replace(/\D/g, '') : '';
+}
+
+/**
  * Interpreta o texto gerado por buildAddressString:
  * "Rua, nº 123, Complemento?, Bairro, Cidade, UF"
  * (complemento opcional — o parser antigo deslocava cidade/UF quando faltava).

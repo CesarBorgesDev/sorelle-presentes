@@ -128,11 +128,18 @@ export default function AdminCustomers() {
                         {customer.full_name || 'Sem nome'}
                       </p>
                       <p className="font-body text-xs text-muted-foreground mt-0.5">{customer.email}</p>
-                      {customer.has_google && (
-                        <span className="inline-block mt-1 text-[10px] px-2 py-0.5 rounded-full font-body bg-blue-100 text-blue-800 dark:bg-blue-500/15 dark:text-blue-300">
-                          Google
-                        </span>
-                      )}
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {customer.has_google && (
+                          <span className="inline-block text-[10px] px-2 py-0.5 rounded-full font-body bg-blue-100 text-blue-800 dark:bg-blue-500/15 dark:text-blue-300">
+                            Google
+                          </span>
+                        )}
+                        {customer.data_from_last_order && (
+                          <span className="inline-block text-[10px] px-2 py-0.5 rounded-full font-body bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300">
+                            Última compra
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-6 py-4">
                       <p className="font-body text-sm text-foreground">{customer.phone || '—'}</p>

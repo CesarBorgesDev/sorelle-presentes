@@ -2,6 +2,7 @@ import { Router } from 'express';
 import pool from '../config/db.js';
 import { requireAuth, requireAdmin } from '../middleware/auth.js';
 import { rowToEntity, rowsToEntities } from '../utils/helpers.js';
+import { enrichCustomerFromLastOrder } from '../utils/enrichCustomerFromOrder.js';
 
 const router = Router();
 
@@ -20,17 +21,59 @@ function formatDocument(doc) {
 
 function toCustomer(row) {
   const entity = rowToEntity(row);
-  const { google_id, ...rest } = entity;
-  return {
+  const {
+    google_id,
+    last_order_customer_name,
+    last_order_customer_phone,
+    last_order_customer_address,
+    last_order_notes,
+    ...rest
+  } = entity;
+
+  const base = {
     ...rest,
-    document_formatted: formatDocument(rest.document),
     has_google: Boolean(google_id),
     orders_count: Number(rest.orders_count) || 0,
     orders_paid_count: Number(rest.orders_paid_count) || 0,
     orders_total: Number(rest.orders_total) || 0,
     last_order_date: rest.last_order_date || null,
   };
+
+  const enriched = enrichCustomerFromLastOrder(base, {
+    customer_name: last_order_customer_name,
+    customer_phone: last_order_customer_phone,
+    customer_address: last_order_customer_address,
+    notes: last_order_notes,
+  });
+
+  return {
+    ...enriched,
+    document_formatted: formatDocument(enriched.document),
+  };
 }
+
+const LAST_ORDER_LATERAL = `
+  LEFT JOIN LATERAL (
+    SELECT
+      COUNT(*)::int AS orders_count,
+      COUNT(*) FILTER (WHERE o.payment_status = 'pago')::int AS orders_paid_count,
+      COALESCE(SUM(o.total) FILTER (WHERE o.payment_status = 'pago'), 0)::float AS orders_total,
+      MAX(o.created_date) AS last_order_date
+    FROM orders o
+    WHERE LOWER(o.customer_email) = LOWER(u.email)
+  ) os ON TRUE
+  LEFT JOIN LATERAL (
+    SELECT
+      o.customer_name AS last_order_customer_name,
+      o.customer_phone AS last_order_customer_phone,
+      o.customer_address AS last_order_customer_address,
+      o.notes AS last_order_notes
+    FROM orders o
+    WHERE LOWER(o.customer_email) = LOWER(u.email)
+    ORDER BY o.created_date DESC
+    LIMIT 1
+  ) lo ON TRUE
+`;
 
 router.get('/', async (req, res) => {
   try {
@@ -84,17 +127,13 @@ router.get('/', async (req, res) => {
          COALESCE(os.orders_count, 0)::int AS orders_count,
          COALESCE(os.orders_paid_count, 0)::int AS orders_paid_count,
          COALESCE(os.orders_total, 0)::float AS orders_total,
-         os.last_order_date
+         os.last_order_date,
+         lo.last_order_customer_name,
+         lo.last_order_customer_phone,
+         lo.last_order_customer_address,
+         lo.last_order_notes
        FROM users u
-       LEFT JOIN LATERAL (
-         SELECT
-           COUNT(*)::int AS orders_count,
-           COUNT(*) FILTER (WHERE o.payment_status = 'pago')::int AS orders_paid_count,
-           COALESCE(SUM(o.total) FILTER (WHERE o.payment_status = 'pago'), 0)::float AS orders_total,
-           MAX(o.created_date) AS last_order_date
-         FROM orders o
-         WHERE LOWER(o.customer_email) = LOWER(u.email)
-       ) os ON TRUE
+       ${LAST_ORDER_LATERAL}
        WHERE u.role = 'user'
        ${searchSql}
        ORDER BY ${sortColumn} ${direction} NULLS LAST
@@ -126,17 +165,13 @@ router.get('/:id', async (req, res) => {
          COALESCE(os.orders_count, 0)::int AS orders_count,
          COALESCE(os.orders_paid_count, 0)::int AS orders_paid_count,
          COALESCE(os.orders_total, 0)::float AS orders_total,
-         os.last_order_date
+         os.last_order_date,
+         lo.last_order_customer_name,
+         lo.last_order_customer_phone,
+         lo.last_order_customer_address,
+         lo.last_order_notes
        FROM users u
-       LEFT JOIN LATERAL (
-         SELECT
-           COUNT(*)::int AS orders_count,
-           COUNT(*) FILTER (WHERE o.payment_status = 'pago')::int AS orders_paid_count,
-           COALESCE(SUM(o.total) FILTER (WHERE o.payment_status = 'pago'), 0)::float AS orders_total,
-           MAX(o.created_date) AS last_order_date
-         FROM orders o
-         WHERE LOWER(o.customer_email) = LOWER(u.email)
-       ) os ON TRUE
+       ${LAST_ORDER_LATERAL}
        WHERE u.id = $1 AND u.role = 'user'`,
       [req.params.id]
     );
