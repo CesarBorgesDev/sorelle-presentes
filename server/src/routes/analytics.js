@@ -2,10 +2,12 @@ import { Router } from 'express';
 import crypto from 'crypto';
 import pool from '../config/db.js';
 import { requireAuth, requireAdmin } from '../middleware/auth.js';
+import { getClientIp, lookupGeo } from '../services/geoip.js';
 
 const router = Router();
 
 const TZ = 'America/Sao_Paulo';
+const PRODUCT_PATH_RE = /^\/produto\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
 
 function normalizeVisitorKey(raw) {
   const key = String(raw || '').trim().slice(0, 64);
@@ -20,6 +22,11 @@ function normalizePath(raw) {
   return path;
 }
 
+function extractProductId(path) {
+  const match = String(path || '').match(PRODUCT_PATH_RE);
+  return match ? match[1].toLowerCase() : null;
+}
+
 /** Registra visita da loja (público). Deduplica por visitante a cada 30 min. */
 router.post('/visit', async (req, res) => {
   try {
@@ -29,6 +36,7 @@ router.post('/visit', async (req, res) => {
       return res.json({ ok: true, skipped: true });
     }
 
+    const productId = extractProductId(path);
     const recent = await pool.query(
       `SELECT id FROM site_visits
        WHERE visitor_key = $1
@@ -37,16 +45,44 @@ router.post('/visit', async (req, res) => {
       [visitorKey]
     );
 
-    if (recent.rows.length > 0) {
-      return res.json({ ok: true, visitor_key: visitorKey, counted: false });
+    const tasks = [];
+    let counted = false;
+
+    if (recent.rows.length === 0) {
+      const geo = await lookupGeo(getClientIp(req));
+      tasks.push(pool.query(
+        `INSERT INTO site_visits (visitor_key, path, country, region, city)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [visitorKey, path, geo.country, geo.region, geo.city]
+      ));
+      counted = true;
     }
 
-    await pool.query(
-      `INSERT INTO site_visits (visitor_key, path) VALUES ($1, $2)`,
-      [visitorKey, path]
-    );
+    if (productId) {
+      const [recentProduct, product] = await Promise.all([
+        pool.query(
+          `SELECT id FROM product_views
+           WHERE visitor_key = $1 AND product_id = $2
+             AND created_date > NOW() - INTERVAL '30 minutes'
+           LIMIT 1`,
+          [visitorKey, productId]
+        ),
+        pool.query('SELECT id FROM products WHERE id = $1 LIMIT 1', [productId]),
+      ]);
 
-    res.json({ ok: true, visitor_key: visitorKey, counted: true });
+      if (recentProduct.rows.length === 0 && product.rows.length > 0) {
+        tasks.push(pool.query(
+          `INSERT INTO product_views (visitor_key, product_id) VALUES ($1, $2)`,
+          [visitorKey, productId]
+        ));
+      }
+    }
+
+    if (tasks.length > 0) {
+      await Promise.all(tasks);
+    }
+
+    res.json({ ok: true, visitor_key: visitorKey, counted });
   } catch (err) {
     console.error('Erro ao registrar visita:', err);
     res.status(500).json({ message: 'Erro ao registrar visita' });
@@ -84,6 +120,54 @@ router.get('/visitors', requireAuth, requireAdmin, async (_req, res) => {
   } catch (err) {
     console.error('Erro ao buscar visitantes:', err);
     res.status(500).json({ message: 'Erro ao buscar visitantes' });
+  }
+});
+
+/** Origem geográfica dos acessos (últimos 30 dias). */
+router.get('/origins', requireAuth, requireAdmin, async (_req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT
+         COALESCE(NULLIF(TRIM(city), ''), 'Não identificado') AS city,
+         COALESCE(NULLIF(TRIM(region), ''), '') AS region,
+         COALESCE(NULLIF(TRIM(country), ''), '') AS country,
+         COUNT(DISTINCT visitor_key)::int AS visitors
+       FROM site_visits
+       WHERE created_date >= NOW() - INTERVAL '30 days'
+       GROUP BY 1, 2, 3
+       ORDER BY visitors DESC, city ASC
+       LIMIT 12`
+    );
+
+    res.json(result.rows);
+  } catch (err) {
+    console.error('Erro ao buscar origem dos acessos:', err);
+    res.status(500).json({ message: 'Erro ao buscar origem dos acessos' });
+  }
+});
+
+/** Produtos mais visitados (últimos 30 dias). */
+router.get('/top-products', requireAuth, requireAdmin, async (_req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT
+         p.id,
+         p.name,
+         p.image_url,
+         COUNT(*)::int AS views,
+         COUNT(DISTINCT pv.visitor_key)::int AS visitors
+       FROM product_views pv
+       JOIN products p ON p.id = pv.product_id
+       WHERE pv.created_date >= NOW() - INTERVAL '30 days'
+       GROUP BY p.id, p.name, p.image_url
+       ORDER BY views DESC, p.name ASC
+       LIMIT 10`
+    );
+
+    res.json(result.rows);
+  } catch (err) {
+    console.error('Erro ao buscar produtos mais visitados:', err);
+    res.status(500).json({ message: 'Erro ao buscar produtos mais visitados' });
   }
 });
 

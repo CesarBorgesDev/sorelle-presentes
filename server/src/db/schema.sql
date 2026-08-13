@@ -339,5 +339,22 @@ CREATE TABLE IF NOT EXISTS site_visits (
   created_date TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+ALTER TABLE site_visits ADD COLUMN IF NOT EXISTS country VARCHAR(100);
+ALTER TABLE site_visits ADD COLUMN IF NOT EXISTS region VARCHAR(100);
+ALTER TABLE site_visits ADD COLUMN IF NOT EXISTS city VARCHAR(100);
+
 CREATE INDEX IF NOT EXISTS idx_site_visits_created ON site_visits(created_date DESC);
 CREATE INDEX IF NOT EXISTS idx_site_visits_visitor_created ON site_visits(visitor_key, created_date DESC);
+CREATE INDEX IF NOT EXISTS idx_site_visits_geo ON site_visits(city, region, country);
+
+CREATE TABLE IF NOT EXISTS product_views (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  visitor_key VARCHAR(64) NOT NULL,
+  product_id UUID NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  created_date TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_product_views_created ON product_views(created_date DESC);
+CREATE INDEX IF NOT EXISTS idx_product_views_product ON product_views(product_id, created_date DESC);
+CREATE INDEX IF NOT EXISTS idx_product_views_visitor_product
+  ON product_views(visitor_key, product_id, created_date DESC);

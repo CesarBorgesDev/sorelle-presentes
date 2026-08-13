@@ -607,6 +607,14 @@ const analyticsApi = {
   visitors() {
     return apiFetch('/analytics/visitors');
   },
+
+  origins() {
+    return apiFetch('/analytics/origins');
+  },
+
+  topProducts() {
+    return apiFetch('/analytics/top-products');
+  },
 };
 
 const customersApi = {
