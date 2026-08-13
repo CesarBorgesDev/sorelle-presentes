@@ -193,10 +193,10 @@ router.post('/login', async (req, res) => {
   }
 });
 
-router.get('/google', (req, res) => {
+router.get('/google', async (req, res) => {
   try {
     const returnUrl = typeof req.query.returnUrl === 'string' ? req.query.returnUrl : '/';
-    const url = buildGoogleAuthorizeUrl({ returnUrl });
+    const url = await buildGoogleAuthorizeUrl({ returnUrl });
     res.redirect(url);
   } catch (err) {
     console.error('[Google Auth] authorize:', err.message);

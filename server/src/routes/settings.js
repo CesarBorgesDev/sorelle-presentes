@@ -21,6 +21,8 @@ import { clearCorreiosTokenCache, testCorreiosApiConnection } from '../services/
 import { testCorreiosPrePostagem } from '../services/correiosPrePostagem.js';
 import { getRodonavesConfig } from '../services/rodonaves.js';
 import { getMelhorEnvioConfig } from '../services/melhorEnvio.js';
+import { getGoogleAuthConfig, getGoogleAuthRequirements } from '../services/googleAuthConfig.js';
+import { testGoogleAuthConnection } from '../services/googleAuth.js';
 
 const router = Router();
 
@@ -46,6 +48,7 @@ async function buildSettingsResponse(message) {
   const correiosConfig = await getCorreiosConfig();
   const rodonavesConfig = await getRodonavesConfig();
   const melhorEnvioConfig = await getMelhorEnvioConfig();
+  const googleConfig = await getGoogleAuthConfig();
 
   return {
     ...(message ? { message } : {}),
@@ -130,6 +133,17 @@ async function buildSettingsResponse(message) {
       token_expires_at: melhorEnvioConfig.tokenExpiresAt,
     },
     store_pickup: await getStorePickupConfig(),
+    google: {
+      configured: googleConfig.configured,
+      isReady: googleConfig.isReady,
+      client_id: googleConfig.clientId,
+      has_client_id: Boolean(googleConfig.clientId),
+      has_client_secret: Boolean(googleConfig.clientSecret),
+      client_secret_masked: maskToken(googleConfig.clientSecret),
+      callback_url: googleConfig.callbackUrl,
+      console_url: googleConfig.consoleUrl,
+      requirements: getGoogleAuthRequirements(googleConfig),
+    },
     cielo: {
       ...cieloConfig,
       clientId: undefined,
@@ -234,6 +248,21 @@ router.post('/correios/test-prepostagem', requireAuth, requireAdmin, async (req,
   }
 });
 
+/** Testa comunicação e credenciais OAuth do login Google. */
+router.post('/google/test', requireAuth, requireAdmin, async (_req, res) => {
+  try {
+    const result = await testGoogleAuthConnection();
+    res.json(result);
+  } catch (err) {
+    console.error('Erro ao testar login Google:', err);
+    res.status(500).json({
+      ok: false,
+      message: err.message || 'Erro ao testar login Google',
+      steps: [],
+    });
+  }
+});
+
 router.put('/', requireAuth, requireAdmin, async (req, res) => {
   try {
     const {
@@ -314,6 +343,9 @@ router.put('/', requireAuth, requireAdmin, async (req, res) => {
       store_pickup_address,
       store_pickup_instructions,
       store_pickup_deadline_days,
+      google_client_id,
+      google_client_secret,
+      google_callback_url,
     } = req.body;
 
     if (pollinations_api_key !== undefined && pollinations_api_key !== '') {
@@ -649,6 +681,16 @@ router.put('/', requireAuth, requireAdmin, async (req, res) => {
     }
     if (store_pickup_deadline_days !== undefined && store_pickup_deadline_days !== '') {
       await setSetting('store_pickup_deadline_days', String(store_pickup_deadline_days));
+    }
+
+    if (google_client_id !== undefined && google_client_id !== '') {
+      await setSetting('google_client_id', google_client_id.trim());
+    }
+    if (google_client_secret !== undefined && google_client_secret !== '') {
+      await setSetting('google_client_secret', google_client_secret.trim());
+    }
+    if (google_callback_url !== undefined) {
+      await setSetting('google_callback_url', google_callback_url.trim());
     }
 
     res.json(await buildSettingsResponse('Configurações salvas com sucesso'));

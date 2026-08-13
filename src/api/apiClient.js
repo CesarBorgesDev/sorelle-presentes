@@ -326,6 +326,13 @@ const settings = {
     });
   },
 
+  async testGoogle() {
+    return apiFetch('/settings/google/test', {
+      method: 'POST',
+      body: JSON.stringify({}),
+    });
+  },
+
   async downloadBackup() {
     return apiFetchBlob('/backup');
   },

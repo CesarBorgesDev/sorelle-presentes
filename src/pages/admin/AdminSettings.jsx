@@ -8,6 +8,7 @@ import {
   Plus, Trash2, ScanBarcode, Link2, Unlink, Download, QrCode, Percent,
 } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import GoogleIcon from '@/components/GoogleIcon';
 import { PRODUCT_SORT_OPTIONS } from '@/hooks/useProductSort';
 import { DEFAULT_INSTALLMENT_SCALE, normalizeInstallmentScale } from '@/lib/installmentScale';
 import {
@@ -28,6 +29,7 @@ const MERCADO_PAGO_DOCS_URL = 'https://www.mercadopago.com.br/developers/pt/docs
 const MELHOR_ENVIO_DOCS_URL = 'https://docs.melhorenvio.com.br/docs/criando-um-novo-aplicativo';
 const MELHOR_ENVIO_AREA_DEV_SANDBOX = 'https://sandbox.melhorenvio.com.br/painel/integracoes/area-dev';
 const MELHOR_ENVIO_AREA_DEV_PROD = 'https://melhorenvio.com.br/painel/integracoes/area-dev';
+const GOOGLE_CREDENTIALS_URL = 'https://console.cloud.google.com/apis/credentials';
 
 const CHECKOUT_SUBS = ['pagamento', 'pix', 'parcelamento'];
 const FRETE_SUBS = ['retirada', 'correios', 'pre_postagem', 'remetente', 'transportadora', 'rodonaves', 'melhor_envio'];
@@ -154,6 +156,11 @@ export default function AdminSettings() {
   const [storePickupAddress, setStorePickupAddress] = useState('Sacramento - MG');
   const [storePickupInstructions, setStorePickupInstructions] = useState('');
   const [storePickupDeadlineDays, setStorePickupDeadlineDays] = useState('3');
+  const [googleClientId, setGoogleClientId] = useState('');
+  const [googleClientSecret, setGoogleClientSecret] = useState('');
+  const [googleCallbackUrl, setGoogleCallbackUrl] = useState('');
+  const [googleTestResult, setGoogleTestResult] = useState(null);
+  const [googleCopied, setGoogleCopied] = useState(false);
   const [model, setModel] = useState('flux');
   const [productSortOrder, setProductSortOrder] = useState('name');
   const [saved, setSaved] = useState(false);
@@ -248,7 +255,11 @@ export default function AdminSettings() {
       setStorePickupInstructions(data.store_pickup.instructions || '');
       setStorePickupDeadlineDays(String(data.store_pickup.deadline_days || 3));
     }
-  }, [data?.image_model, data?.product_sort_order, data?.cielo, data?.payment, data?.sipag, data?.mercado_pago, data?.correios, data?.rodonaves, data?.melhor_envio, data?.store_pickup]);
+    if (data?.google) {
+      setGoogleClientId(data.google.client_id || '');
+      setGoogleCallbackUrl(data.google.callback_url || '');
+    }
+  }, [data?.image_model, data?.product_sort_order, data?.cielo, data?.payment, data?.sipag, data?.mercado_pago, data?.correios, data?.rodonaves, data?.melhor_envio, data?.store_pickup, data?.google]);
 
   React.useEffect(() => {
     const status = searchParams.get('melhor_envio');
@@ -292,6 +303,16 @@ export default function AdminSettings() {
       details: err?.body?.details || [],
       next_steps: err?.body?.next_steps || [],
       raw: err?.body?.raw || err?.body || null,
+    }),
+  });
+
+  const googleTestMutation = useMutation({
+    mutationFn: () => api.settings.testGoogle(),
+    onSuccess: (result) => setGoogleTestResult(result),
+    onError: (err) => setGoogleTestResult({
+      ok: false,
+      message: err?.body?.message || err.message || 'Falha ao testar login Google',
+      steps: err?.body?.steps || [],
     }),
   });
 
@@ -378,6 +399,7 @@ export default function AdminSettings() {
       setCorreiosPostCard('');
       setRodonavesPassword('');
       setMeClientSecret('');
+      setGoogleClientSecret('');
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     },
@@ -436,6 +458,7 @@ export default function AdminSettings() {
       store_pickup_address: storePickupAddress.trim(),
       store_pickup_instructions: storePickupInstructions.trim(),
       store_pickup_deadline_days: storePickupDeadlineDays,
+      google_callback_url: googleCallbackUrl.trim(),
     };
     if (pollinationsKey.trim()) payload.pollinations_api_key = pollinationsKey.trim();
     if (hfToken.trim()) payload.huggingface_api_token = hfToken.trim();
@@ -466,6 +489,8 @@ export default function AdminSettings() {
     if (carrierPrice.trim()) payload.shipping_carrier_price = carrierPrice.trim().replace(',', '.');
     if (rodonavesPassword.trim()) payload.rodonaves_password = rodonavesPassword.trim();
     if (meClientSecret.trim()) payload.melhor_envio_client_secret = meClientSecret.trim();
+    if (googleClientId.trim()) payload.google_client_id = googleClientId.trim();
+    if (googleClientSecret.trim()) payload.google_client_secret = googleClientSecret.trim();
     mutation.mutate(payload);
   };
 
@@ -485,6 +510,7 @@ export default function AdminSettings() {
   const cielo = data?.cielo;
   const sipag = data?.sipag;
   const mercadoPago = data?.mercado_pago;
+  const google = data?.google;
   const requirements = cielo?.requirements || [];
   const sipagRequirements = sipag?.requirements || [];
   const mpRequirements = mercadoPago?.requirements || [];
@@ -552,6 +578,10 @@ export default function AdminSettings() {
                 <Store className="w-3.5 h-3.5" />
                 Loja
               </TabsTrigger>
+              <TabsTrigger value="google" className="gap-1.5 font-body text-xs sm:text-sm px-3 py-2">
+                <GoogleIcon className="w-3.5 h-3.5" />
+                Google
+              </TabsTrigger>
             </TabsList>
 
             <TabsContent value="loja" className="space-y-6 mt-0 focus-visible:outline-none">
@@ -610,6 +640,169 @@ export default function AdminSettings() {
                   </p>
                 )}
               </div>
+            </TabsContent>
+
+            <TabsContent value="google" className="space-y-6 mt-0 focus-visible:outline-none">
+              <div className="flex items-start gap-3">
+                <GoogleIcon className="w-5 h-5 mt-0.5 shrink-0" />
+                <div>
+                  <h2 className="font-display text-lg tracking-wide text-foreground">Login com Google</h2>
+                  <p className="font-body text-sm text-muted-foreground mt-1">
+                    Defina o Client ID e o Client Secret do OAuth para habilitar &quot;Continuar com Google&quot; na loja.
+                  </p>
+                  <a
+                    href={GOOGLE_CREDENTIALS_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 font-body text-xs text-primary hover:underline mt-2"
+                  >
+                    Google Cloud — Credenciais
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                </div>
+              </div>
+
+              <div className={`flex items-center gap-2 px-3 py-2 rounded-sm text-sm font-body ${
+                google?.isReady
+                  ? 'bg-green-500/10 text-green-700 dark:text-green-400'
+                  : 'bg-amber-500/10 text-amber-700 dark:text-amber-400'
+              }`}>
+                {google?.isReady ? <CheckCircle2 className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
+                {google?.isReady
+                  ? 'Login com Google configurado'
+                  : 'Login com Google não configurado. Defina GOOGLE_CLIENT_ID e GOOGLE_CLIENT_SECRET.'}
+              </div>
+
+              <div className="p-4 bg-secondary/50 rounded-sm border border-border">
+                <p className="font-body text-xs text-muted-foreground uppercase tracking-wider mb-3">
+                  Requisitos
+                </p>
+                <ul className="space-y-3">
+                  {(google?.requirements || []).map((item) => (
+                    <RequirementItem key={item.id} item={item} />
+                  ))}
+                </ul>
+              </div>
+
+              <div>
+                <label className={labelClass}>Client ID *</label>
+                <input
+                  type="text"
+                  className={inputClass}
+                  value={googleClientId}
+                  onChange={(e) => setGoogleClientId(e.target.value)}
+                  placeholder="xxxx.apps.googleusercontent.com"
+                  autoComplete="off"
+                />
+              </div>
+
+              <div>
+                <label className={labelClass}>Client Secret *</label>
+                {google?.has_client_secret && (
+                  <p className="font-body text-xs text-muted-foreground mb-2">
+                    Atual: <span className="font-mono text-foreground">{google.client_secret_masked}</span>
+                  </p>
+                )}
+                <input
+                  type="password"
+                  className={inputClass}
+                  value={googleClientSecret}
+                  onChange={(e) => setGoogleClientSecret(e.target.value)}
+                  placeholder={google?.has_client_secret ? 'Salvo — preencha para trocar' : 'Cole o Client Secret'}
+                  autoComplete="new-password"
+                />
+              </div>
+
+              <div>
+                <label className={labelClass}>URI de redirecionamento autorizado</label>
+                <div className="flex gap-2">
+                  <input
+                    type="url"
+                    className={inputClass}
+                    value={googleCallbackUrl}
+                    onChange={(e) => setGoogleCallbackUrl(e.target.value)}
+                    placeholder="https://seudominio.com/api/auth/google/callback"
+                    autoComplete="off"
+                  />
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (!googleCallbackUrl) return;
+                      try {
+                        await navigator.clipboard.writeText(googleCallbackUrl);
+                        setGoogleCopied(true);
+                        setTimeout(() => setGoogleCopied(false), 2000);
+                      } catch {
+                        setGoogleCopied(false);
+                      }
+                    }}
+                    className="shrink-0 px-3 py-2.5 border border-border rounded-sm font-body text-xs hover:bg-secondary"
+                  >
+                    {googleCopied ? 'Copiado' : 'Copiar'}
+                  </button>
+                </div>
+                <p className="font-body text-xs text-muted-foreground mt-1">
+                  Cadastre exatamente esta URI no tipo &quot;Aplicativo da Web&quot; do Google Cloud.
+                </p>
+              </div>
+
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between rounded-sm border border-border bg-secondary/20 p-4">
+                <div className="min-w-0">
+                  <p className="font-body text-sm text-foreground">Testar comunicação</p>
+                  <p className="font-body text-xs text-muted-foreground mt-0.5">
+                    Salve as credenciais e confira se o servidor alcança o Google e se o Client ID/Secret são aceitos.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  disabled={googleTestMutation.isPending}
+                  onClick={() => {
+                    setGoogleTestResult(null);
+                    googleTestMutation.mutate();
+                  }}
+                  className="shrink-0 inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-sm border border-border bg-background font-body text-sm hover:bg-secondary disabled:opacity-60"
+                >
+                  {googleTestMutation.isPending ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Link2 className="w-4 h-4" />
+                  )}
+                  Testar comunicação
+                </button>
+              </div>
+
+              {googleTestResult && (
+                <div
+                  className={`p-4 rounded-sm border space-y-3 ${
+                    googleTestResult.ok
+                      ? 'border-green-200 bg-green-50 dark:border-green-900 dark:bg-green-950/30'
+                      : 'border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/30'
+                  }`}
+                >
+                  <div className="flex items-start gap-2">
+                    {googleTestResult.ok ? (
+                      <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0 text-green-600 dark:text-green-400" />
+                    ) : (
+                      <AlertCircle className="w-4 h-4 mt-0.5 shrink-0 text-amber-600 dark:text-amber-400" />
+                    )}
+                    <p className="font-body text-sm text-foreground">{googleTestResult.message}</p>
+                  </div>
+                  {Array.isArray(googleTestResult.steps) && googleTestResult.steps.length > 0 && (
+                    <ul className="space-y-1.5 pl-6">
+                      {googleTestResult.steps.map((step, index) => (
+                        <li key={index} className="flex items-start gap-2 font-body text-xs text-muted-foreground">
+                          {step.ok ? (
+                            <CheckCircle2 className="w-3.5 h-3.5 mt-0.5 shrink-0 text-green-600 dark:text-green-400" />
+                          ) : (
+                            <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0 text-amber-600 dark:text-amber-400" />
+                          )}
+                          <span>{step.label}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
             </TabsContent>
 
             <TabsContent value="checkout" className="space-y-6 mt-0 focus-visible:outline-none">
