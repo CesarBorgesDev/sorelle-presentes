@@ -5,7 +5,7 @@ import { api } from '@/api/apiClient';
 import {
   Settings, Key, Sparkles, Loader2, CheckCircle2,
   CreditCard, Circle, ExternalLink, AlertCircle, Truck, ShoppingBag, Store,
-  Plus, Trash2, ScanBarcode, Link2, Unlink, Download,
+  Plus, Trash2, ScanBarcode, Link2, Unlink, Download, QrCode, Percent,
 } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { PRODUCT_SORT_OPTIONS } from '@/hooks/useProductSort';
@@ -28,6 +28,9 @@ const MERCADO_PAGO_DOCS_URL = 'https://www.mercadopago.com.br/developers/pt/docs
 const MELHOR_ENVIO_DOCS_URL = 'https://docs.melhorenvio.com.br/docs/criando-um-novo-aplicativo';
 const MELHOR_ENVIO_AREA_DEV_SANDBOX = 'https://sandbox.melhorenvio.com.br/painel/integracoes/area-dev';
 const MELHOR_ENVIO_AREA_DEV_PROD = 'https://melhorenvio.com.br/painel/integracoes/area-dev';
+
+const CHECKOUT_SUBS = ['pagamento', 'pix', 'parcelamento'];
+const FRETE_SUBS = ['retirada', 'correios', 'pre_postagem', 'remetente', 'transportadora', 'rodonaves', 'melhor_envio'];
 
 function RequirementItem({ item }) {
   const Icon = item.done ? CheckCircle2 : item.manual ? AlertCircle : Circle;
@@ -57,8 +60,11 @@ export default function AdminSettings() {
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
   const initialMainTab = searchParams.get('tab') || 'checkout';
-  const initialFreteTab = searchParams.get('sub') || 'retirada';
+  const initialSub = searchParams.get('sub');
+  const initialCheckoutTab = CHECKOUT_SUBS.includes(initialSub) ? initialSub : 'pagamento';
+  const initialFreteTab = FRETE_SUBS.includes(initialSub) ? initialSub : 'retirada';
   const [mainTab, setMainTab] = useState(initialMainTab);
+  const [checkoutTab, setCheckoutTab] = useState(initialCheckoutTab);
   const [freteTab, setFreteTab] = useState(initialFreteTab);
   const [meOauthBanner, setMeOauthBanner] = useState(null);
   const [pollinationsKey, setPollinationsKey] = useState('');
@@ -510,6 +516,9 @@ export default function AdminSettings() {
               setMainTab(value);
               const next = new URLSearchParams(searchParams);
               next.set('tab', value);
+              if (value === 'checkout') next.set('sub', checkoutTab);
+              else if (value === 'frete') next.set('sub', freteTab);
+              else next.delete('sub');
               setSearchParams(next, { replace: true });
             }}
             className="w-full"
@@ -607,288 +616,326 @@ export default function AdminSettings() {
               <div>
                 <h2 className="font-display text-lg tracking-wide text-foreground">Finalizar compra</h2>
                 <p className="font-body text-sm text-muted-foreground mt-1">
-                  Escolha quais formas de pagamento o cliente pode selecionar no checkout.
+                  Formas de pagamento, PIX e condições de parcelamento exibidas no checkout.
                 </p>
               </div>
 
-            {payment?.checkout_config && (
-              <div className={`px-3 py-2 rounded-sm text-sm font-body ${
-                payment.checkout_config.available
-                  ? 'bg-green-500/10 text-green-700 dark:text-green-400'
-                  : 'bg-amber-500/10 text-amber-700 dark:text-amber-400'
-              }`}>
-                {payment.checkout_config.available
-                  ? `${enabledPaymentMethods.length} forma(s) habilitada(s) — gateway: ${payment.payment_gateways?.find((g) => g.id === paymentGateway)?.label || paymentGateway}`
-                  : 'Checkout indisponível — configure Cielo, SiPag, Mercado Pago ou chave PIX abaixo'}
-              </div>
-            )}
-
-            <div>
-              <label className={labelClass}>Gateway de pagamento online</label>
-              <select
-                className={inputClass}
-                value={paymentGateway}
-                onChange={(e) => setPaymentGateway(e.target.value)}
+              <Tabs
+                value={checkoutTab}
+                onValueChange={(value) => {
+                  setCheckoutTab(value);
+                  const next = new URLSearchParams(searchParams);
+                  next.set('tab', 'checkout');
+                  next.set('sub', value);
+                  setSearchParams(next, { replace: true });
+                }}
+                className="w-full"
               >
-                {(payment?.payment_gateways || [
-                  { id: 'cielo', label: 'Cielo (Checkout Cielo)' },
-                  { id: 'sipag', label: 'SiPag (IPG Online / Fiserv)' },
-                  { id: 'mercado_pago', label: 'Mercado Pago (Checkout Pro)' },
-                ]).map((option) => (
-                  <option key={option.id} value={option.id}>{option.label}</option>
-                ))}
-              </select>
-              <p className="font-body text-xs text-muted-foreground mt-1">
-                Define qual adquirente processa cartão, PIX online, débito e boleto. Se o gateway escolhido não estiver configurado, o sistema tenta outro disponível.
-              </p>
-            </div>
+                <TabsList className="w-full h-auto flex flex-wrap justify-start gap-1 p-1 mb-6 bg-secondary/40">
+                  <TabsTrigger value="pagamento" className="gap-1.5 font-body text-xs sm:text-sm px-3 py-2">
+                    <CreditCard className="w-3.5 h-3.5" />
+                    Pagamento
+                  </TabsTrigger>
+                  <TabsTrigger value="pix" className="gap-1.5 font-body text-xs sm:text-sm px-3 py-2">
+                    <QrCode className="w-3.5 h-3.5" />
+                    PIX
+                  </TabsTrigger>
+                  <TabsTrigger value="parcelamento" className="gap-1.5 font-body text-xs sm:text-sm px-3 py-2">
+                    <Percent className="w-3.5 h-3.5" />
+                    Parcelamento
+                  </TabsTrigger>
+                </TabsList>
 
-            <div className="space-y-2">
-              {checkoutOptions.map((option) => (
-                <label
-                  key={option.id}
-                  className={`flex items-start gap-3 p-4 border rounded-sm cursor-pointer transition-colors ${
-                    enabledPaymentMethods.includes(option.id)
-                      ? 'border-primary bg-primary/5 ring-1 ring-primary'
-                      : 'border-border hover:bg-secondary/30'
-                  }`}
-                >
-                  <input
-                    type="checkbox"
-                    checked={enabledPaymentMethods.includes(option.id)}
-                    onChange={() => {
-                      setEnabledPaymentMethods((current) => (
-                        current.includes(option.id)
-                          ? current.filter((id) => id !== option.id)
-                          : [...current, option.id]
-                      ));
-                    }}
-                    className="mt-1"
-                  />
+                <TabsContent value="pagamento" className="space-y-4 mt-0 focus-visible:outline-none">
+                  {payment?.checkout_config && (
+                    <div className={`px-3 py-2 rounded-sm text-sm font-body ${
+                      payment.checkout_config.available
+                        ? 'bg-green-500/10 text-green-700 dark:text-green-400'
+                        : 'bg-amber-500/10 text-amber-700 dark:text-amber-400'
+                    }`}>
+                      {payment.checkout_config.available
+                        ? `${enabledPaymentMethods.length} forma(s) habilitada(s) — gateway: ${payment.payment_gateways?.find((g) => g.id === paymentGateway)?.label || paymentGateway}`
+                        : 'Checkout indisponível — configure Cielo, SiPag, Mercado Pago ou chave PIX'}
+                    </div>
+                  )}
+
                   <div>
-                    <span className="font-body text-sm font-medium text-foreground">{option.label}</span>
-                    {option.hint && (
-                      <p className="font-body text-xs text-muted-foreground mt-0.5">{option.hint}</p>
-                    )}
+                    <label className={labelClass}>Gateway de pagamento online</label>
+                    <select
+                      className={inputClass}
+                      value={paymentGateway}
+                      onChange={(e) => setPaymentGateway(e.target.value)}
+                    >
+                      {(payment?.payment_gateways || [
+                        { id: 'cielo', label: 'Cielo (Checkout Cielo)' },
+                        { id: 'sipag', label: 'SiPag (IPG Online / Fiserv)' },
+                        { id: 'mercado_pago', label: 'Mercado Pago (Checkout Pro)' },
+                      ]).map((option) => (
+                        <option key={option.id} value={option.id}>{option.label}</option>
+                      ))}
+                    </select>
+                    <p className="font-body text-xs text-muted-foreground mt-1">
+                      Define qual adquirente processa cartão, PIX online, débito e boleto. Se o gateway escolhido não estiver configurado, o sistema tenta outro disponível.
+                    </p>
                   </div>
-                </label>
-              ))}
-            </div>
 
-            {enabledPaymentMethods.length === 0 && (
-              <p className="font-body text-xs text-destructive">
-                Selecione ao menos uma forma de pagamento.
-              </p>
-            )}
+                  <div className="space-y-2">
+                    {checkoutOptions.map((option) => (
+                      <label
+                        key={option.id}
+                        className={`flex items-start gap-3 p-4 border rounded-sm cursor-pointer transition-colors ${
+                          enabledPaymentMethods.includes(option.id)
+                            ? 'border-primary bg-primary/5 ring-1 ring-primary'
+                            : 'border-border hover:bg-secondary/30'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={enabledPaymentMethods.includes(option.id)}
+                          onChange={() => {
+                            setEnabledPaymentMethods((current) => (
+                              current.includes(option.id)
+                                ? current.filter((id) => id !== option.id)
+                                : [...current, option.id]
+                            ));
+                          }}
+                          className="mt-1"
+                        />
+                        <div>
+                          <span className="font-body text-sm font-medium text-foreground">{option.label}</span>
+                          {option.hint && (
+                            <p className="font-body text-xs text-muted-foreground mt-0.5">{option.hint}</p>
+                          )}
+                        </div>
+                      </label>
+                    ))}
+                  </div>
 
-            {enabledPaymentMethods.includes('test') && (
-              <div className="p-3 rounded-sm bg-amber-500/10 border border-amber-500/30 font-body text-xs text-amber-800 dark:text-amber-300">
-                Modo teste aprova pedidos automaticamente, esvazia o carrinho e não cobra nada.
-                Use apenas em desenvolvimento ou homologação.
-              </div>
-            )}
-
-            {enabledPaymentMethods.includes('pix') && (
-              <>
-                <div>
-                  <label className={labelClass}>Chave PIX (pagamento manual)</label>
-                  {payment?.has_pix_key && (
-                    <p className="font-body text-xs text-muted-foreground mb-2">
-                      Chave atual: <span className="font-mono text-foreground">{payment.pix_key_masked}</span>
+                  {enabledPaymentMethods.length === 0 && (
+                    <p className="font-body text-xs text-destructive">
+                      Selecione ao menos uma forma de pagamento.
                     </p>
                   )}
-                  <input
-                    type="text"
-                    className={inputClass}
-                    value={pixKey}
-                    onChange={(e) => setPixKey(e.target.value)}
-                    placeholder="Obrigatória se Cielo não estiver configurada"
-                    autoComplete="off"
-                  />
-                </div>
 
-                <div>
-                  <label className={labelClass}>Titular da chave PIX</label>
-                  <input
-                    type="text"
-                    className={inputClass}
-                    value={pixHolderName}
-                    onChange={(e) => setPixHolderName(e.target.value)}
-                    placeholder="Sorelle Presentes"
-                  />
-                </div>
-              </>
-            )}
+                  {enabledPaymentMethods.includes('test') && (
+                    <div className="p-3 rounded-sm bg-amber-500/10 border border-amber-500/30 font-body text-xs text-amber-800 dark:text-amber-300">
+                      Modo teste aprova pedidos automaticamente, esvazia o carrinho e não cobra nada.
+                      Use apenas em desenvolvimento ou homologação.
+                    </div>
+                  )}
+                </TabsContent>
 
-            <div className="pt-4 border-t border-border space-y-4">
-              <div>
-                <h3 className="font-display text-base tracking-wide text-foreground">Condições na loja</h3>
-                <p className="font-body text-xs text-muted-foreground mt-1">
-                  Escala de parcelamento por valor, juros, teto do gateway e desconto PIX.
-                </p>
-              </div>
+                <TabsContent value="pix" className="space-y-4 mt-0 focus-visible:outline-none">
+                  <div>
+                    <h3 className="font-display text-base tracking-wide text-foreground">PIX</h3>
+                    <p className="font-body text-xs text-muted-foreground mt-1">
+                      Chave para pagamento manual, titular e desconto aplicado no checkout.
+                    </p>
+                  </div>
 
-              <div>
-                <div className="flex items-center justify-between gap-3 mb-2">
-                  <label className={labelClass}>Escala de parcelamento</label>
-                  <button
-                    type="button"
-                    onClick={() => setInstallmentScale((prev) => {
-                      const nextMin = Math.max(0, ...(prev.map((t) => Number(t.min_amount) || 0))) + 100;
-                      return normalizeInstallmentScale([
-                        ...prev,
-                        { min_amount: nextMin, installments: 10 },
-                      ]);
-                    })}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-border rounded-sm font-body text-xs hover:bg-secondary transition-colors"
-                  >
-                    <Plus className="w-3.5 h-3.5" /> Faixa
-                  </button>
-                </div>
-                <p className="font-body text-xs text-muted-foreground mb-3">
-                  Ex.: a partir de R$ 600 → 10x; abaixo → 5x. A faixa com maior valor mínimo que o pedido atingir define as parcelas.
-                </p>
-                <div className="space-y-2">
-                  {normalizeInstallmentScale(installmentScale).map((tier, index) => (
-                    <div
-                      key={`${tier.min_amount}-${index}`}
-                      className="grid grid-cols-[1fr_1fr_auto] gap-2 items-end p-3 border border-border rounded-sm bg-background"
-                    >
-                      <div>
-                        <label className={labelClass}>A partir de (R$)</label>
-                        <input
-                          type="number"
-                          min={0}
-                          step={0.01}
-                          className={inputClass}
-                          value={tier.min_amount}
-                          onChange={(e) => {
-                            const value = e.target.value;
-                            setInstallmentScale((prev) => {
-                              const next = [...normalizeInstallmentScale(prev)];
-                              next[index] = {
-                                ...next[index],
-                                min_amount: value === '' ? 0 : Number(value),
-                              };
-                              return next;
-                            });
-                          }}
-                        />
-                      </div>
-                      <div>
-                        <label className={labelClass}>Parcelas</label>
-                        <input
-                          type="number"
-                          min={1}
-                          max={12}
-                          className={inputClass}
-                          value={tier.installments}
-                          onChange={(e) => {
-                            const value = e.target.value;
-                            setInstallmentScale((prev) => {
-                              const next = [...normalizeInstallmentScale(prev)];
-                              next[index] = {
-                                ...next[index],
-                                installments: value === '' ? 1 : Number(value),
-                              };
-                              return next;
-                            });
-                          }}
-                        />
-                      </div>
+                  {!enabledPaymentMethods.includes('pix') && (
+                    <div className="p-3 rounded-sm bg-amber-500/10 border border-amber-500/30 font-body text-xs text-amber-800 dark:text-amber-300">
+                      PIX não está habilitado. Ative a forma de pagamento na aba Pagamento para oferecer esta opção no checkout.
+                    </div>
+                  )}
+
+                  <div>
+                    <label className={labelClass}>Chave PIX (pagamento manual)</label>
+                    {payment?.has_pix_key && (
+                      <p className="font-body text-xs text-muted-foreground mb-2">
+                        Chave atual: <span className="font-mono text-foreground">{payment.pix_key_masked}</span>
+                      </p>
+                    )}
+                    <input
+                      type="text"
+                      className={inputClass}
+                      value={pixKey}
+                      onChange={(e) => setPixKey(e.target.value)}
+                      placeholder="Obrigatória se Cielo não estiver configurada"
+                      autoComplete="off"
+                    />
+                  </div>
+
+                  <div>
+                    <label className={labelClass}>Titular da chave PIX</label>
+                    <input
+                      type="text"
+                      className={inputClass}
+                      value={pixHolderName}
+                      onChange={(e) => setPixHolderName(e.target.value)}
+                      placeholder="Sorelle Presentes"
+                    />
+                  </div>
+
+                  <div>
+                    <label className={labelClass}>Desconto no PIX (%)</label>
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      step={0.5}
+                      className={inputClass}
+                      value={pixDiscountPercent}
+                      onChange={(e) => setPixDiscountPercent(e.target.value)}
+                    />
+                    <p className="font-body text-xs text-muted-foreground mt-1">
+                      0 = sem desconto. Aplicado sobre os produtos no checkout PIX.
+                    </p>
+                  </div>
+                </TabsContent>
+
+                <TabsContent value="parcelamento" className="space-y-4 mt-0 focus-visible:outline-none">
+                  <div>
+                    <h3 className="font-display text-base tracking-wide text-foreground">Parcelamento</h3>
+                    <p className="font-body text-xs text-muted-foreground mt-1">
+                      Escala de parcelas por valor, teto do gateway e juros por parcela.
+                    </p>
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between gap-3 mb-2">
+                      <label className={labelClass}>Escala de parcelamento</label>
                       <button
                         type="button"
-                        disabled={normalizeInstallmentScale(installmentScale).length <= 1}
                         onClick={() => setInstallmentScale((prev) => {
-                          const current = normalizeInstallmentScale(prev);
-                          if (current.length <= 1) return current;
-                          return normalizeInstallmentScale(current.filter((_, i) => i !== index));
+                          const nextMin = Math.max(0, ...(prev.map((t) => Number(t.min_amount) || 0))) + 100;
+                          return normalizeInstallmentScale([
+                            ...prev,
+                            { min_amount: nextMin, installments: 10 },
+                          ]);
                         })}
-                        className="p-2.5 text-muted-foreground hover:text-destructive disabled:opacity-40 transition-colors"
-                        title="Remover faixa"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-border rounded-sm font-body text-xs hover:bg-secondary transition-colors"
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <Plus className="w-3.5 h-3.5" /> Faixa
                       </button>
                     </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="grid sm:grid-cols-2 gap-4">
-                <div>
-                  <label className={labelClass}>Teto de parcelas (gateway)</label>
-                  <input
-                    type="number"
-                    min={1}
-                    max={12}
-                    className={inputClass}
-                    value={cieloMaxInstallments}
-                    onChange={(e) => setCieloMaxInstallments(e.target.value)}
-                  />
-                  <p className="font-body text-xs text-muted-foreground mt-1">
-                    Limite absoluto enviado à Cielo/Mercado Pago (máx. 12). A escala não ultrapassa este teto.
-                  </p>
-                </div>
-
-                <div>
-                  <label className={labelClass}>Desconto no PIX (%)</label>
-                  <input
-                    type="number"
-                    min={0}
-                    max={100}
-                    step={0.5}
-                    className={inputClass}
-                    value={pixDiscountPercent}
-                    onChange={(e) => setPixDiscountPercent(e.target.value)}
-                  />
-                  <p className="font-body text-xs text-muted-foreground mt-1">
-                    0 = sem desconto. Aplicado sobre os produtos no checkout PIX.
-                  </p>
-                </div>
-              </div>
-
-              <div>
-                <label className={labelClass}>Taxa de juros por parcelamento (%)</label>
-                <p className="font-body text-xs text-muted-foreground mb-3">
-                  Informe o acréscimo percentual para cada opção de 1x a 10x. 0 = sem juros naquela parcela.
-                  Ex.: 3x com 5% → total = valor × 1,05 ÷ 3.
-                </p>
-                <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-                  {normalizeInstallmentInterestRates(installmentInterestRates).map((tier) => (
-                    <div key={tier.installments} className="p-3 border border-border rounded-sm bg-background">
-                      <label className={labelClass}>{tier.installments}x</label>
-                      <div className="relative">
-                        <input
-                          type="number"
-                          min={0}
-                          max={100}
-                          step={0.01}
-                          className={inputClass}
-                          value={tier.interest_percent}
-                          onChange={(e) => {
-                            const value = e.target.value;
-                            setInstallmentInterestRates((prev) => {
-                              const next = normalizeInstallmentInterestRates(prev).map((item) => (
-                                item.installments === tier.installments
-                                  ? {
-                                    ...item,
-                                    interest_percent: value === '' ? 0 : Number(value),
-                                  }
-                                  : item
-                              ));
-                              return next;
-                            });
-                          }}
-                        />
-                        <span className="absolute right-3 top-1/2 -translate-y-1/2 font-body text-xs text-muted-foreground">
-                          %
-                        </span>
-                      </div>
+                    <p className="font-body text-xs text-muted-foreground mb-3">
+                      Ex.: a partir de R$ 600 → 10x; abaixo → 5x. A faixa com maior valor mínimo que o pedido atingir define as parcelas.
+                    </p>
+                    <div className="space-y-2">
+                      {normalizeInstallmentScale(installmentScale).map((tier, index) => (
+                        <div
+                          key={`${tier.min_amount}-${index}`}
+                          className="grid grid-cols-[1fr_1fr_auto] gap-2 items-end p-3 border border-border rounded-sm bg-background"
+                        >
+                          <div>
+                            <label className={labelClass}>A partir de (R$)</label>
+                            <input
+                              type="number"
+                              min={0}
+                              step={0.01}
+                              className={inputClass}
+                              value={tier.min_amount}
+                              onChange={(e) => {
+                                const value = e.target.value;
+                                setInstallmentScale((prev) => {
+                                  const next = [...normalizeInstallmentScale(prev)];
+                                  next[index] = {
+                                    ...next[index],
+                                    min_amount: value === '' ? 0 : Number(value),
+                                  };
+                                  return next;
+                                });
+                              }}
+                            />
+                          </div>
+                          <div>
+                            <label className={labelClass}>Parcelas</label>
+                            <input
+                              type="number"
+                              min={1}
+                              max={12}
+                              className={inputClass}
+                              value={tier.installments}
+                              onChange={(e) => {
+                                const value = e.target.value;
+                                setInstallmentScale((prev) => {
+                                  const next = [...normalizeInstallmentScale(prev)];
+                                  next[index] = {
+                                    ...next[index],
+                                    installments: value === '' ? 1 : Number(value),
+                                  };
+                                  return next;
+                                });
+                              }}
+                            />
+                          </div>
+                          <button
+                            type="button"
+                            disabled={normalizeInstallmentScale(installmentScale).length <= 1}
+                            onClick={() => setInstallmentScale((prev) => {
+                              const current = normalizeInstallmentScale(prev);
+                              if (current.length <= 1) return current;
+                              return normalizeInstallmentScale(current.filter((_, i) => i !== index));
+                            })}
+                            className="p-2.5 text-muted-foreground hover:text-destructive disabled:opacity-40 transition-colors"
+                            title="Remover faixa"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
-              </div>
-            </div>
+                  </div>
+
+                  <div>
+                    <label className={labelClass}>Teto de parcelas (gateway)</label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={12}
+                      className={inputClass}
+                      value={cieloMaxInstallments}
+                      onChange={(e) => setCieloMaxInstallments(e.target.value)}
+                    />
+                    <p className="font-body text-xs text-muted-foreground mt-1">
+                      Limite absoluto enviado à Cielo/Mercado Pago (máx. 12). A escala não ultrapassa este teto.
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className={labelClass}>Taxa de juros por parcelamento (%)</label>
+                    <p className="font-body text-xs text-muted-foreground mb-3">
+                      Informe o acréscimo percentual para cada opção de 1x a 10x. 0 = sem juros naquela parcela.
+                      Ex.: 3x com 5% → total = valor × 1,05 ÷ 3.
+                    </p>
+                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                      {normalizeInstallmentInterestRates(installmentInterestRates).map((tier) => (
+                        <div key={tier.installments} className="p-3 border border-border rounded-sm bg-background">
+                          <label className={labelClass}>{tier.installments}x</label>
+                          <div className="relative">
+                            <input
+                              type="number"
+                              min={0}
+                              max={100}
+                              step={0.01}
+                              className={inputClass}
+                              value={tier.interest_percent}
+                              onChange={(e) => {
+                                const value = e.target.value;
+                                setInstallmentInterestRates((prev) => {
+                                  const next = normalizeInstallmentInterestRates(prev).map((item) => (
+                                    item.installments === tier.installments
+                                      ? {
+                                        ...item,
+                                        interest_percent: value === '' ? 0 : Number(value),
+                                      }
+                                      : item
+                                  ));
+                                  return next;
+                                });
+                              }}
+                            />
+                            <span className="absolute right-3 top-1/2 -translate-y-1/2 font-body text-xs text-muted-foreground">
+                              %
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </TabsContent>
+              </Tabs>
             </TabsContent>
 
             <TabsContent value="frete" className="space-y-6 mt-0 focus-visible:outline-none">
