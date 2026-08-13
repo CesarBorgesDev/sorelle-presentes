@@ -7,6 +7,7 @@ import {
   normalizeZipCode,
   profileIncompleteMessage,
 } from '../utils/userProfile.js';
+import { hydrateUserAddress, composeProfileAddress } from '../utils/address.js';
 import { enrichCustomerFromLastOrder } from '../utils/enrichCustomerFromOrder.js';
 
 const router = Router();
@@ -18,7 +19,7 @@ router.use(requireAuth);
 router.get('/profile', async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT id, email, role, full_name, phone, document, address, zip_code, created_date, updated_date
+      `SELECT id, email, role, full_name, phone, document, address, address_street, address_district, address_city, zip_code, created_date, updated_date
        FROM users WHERE id = $1`,
       [req.user.id]
     );
@@ -26,7 +27,7 @@ router.get('/profile', async (req, res) => {
       return res.status(404).json({ message: 'Usuário não encontrado' });
     }
 
-    const profile = rowToEntity(result.rows[0]);
+    const profile = hydrateUserAddress(rowToEntity(result.rows[0]));
     const lastOrderResult = await pool.query(
       `SELECT customer_name, customer_phone, customer_address, notes
        FROM orders
@@ -36,7 +37,9 @@ router.get('/profile', async (req, res) => {
       [profile.email]
     );
 
-    const enriched = enrichCustomerFromLastOrder(profile, lastOrderResult.rows[0] || null);
+    const enriched = hydrateUserAddress(
+      enrichCustomerFromLastOrder(profile, lastOrderResult.rows[0] || null)
+    );
     res.json(enriched);
   } catch (err) {
     console.error('Erro ao buscar perfil:', err);
@@ -46,10 +49,10 @@ router.get('/profile', async (req, res) => {
 
 router.patch('/profile', async (req, res) => {
   try {
-    const { full_name, phone, document, address, zip_code } = req.body;
+    const { full_name, phone, document, address, address_street, address_district, address_city, zip_code } = req.body;
 
     const current = await pool.query(
-      `SELECT id, email, full_name, phone, document, address, zip_code
+      `SELECT id, email, full_name, phone, document, address, address_street, address_district, address_city, zip_code
        FROM users WHERE id = $1`,
       [req.user.id]
     );
@@ -57,13 +60,23 @@ router.patch('/profile', async (req, res) => {
       return res.status(404).json({ message: 'Usuário não encontrado' });
     }
 
+    const currentRow = hydrateUserAddress(current.rows[0]);
+    const street = address_street !== undefined ? String(address_street).trim() : currentRow.address_street;
+    const district = address_district !== undefined ? String(address_district).trim() : currentRow.address_district;
+    const city = address_city !== undefined ? String(address_city).trim() : currentRow.address_city;
+    const composedAddress = composeProfileAddress({ street, district, city })
+      || (address !== undefined ? String(address).trim() : currentRow.address);
+
     const next = {
-      email: current.rows[0].email,
-      full_name: full_name !== undefined ? String(full_name).trim() : current.rows[0].full_name,
-      phone: phone !== undefined ? String(phone).trim() : current.rows[0].phone,
-      document: document !== undefined ? normalizeDocument(document) : current.rows[0].document,
-      address: address !== undefined ? String(address).trim() : current.rows[0].address,
-      zip_code: zip_code !== undefined ? normalizeZipCode(zip_code) : current.rows[0].zip_code,
+      email: currentRow.email,
+      full_name: full_name !== undefined ? String(full_name).trim() : currentRow.full_name,
+      phone: phone !== undefined ? String(phone).trim() : currentRow.phone,
+      document: document !== undefined ? normalizeDocument(document) : currentRow.document,
+      address: composedAddress,
+      address_street: street,
+      address_district: district,
+      address_city: city,
+      zip_code: zip_code !== undefined ? normalizeZipCode(zip_code) : currentRow.zip_code,
     };
 
     const incomplete = profileIncompleteMessage(next);
@@ -77,20 +90,26 @@ router.patch('/profile', async (req, res) => {
         phone = $2,
         document = $3,
         address = $4,
-        zip_code = $5,
+        address_street = $5,
+        address_district = $6,
+        address_city = $7,
+        zip_code = $8,
         updated_date = NOW()
-      WHERE id = $6
-      RETURNING id, email, role, full_name, phone, document, address, zip_code, created_date, updated_date`,
+      WHERE id = $9
+      RETURNING id, email, role, full_name, phone, document, address, address_street, address_district, address_city, zip_code, created_date, updated_date`,
       [
         next.full_name,
         next.phone,
         next.document,
         next.address,
+        next.address_street || null,
+        next.address_district || null,
+        next.address_city || null,
         next.zip_code,
         req.user.id,
       ]
     );
-    res.json(rowToEntity(result.rows[0]));
+    res.json(hydrateUserAddress(rowToEntity(result.rows[0])));
   } catch (err) {
     console.error('Erro ao atualizar perfil:', err);
     res.status(500).json({ message: 'Erro ao salvar dados pessoais' });

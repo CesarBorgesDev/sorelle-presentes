@@ -7,11 +7,13 @@ import CustomerOrderDetail from '@/components/CustomerOrderDetail';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { isProductAvailable } from '@/lib/productStock';
+import AddressFields from '@/components/AddressFields';
 import {
   formatZipCodeInput,
   onlyDigits,
   profileIncompleteMessage,
   resolvePersonName,
+  composeProfileAddress,
 } from '@/lib/profile';
 import {
   ORDER_STATUS_LABELS,
@@ -45,7 +47,9 @@ function ProfileForm({ profile, onSaved }) {
     phone: '',
     document: '',
     zip_code: '',
-    address: '',
+    address_street: '',
+    address_district: '',
+    address_city: '',
   });
   const [formError, setFormError] = useState('');
 
@@ -56,7 +60,9 @@ function ProfileForm({ profile, onSaved }) {
         phone: profile.phone || '',
         document: profile.document || '',
         zip_code: formatZipCodeInput(profile.zip_code || ''),
-        address: profile.address || '',
+        address_street: profile.address_street || '',
+        address_district: profile.address_district || '',
+        address_city: profile.address_city || '',
       });
     }
   }, [profile]);
@@ -83,7 +89,10 @@ function ProfileForm({ profile, onSaved }) {
       phone: form.phone.trim(),
       document: onlyDigits(form.document),
       zip_code: onlyDigits(form.zip_code),
-      address: form.address.trim(),
+      address_street: form.address_street.trim(),
+      address_district: form.address_district.trim(),
+      address_city: form.address_city.trim(),
+      address: composeProfileAddress(form),
     };
     const incomplete = profileIncompleteMessage(payload);
     if (incomplete) {
@@ -95,6 +104,9 @@ function ProfileForm({ profile, onSaved }) {
       phone: payload.phone,
       document: payload.document,
       zip_code: payload.zip_code,
+      address_street: payload.address_street,
+      address_district: payload.address_district,
+      address_city: payload.address_city,
       address: payload.address,
     });
   };
@@ -143,28 +155,11 @@ function ProfileForm({ profile, onSaved }) {
           placeholder="000.000.000-00"
         />
       </div>
-      <div>
-        <label className="block font-body text-xs text-muted-foreground mb-1.5">CEP *</label>
-        <input
-          type="text"
-          required
-          value={form.zip_code}
-          onChange={(e) => setForm((f) => ({ ...f, zip_code: formatZipCodeInput(e.target.value) }))}
-          className="w-full px-3 py-2 border border-border rounded-sm font-body text-sm bg-background"
-          placeholder="00000-000"
-        />
-      </div>
-      <div>
-        <label className="block font-body text-xs text-muted-foreground mb-1.5">Endereço *</label>
-        <textarea
-          required
-          value={form.address}
-          onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))}
-          rows={3}
-          className="w-full px-3 py-2 border border-border rounded-sm font-body text-sm bg-background resize-none"
-          placeholder="Rua, número, bairro, cidade, UF"
-        />
-      </div>
+      <AddressFields
+        values={form}
+        onChange={(patch) => setForm((f) => ({ ...f, ...patch }))}
+        inputClassName="w-full px-3 py-2 border border-border rounded-sm font-body text-sm bg-background"
+      />
       {(formError || saveMutation.isError) && (
         <p className="font-body text-sm text-destructive">
           {formError || saveMutation.error?.message || 'Erro ao salvar'}

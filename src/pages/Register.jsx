@@ -2,13 +2,14 @@ import React, { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { api, logApiError } from "@/api/apiClient";
 import { cartApi } from "@/lib/cartApi";
-import { formatZipCodeInput, onlyDigits, profileIncompleteMessage } from "@/lib/profile";
+import { onlyDigits, profileIncompleteMessage, composeProfileAddress } from "@/lib/profile";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { UserPlus, Mail, Lock, Loader2 } from "lucide-react";
 import AuthLayout from "@/components/AuthLayout";
 import GoogleIcon from "@/components/GoogleIcon";
+import AddressFields from "@/components/AddressFields";
 
 export default function Register() {
   const [searchParams] = useSearchParams();
@@ -18,7 +19,9 @@ export default function Register() {
     phone: "",
     document: "",
     zip_code: "",
-    address: "",
+    address_street: "",
+    address_district: "",
+    address_city: "",
     password: "",
     confirmPassword: "",
   });
@@ -44,7 +47,10 @@ export default function Register() {
       phone: form.phone.trim(),
       document: onlyDigits(form.document),
       zip_code: onlyDigits(form.zip_code),
-      address: form.address.trim(),
+      address_street: form.address_street.trim(),
+      address_district: form.address_district.trim(),
+      address_city: form.address_city.trim(),
+      address: composeProfileAddress(form),
     };
 
     const incomplete = profileIncompleteMessage(payload);
@@ -164,28 +170,10 @@ export default function Register() {
             required
           />
         </div>
-        <div className="space-y-2">
-          <Label htmlFor="zip_code">CEP *</Label>
-          <Input
-            id="zip_code"
-            value={form.zip_code}
-            onChange={(e) => set("zip_code", formatZipCodeInput(e.target.value))}
-            placeholder="00000-000"
-            className="h-12"
-            required
-          />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="address">Endereço *</Label>
-          <Input
-            id="address"
-            value={form.address}
-            onChange={(e) => set("address", e.target.value)}
-            placeholder="Rua, número, bairro, cidade, UF"
-            className="h-12"
-            required
-          />
-        </div>
+        <AddressFields
+          values={form}
+          onChange={(patch) => setForm((f) => ({ ...f, ...patch }))}
+        />
         <div className="space-y-2">
           <Label htmlFor="password">Senha *</Label>
           <div className="relative">

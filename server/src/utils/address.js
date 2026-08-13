@@ -17,6 +17,36 @@ export function buildAddressString({
   return parts.join(', ');
 }
 
+export function composeProfileAddress({ street, district, city } = {}) {
+  return [street, district, city]
+    .map((part) => String(part || '').trim())
+    .filter(Boolean)
+    .join(', ');
+}
+
+export function hydrateUserAddress(user = {}) {
+  const street = String(user.address_street || '').trim();
+  const district = String(user.address_district || '').trim();
+  const city = String(user.address_city || '').trim();
+  if (street || district || city) {
+    return {
+      ...user,
+      address_street: street,
+      address_district: district,
+      address_city: city,
+      address: user.address || composeProfileAddress({ street, district, city }),
+    };
+  }
+
+  const parsed = parseCustomerAddressString(user.address);
+  return {
+    ...user,
+    address_street: parsed.street || '',
+    address_district: parsed.district || '',
+    address_city: parsed.city || '',
+  };
+}
+
 export function normalizeAddressInput(body = {}) {
   const street = String(body.address_street || '').trim();
   const number = String(body.address_number || '').trim();

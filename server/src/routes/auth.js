@@ -4,6 +4,7 @@ import pool from '../config/db.js';
 import { config } from '../config/env.js';
 import { generateToken, requireAuth } from '../middleware/auth.js';
 import { rowToEntity } from '../utils/helpers.js';
+import { hydrateUserAddress, composeProfileAddress } from '../utils/address.js';
 import {
   buildGoogleAuthorizeUrl,
   decodeOAuthState,
@@ -21,17 +22,21 @@ import {
 const router = Router();
 
 function publicUser(row) {
+  const hydrated = hydrateUserAddress(row);
   return rowToEntity({
-    id: row.id,
-    email: row.email,
-    role: row.role,
-    full_name: resolvePersonName(row.full_name, row.email) || null,
-    phone: row.phone,
-    document: row.document,
-    address: row.address,
-    zip_code: row.zip_code,
-    google_id: row.google_id || null,
-    created_date: row.created_date,
+    id: hydrated.id,
+    email: hydrated.email,
+    role: hydrated.role,
+    full_name: resolvePersonName(hydrated.full_name, hydrated.email) || null,
+    phone: hydrated.phone,
+    document: hydrated.document,
+    address: hydrated.address,
+    address_street: hydrated.address_street || '',
+    address_district: hydrated.address_district || '',
+    address_city: hydrated.address_city || '',
+    zip_code: hydrated.zip_code,
+    google_id: hydrated.google_id || null,
+    created_date: hydrated.created_date,
   });
 }
 
@@ -45,7 +50,7 @@ async function findOrCreateGoogleUser(profile) {
     ? null
     : String(profile.fullName || '').trim() || null;
   const byGoogle = await pool.query(
-    `SELECT id, email, role, full_name, phone, document, address, zip_code, google_id, created_date
+    `SELECT id, email, role, full_name, phone, document, address, address_street, address_district, address_city, zip_code, google_id, created_date
      FROM users WHERE google_id = $1`,
     [profile.googleId]
   );
@@ -54,7 +59,7 @@ async function findOrCreateGoogleUser(profile) {
   }
 
   const byEmail = await pool.query(
-    `SELECT id, email, role, full_name, phone, document, address, zip_code, google_id, created_date
+    `SELECT id, email, role, full_name, phone, document, address, address_street, address_district, address_city, zip_code, google_id, created_date
      FROM users WHERE LOWER(email) = LOWER($1)`,
     [profile.email]
   );
@@ -67,7 +72,7 @@ async function findOrCreateGoogleUser(profile) {
            full_name = COALESCE($2, full_name),
            updated_date = NOW()
        WHERE id = $3
-       RETURNING id, email, role, full_name, phone, document, address, zip_code, google_id, created_date`,
+       RETURNING id, email, role, full_name, phone, document, address, address_street, address_district, address_city, zip_code, google_id, created_date`,
       [profile.googleId, nextName, byEmail.rows[0].id]
     );
     return linked.rows[0];
@@ -76,7 +81,7 @@ async function findOrCreateGoogleUser(profile) {
   const created = await pool.query(
     `INSERT INTO users (email, password_hash, role, full_name, google_id)
      VALUES ($1, NULL, 'user', $2, $3)
-     RETURNING id, email, role, full_name, phone, document, address, zip_code, google_id, created_date`,
+     RETURNING id, email, role, full_name, phone, document, address, address_street, address_district, address_city, zip_code, google_id, created_date`,
     [profile.email, googleName, profile.googleId]
   );
   return created.rows[0];
@@ -91,6 +96,9 @@ router.post('/register', async (req, res) => {
       phone,
       document,
       address,
+      address_street,
+      address_district,
+      address_city,
       zip_code,
     } = req.body;
 
@@ -101,12 +109,20 @@ router.post('/register', async (req, res) => {
       return res.status(400).json({ message: 'A senha deve ter pelo menos 6 caracteres' });
     }
 
+    const street = String(address_street || '').trim();
+    const district = String(address_district || '').trim();
+    const city = String(address_city || '').trim();
+    const composedAddress = composeProfileAddress({ street, district, city }) || String(address || '').trim();
+
     const profileDraft = {
       email: String(email).trim().toLowerCase(),
       full_name: String(full_name || '').trim(),
       phone: String(phone || '').trim(),
       document: normalizeDocument(document),
-      address: String(address || '').trim(),
+      address: composedAddress,
+      address_street: street,
+      address_district: district,
+      address_city: city,
       zip_code: normalizeZipCode(zip_code),
     };
 
@@ -122,9 +138,9 @@ router.post('/register', async (req, res) => {
 
     const passwordHash = await bcrypt.hash(password, 10);
     const result = await pool.query(
-      `INSERT INTO users (email, password_hash, role, full_name, phone, document, address, zip_code)
-       VALUES ($1, $2, 'user', $3, $4, $5, $6, $7)
-       RETURNING id, email, role, full_name, phone, document, address, zip_code, google_id, created_date`,
+      `INSERT INTO users (email, password_hash, role, full_name, phone, document, address, address_street, address_district, address_city, zip_code)
+       VALUES ($1, $2, 'user', $3, $4, $5, $6, $7, $8, $9, $10)
+       RETURNING id, email, role, full_name, phone, document, address, address_street, address_district, address_city, zip_code, google_id, created_date`,
       [
         profileDraft.email,
         passwordHash,
@@ -132,6 +148,9 @@ router.post('/register', async (req, res) => {
         profileDraft.phone,
         profileDraft.document,
         profileDraft.address,
+        profileDraft.address_street || null,
+        profileDraft.address_district || null,
+        profileDraft.address_city || null,
         profileDraft.zip_code,
       ]
     );
@@ -158,7 +177,7 @@ router.post('/login', async (req, res) => {
     }
 
     const result = await pool.query(
-      `SELECT id, email, password_hash, role, full_name, phone, document, address, zip_code, google_id, created_date
+      `SELECT id, email, password_hash, role, full_name, phone, document, address, address_street, address_district, address_city, zip_code, google_id, created_date
        FROM users WHERE email = $1`,
       [email.toLowerCase()]
     );
@@ -246,7 +265,7 @@ router.get('/google/callback', async (req, res) => {
 router.get('/me', requireAuth, async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT id, email, role, full_name, phone, document, address, zip_code, google_id, created_date
+      `SELECT id, email, role, full_name, phone, document, address, address_street, address_district, address_city, zip_code, google_id, created_date
        FROM users WHERE id = $1`,
       [req.user.id]
     );

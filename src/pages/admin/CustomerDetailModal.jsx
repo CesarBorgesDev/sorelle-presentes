@@ -14,7 +14,8 @@ import {
   getOrderDiscount,
   getOrderDiscountLabel,
 } from '@/lib/orderLabels';
-import { formatZipCodeInput } from '@/lib/profile';
+import { formatZipCodeInput, composeProfileAddress } from '@/lib/profile';
+import AddressFields from '@/components/AddressFields';
 import { getOrderItemCatalogPath, getOrderItemCode } from '@/lib/orderItemDisplay';
 import OrderDetailModal from './OrderDetailModal';
 
@@ -143,7 +144,9 @@ export default function CustomerDetailModal({ customerId, onClose, onUpdated, on
     phone: '',
     document: '',
     zip_code: '',
-    address: '',
+    address_street: '',
+    address_district: '',
+    address_city: '',
   });
 
   const { data: customer, isLoading, error } = useQuery({
@@ -159,7 +162,9 @@ export default function CustomerDetailModal({ customerId, onClose, onUpdated, on
       phone: customer.phone || '',
       document: customer.document || '',
       zip_code: formatZipCodeInput(customer.zip_code || ''),
-      address: customer.address || '',
+      address_street: customer.address_street || '',
+      address_district: customer.address_district || '',
+      address_city: customer.address_city || '',
     });
     setEditing(false);
     setTab('compras');
@@ -197,7 +202,10 @@ export default function CustomerDetailModal({ customerId, onClose, onUpdated, on
       phone: form.phone,
       document: form.document,
       zip_code: form.zip_code,
-      address: form.address,
+      address_street: form.address_street,
+      address_district: form.address_district,
+      address_city: form.address_city,
+      address: composeProfileAddress(form),
     });
   };
 
@@ -319,9 +327,9 @@ export default function CustomerDetailModal({ customerId, onClose, onUpdated, on
                       <Field label="Telefone">{customer.phone}</Field>
                       <Field label="CPF/CNPJ">{customer.document_formatted || customer.document}</Field>
                       <Field label="CEP">{customer.zip_code ? formatZipCodeInput(customer.zip_code) : '—'}</Field>
-                      <div className="md:col-span-2">
-                        <Field label="Endereço">{customer.address}</Field>
-                      </div>
+                      <Field label="Logradouro">{customer.address_street}</Field>
+                      <Field label="Bairro">{customer.address_district}</Field>
+                      <Field label="Cidade">{customer.address_city}</Field>
                       <Field label="Cadastro em">{formatOrderDate(customer.created_date)}</Field>
                       <Field label="Atualizado em">{formatOrderDate(customer.updated_date)}</Field>
                       <Field label="Último pedido">{customer.last_order_date ? formatOrderDate(customer.last_order_date) : '—'}</Field>
@@ -399,27 +407,11 @@ export default function CustomerDetailModal({ customerId, onClose, onUpdated, on
                         />
                       </div>
                     </div>
-                    <div>
-                      <label className="block font-body text-xs text-muted-foreground tracking-wider uppercase mb-2">
-                        CEP
-                      </label>
-                      <input
-                        value={form.zip_code}
-                        onChange={(e) => setForm((f) => ({ ...f, zip_code: formatZipCodeInput(e.target.value) }))}
-                        className="w-full px-3 py-2.5 bg-background border border-border rounded-sm font-body text-sm focus:outline-none focus:ring-1 focus:ring-ring"
-                      />
-                    </div>
-                    <div>
-                      <label className="block font-body text-xs text-muted-foreground tracking-wider uppercase mb-2">
-                        Endereço
-                      </label>
-                      <textarea
-                        rows={3}
-                        value={form.address}
-                        onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))}
-                        className="w-full px-3 py-2.5 bg-background border border-border rounded-sm font-body text-sm focus:outline-none focus:ring-1 focus:ring-ring resize-y"
-                      />
-                    </div>
+                    <AddressFields
+                      values={form}
+                      onChange={(patch) => setForm((f) => ({ ...f, ...patch }))}
+                      inputClassName="w-full px-3 py-2.5 bg-background border border-border rounded-sm font-body text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                    />
                     <div className="flex justify-end gap-2 pt-2">
                       <button
                         type="button"

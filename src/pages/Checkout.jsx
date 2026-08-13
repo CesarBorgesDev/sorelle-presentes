@@ -106,6 +106,9 @@ export default function Checkout() {
         customer_zip_code: profile?.zip_code
           ? String(profile.zip_code).replace(/\D/g, '').replace(/(\d{5})(\d{0,3})/, (_, a, b) => (b ? `${a}-${b}` : a))
           : f.customer_zip_code || '',
+        address_street: f.address_street || profile?.address_street || '',
+        address_district: f.address_district || profile?.address_district || '',
+        address_city: f.address_city || profile?.address_city || '',
       };
     });
   }, [profile, user]);

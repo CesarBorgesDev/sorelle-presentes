@@ -105,6 +105,9 @@ router.get('/', async (req, res) => {
         OR LOWER(COALESCE(u.phone, '')) LIKE ${p}
         OR LOWER(COALESCE(u.document, '')) LIKE ${p}
         OR LOWER(COALESCE(u.address, '')) LIKE ${p}
+        OR LOWER(COALESCE(u.address_street, '')) LIKE ${p}
+        OR LOWER(COALESCE(u.address_district, '')) LIKE ${p}
+        OR LOWER(COALESCE(u.address_city, '')) LIKE ${p}
         OR LOWER(COALESCE(u.zip_code, '')) LIKE ${p}
       )`;
     }
@@ -120,6 +123,9 @@ router.get('/', async (req, res) => {
          u.phone,
          u.document,
          u.address,
+         u.address_street,
+         u.address_district,
+         u.address_city,
          u.zip_code,
          u.google_id,
          u.created_date,
@@ -158,6 +164,9 @@ router.get('/:id', async (req, res) => {
          u.phone,
          u.document,
          u.address,
+         u.address_street,
+         u.address_district,
+         u.address_city,
          u.zip_code,
          u.google_id,
          u.created_date,
@@ -214,12 +223,15 @@ router.patch('/:id', async (req, res) => {
       return res.status(404).json({ message: 'Cliente não encontrado' });
     }
 
-    const { full_name, phone, document, address, zip_code } = req.body;
+    const { full_name, phone, document, address, address_street, address_district, address_city, zip_code } = req.body;
     if (
       full_name === undefined
       && phone === undefined
       && document === undefined
       && address === undefined
+      && address_street === undefined
+      && address_district === undefined
+      && address_city === undefined
       && zip_code === undefined
     ) {
       return res.status(400).json({ message: 'Nenhum dado para atualizar' });
@@ -238,6 +250,9 @@ router.patch('/:id', async (req, res) => {
       push('document', String(document).replace(/\D/g, '').slice(0, 14) || null);
     }
     if (address !== undefined) push('address', String(address).trim() || null);
+    if (address_street !== undefined) push('address_street', String(address_street).trim() || null);
+    if (address_district !== undefined) push('address_district', String(address_district).trim() || null);
+    if (address_city !== undefined) push('address_city', String(address_city).trim() || null);
     if (zip_code !== undefined) {
       push('zip_code', String(zip_code).replace(/\D/g, '').slice(0, 8) || null);
     }
@@ -246,7 +261,7 @@ router.patch('/:id', async (req, res) => {
     const updateResult = await pool.query(
       `UPDATE users SET ${sets.join(', ')}, updated_date = NOW()
        WHERE id = $${values.length} AND role = 'user'
-       RETURNING id, email, full_name, phone, document, address, zip_code, google_id, created_date, updated_date`,
+       RETURNING id, email, full_name, phone, document, address, address_street, address_district, address_city, zip_code, google_id, created_date, updated_date`,
       values
     );
 

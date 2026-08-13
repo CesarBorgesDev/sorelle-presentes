@@ -9,12 +9,14 @@ import {
   onlyDigits,
   profileIncompleteMessage,
   resolvePersonName,
+  composeProfileAddress,
 } from '@/lib/profile';
 import AuthLayout from '@/components/AuthLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Loader2, UserRound } from 'lucide-react';
+import AddressFields from '@/components/AddressFields';
 
 export default function CompletarCadastro() {
   const [searchParams] = useSearchParams();
@@ -28,7 +30,9 @@ export default function CompletarCadastro() {
     phone: '',
     document: '',
     zip_code: '',
-    address: '',
+    address_street: '',
+    address_district: '',
+    address_city: '',
   });
   const [error, setError] = useState('');
 
@@ -54,7 +58,9 @@ export default function CompletarCadastro() {
       phone: f.phone || source.phone || '',
       document: f.document || source.document || '',
       zip_code: f.zip_code || formatZipCodeInput(source.zip_code || ''),
-      address: f.address || source.address || '',
+      address_street: f.address_street || source.address_street || '',
+      address_district: f.address_district || source.address_district || '',
+      address_city: f.address_city || source.address_city || '',
     }));
     if (isProfileComplete({ ...source, email, full_name: incomingName || source.full_name })) {
       navigate(returnUrl.startsWith('/') ? returnUrl : '/checkout', { replace: true });
@@ -88,7 +94,10 @@ export default function CompletarCadastro() {
       phone: form.phone.trim(),
       document: onlyDigits(form.document),
       zip_code: onlyDigits(form.zip_code),
-      address: form.address.trim(),
+      address_street: form.address_street.trim(),
+      address_district: form.address_district.trim(),
+      address_city: form.address_city.trim(),
+      address: composeProfileAddress(form),
     };
     const incomplete = profileIncompleteMessage(payload);
     if (incomplete) {
@@ -100,6 +109,9 @@ export default function CompletarCadastro() {
       phone: payload.phone,
       document: payload.document,
       zip_code: payload.zip_code,
+      address_street: payload.address_street,
+      address_district: payload.address_district,
+      address_city: payload.address_city,
       address: payload.address,
     });
   };
@@ -116,7 +128,7 @@ export default function CompletarCadastro() {
     <AuthLayout
       icon={UserRound}
       title="Complete seu cadastro"
-      subtitle="Preencha Nome, Endereço, Telefone, CEP e CPF para continuar"
+      subtitle="Preencha nome, telefone, CPF e endereço para continuar"
       footer={
         <>
           <Link to="/conta" className="text-primary font-medium hover:underline">
@@ -171,28 +183,10 @@ export default function CompletarCadastro() {
             required
           />
         </div>
-        <div className="space-y-2">
-          <Label htmlFor="zip_code">CEP *</Label>
-          <Input
-            id="zip_code"
-            value={form.zip_code}
-            onChange={(e) => set('zip_code', formatZipCodeInput(e.target.value))}
-            placeholder="00000-000"
-            className="h-12"
-            required
-          />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="address">Endereço *</Label>
-          <Input
-            id="address"
-            value={form.address}
-            onChange={(e) => set('address', e.target.value)}
-            placeholder="Rua, número, bairro, cidade, UF"
-            className="h-12"
-            required
-          />
-        </div>
+        <AddressFields
+          values={form}
+          onChange={(patch) => setForm((f) => ({ ...f, ...patch }))}
+        />
         <Button type="submit" className="w-full h-12 font-medium" disabled={mutation.isPending}>
           {mutation.isPending ? (
             <>

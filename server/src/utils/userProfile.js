@@ -30,19 +30,28 @@ export function normalizeDocument(value) {
   return digits || null;
 }
 
+export function composeProfileAddress({ street, district, city } = {}) {
+  return [street, district, city]
+    .map((part) => String(part || '').trim())
+    .filter(Boolean)
+    .join(', ');
+}
+
 /**
  * Campos obrigatórios do cadastro de cliente:
- * Nome, Endereço, Telefone, E-mail, CEP e CPF.
+ * Nome, Logradouro, Bairro, Cidade, Telefone, E-mail, CEP e CPF.
  */
 export function getMissingProfileFields(user, { requireEmail = true } = {}) {
   if (!user) {
-    return ['Nome', 'Endereço', 'Telefone', 'E-mail', 'CEP', 'CPF'];
+    return ['Nome', 'Logradouro', 'Bairro', 'Cidade', 'Telefone', 'E-mail', 'CEP', 'CPF'];
   }
 
   const missing = [];
   if (requireEmail && !String(user.email || '').trim()) missing.push('E-mail');
   if (!resolvePersonName(user.full_name, user.email)) missing.push('Nome');
-  if (!String(user.address || '').trim()) missing.push('Endereço');
+  if (!String(user.address_street || '').trim()) missing.push('Logradouro');
+  if (!String(user.address_district || '').trim()) missing.push('Bairro');
+  if (!String(user.address_city || '').trim()) missing.push('Cidade');
   if (onlyDigits(user.phone).length < 10) missing.push('Telefone');
   if (onlyDigits(user.zip_code).length !== 8) missing.push('CEP');
 

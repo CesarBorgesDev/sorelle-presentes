@@ -1,4 +1,4 @@
-import { extractDocumentFromNotes, extractZipFromNotes } from './address.js';
+import { extractDocumentFromNotes, extractZipFromNotes, hydrateUserAddress } from './address.js';
 import { isPlaceholderFullName, resolvePersonName } from './userProfile.js';
 
 function empty(value) {
@@ -31,7 +31,7 @@ export function enrichCustomerFromLastOrder(customer, lastOrder) {
 
   if (!lastOrder) {
     return {
-      ...next,
+      ...hydrateUserAddress(next),
       data_from_last_order: filled.length > 0,
       filled_from_last_order: filled,
     };
@@ -58,7 +58,7 @@ export function enrichCustomerFromLastOrder(customer, lastOrder) {
   }
 
   return {
-    ...next,
+    ...hydrateUserAddress(next),
     data_from_last_order: filled.length > 0,
     filled_from_last_order: filled,
   };
