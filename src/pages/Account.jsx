@@ -11,6 +11,7 @@ import {
   formatZipCodeInput,
   onlyDigits,
   profileIncompleteMessage,
+  resolvePersonName,
 } from '@/lib/profile';
 import {
   ORDER_STATUS_LABELS,
@@ -51,7 +52,7 @@ function ProfileForm({ profile, onSaved }) {
   useEffect(() => {
     if (profile) {
       setForm({
-        full_name: profile.full_name || '',
+        full_name: resolvePersonName(profile.full_name, profile.email),
         phone: profile.phone || '',
         document: profile.document || '',
         zip_code: formatZipCodeInput(profile.zip_code || ''),
@@ -484,7 +485,8 @@ export default function Account() {
     return <Navigate to="/login" replace />;
   }
 
-  const displayName = profile?.full_name || user?.full_name;
+  const displayName = resolvePersonName(profile?.full_name, profile?.email || user?.email)
+    || resolvePersonName(user?.full_name, user?.email);
 
   return (
     <div className="max-w-3xl mx-auto px-4 pt-24 lg:pt-32 pb-10 lg:pb-14">

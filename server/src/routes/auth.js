@@ -11,9 +11,11 @@ import {
   isProfileComplete,
 } from '../services/googleAuth.js';
 import {
+  isPlaceholderFullName,
   normalizeDocument,
   normalizeZipCode,
   profileIncompleteMessage,
+  resolvePersonName,
 } from '../utils/userProfile.js';
 
 const router = Router();
@@ -23,7 +25,7 @@ function publicUser(row) {
     id: row.id,
     email: row.email,
     role: row.role,
-    full_name: row.full_name,
+    full_name: resolvePersonName(row.full_name, row.email) || null,
     phone: row.phone,
     document: row.document,
     address: row.address,
@@ -39,6 +41,9 @@ function frontendRedirect(path) {
 }
 
 async function findOrCreateGoogleUser(profile) {
+  const googleName = isPlaceholderFullName(profile.fullName, profile.email)
+    ? null
+    : String(profile.fullName || '').trim() || null;
   const byGoogle = await pool.query(
     `SELECT id, email, role, full_name, phone, document, address, zip_code, google_id, created_date
      FROM users WHERE google_id = $1`,
@@ -55,14 +60,15 @@ async function findOrCreateGoogleUser(profile) {
   );
 
   if (byEmail.rows[0]) {
+    const nextName = resolvePersonName(byEmail.rows[0].full_name, profile.email) || googleName;
     const linked = await pool.query(
       `UPDATE users
        SET google_id = $1,
-           full_name = COALESCE(NULLIF(TRIM(full_name), ''), $2),
+           full_name = COALESCE($2, full_name),
            updated_date = NOW()
        WHERE id = $3
        RETURNING id, email, role, full_name, phone, document, address, zip_code, google_id, created_date`,
-      [profile.googleId, profile.fullName, byEmail.rows[0].id]
+      [profile.googleId, nextName, byEmail.rows[0].id]
     );
     return linked.rows[0];
   }
@@ -71,7 +77,7 @@ async function findOrCreateGoogleUser(profile) {
     `INSERT INTO users (email, password_hash, role, full_name, google_id)
      VALUES ($1, NULL, 'user', $2, $3)
      RETURNING id, email, role, full_name, phone, document, address, zip_code, google_id, created_date`,
-    [profile.email, profile.fullName, profile.googleId]
+    [profile.email, googleName, profile.googleId]
   );
   return created.rows[0];
 }

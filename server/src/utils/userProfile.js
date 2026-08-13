@@ -2,6 +2,24 @@ export function onlyDigits(value) {
   return String(value || '').replace(/\D/g, '');
 }
 
+export function emailLocalPart(email) {
+  return String(email || '').split('@')[0].trim().toLowerCase();
+}
+
+/** True when the "name" is empty or just the part before @ in the e-mail (ex.: mxpv). */
+export function isPlaceholderFullName(name, email) {
+  const n = String(name || '').trim();
+  if (!n) return true;
+  const local = emailLocalPart(email);
+  return Boolean(local) && n.toLowerCase() === local;
+}
+
+export function resolvePersonName(name, email) {
+  const n = String(name || '').trim();
+  if (!n || isPlaceholderFullName(n, email)) return '';
+  return n;
+}
+
 export function normalizeZipCode(value) {
   const digits = onlyDigits(value).slice(0, 8);
   return digits || null;
@@ -23,7 +41,7 @@ export function getMissingProfileFields(user, { requireEmail = true } = {}) {
 
   const missing = [];
   if (requireEmail && !String(user.email || '').trim()) missing.push('E-mail');
-  if (!String(user.full_name || '').trim()) missing.push('Nome');
+  if (!resolvePersonName(user.full_name, user.email)) missing.push('Nome');
   if (!String(user.address || '').trim()) missing.push('Endereço');
   if (onlyDigits(user.phone).length < 10) missing.push('Telefone');
   if (onlyDigits(user.zip_code).length !== 8) missing.push('CEP');

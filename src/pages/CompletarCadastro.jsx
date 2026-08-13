@@ -8,6 +8,7 @@ import {
   isProfileComplete,
   onlyDigits,
   profileIncompleteMessage,
+  resolvePersonName,
 } from '@/lib/profile';
 import AuthLayout from '@/components/AuthLayout';
 import { Button } from '@/components/ui/button';
@@ -46,14 +47,16 @@ export default function CompletarCadastro() {
   useEffect(() => {
     if (!profile && !user) return;
     const source = profile || user;
-    setForm({
-      full_name: source.full_name || '',
-      phone: source.phone || '',
-      document: source.document || '',
-      zip_code: formatZipCodeInput(source.zip_code || ''),
-      address: source.address || '',
-    });
-    if (isProfileComplete({ ...source, email: source.email || user?.email })) {
+    const email = source.email || user?.email;
+    const incomingName = resolvePersonName(source.full_name, email);
+    setForm((f) => ({
+      full_name: f.full_name || incomingName,
+      phone: f.phone || source.phone || '',
+      document: f.document || source.document || '',
+      zip_code: f.zip_code || formatZipCodeInput(source.zip_code || ''),
+      address: f.address || source.address || '',
+    }));
+    if (isProfileComplete({ ...source, email, full_name: incomingName || source.full_name })) {
       navigate(returnUrl.startsWith('/') ? returnUrl : '/checkout', { replace: true });
     }
   }, [profile, user, navigate, returnUrl]);

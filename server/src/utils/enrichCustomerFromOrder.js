@@ -1,4 +1,5 @@
 import { extractDocumentFromNotes, extractZipFromNotes } from './address.js';
+import { isPlaceholderFullName, resolvePersonName } from './userProfile.js';
 
 function empty(value) {
   return value == null || String(value).trim() === '';
@@ -8,24 +9,37 @@ function empty(value) {
  * Preenche campos vazios do cadastro com dados da última compra.
  */
 export function enrichCustomerFromLastOrder(customer, lastOrder) {
-  if (!customer || !lastOrder) {
+  if (!customer) {
     return {
-      ...customer,
+      customer,
       data_from_last_order: false,
       filled_from_last_order: [],
     };
   }
 
-  const zipFromOrder = extractZipFromNotes(lastOrder.notes);
-  const documentFromOrder = extractDocumentFromNotes(lastOrder.notes);
+  const next = { ...customer };
   const filled = [];
 
-  const next = { ...customer };
-
-  if (empty(next.full_name) && !empty(lastOrder.customer_name)) {
-    next.full_name = String(lastOrder.customer_name).trim();
+  const registeredName = resolvePersonName(next.full_name, next.email);
+  const orderName = resolvePersonName(lastOrder?.customer_name, next.email);
+  if (!registeredName && orderName) {
+    next.full_name = orderName;
     filled.push('full_name');
+  } else if (!registeredName && isPlaceholderFullName(next.full_name, next.email)) {
+    next.full_name = null;
   }
+
+  if (!lastOrder) {
+    return {
+      ...next,
+      data_from_last_order: filled.length > 0,
+      filled_from_last_order: filled,
+    };
+  }
+
+  const zipFromOrder = extractZipFromNotes(lastOrder.notes);
+  const documentFromOrder = extractDocumentFromNotes(lastOrder.notes);
+
   if (empty(next.phone) && !empty(lastOrder.customer_phone)) {
     next.phone = String(lastOrder.customer_phone).trim();
     filled.push('phone');

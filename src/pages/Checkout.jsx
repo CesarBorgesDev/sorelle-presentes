@@ -5,7 +5,7 @@ import { api } from '@/api/apiClient';
 import { cartApi } from '@/lib/cartApi';
 import { guestCart } from '@/lib/guestCart';
 import { useAuth } from '@/lib/AuthContext';
-import { completarCadastroUrl, isProfileComplete } from '@/lib/profile';
+import { completarCadastroUrl, isProfileComplete, resolvePersonName } from '@/lib/profile';
 import { Button } from '@/components/ui/button';
 import { Loader2, ArrowLeft, Truck, FlaskConical, CreditCard, QrCode, FileText, Store, Banknote, Wallet } from 'lucide-react';
 
@@ -47,7 +47,7 @@ export default function Checkout() {
   const [cepError, setCepError] = useState('');
 
   const [form, setForm] = useState({
-    customer_name: user?.full_name || user?.email?.split('@')[0] || '',
+    customer_name: resolvePersonName(user?.full_name, user?.email),
     customer_email: user?.email || '',
     customer_phone: user?.phone || '',
     customer_document: user?.document || '',
@@ -92,16 +92,22 @@ export default function Checkout() {
 
   useEffect(() => {
     if (!profile && !user) return;
-    setForm((f) => ({
-      ...f,
-      customer_name: profile?.full_name || user?.full_name || f.customer_name || '',
-      customer_email: user?.email || profile?.email || f.customer_email || '',
-      customer_phone: profile?.phone || user?.phone || f.customer_phone || '',
-      customer_document: profile?.document || user?.document || f.customer_document || '',
-      customer_zip_code: profile?.zip_code
-        ? String(profile.zip_code).replace(/\D/g, '').replace(/(\d{5})(\d{0,3})/, (_, a, b) => (b ? `${a}-${b}` : a))
-        : f.customer_zip_code || '',
-    }));
+    setForm((f) => {
+      const email = user?.email || profile?.email || f.customer_email || '';
+      const fromProfile = resolvePersonName(profile?.full_name, email);
+      const fromUser = resolvePersonName(user?.full_name, email);
+      const fromForm = resolvePersonName(f.customer_name, email);
+      return {
+        ...f,
+        customer_name: fromProfile || fromUser || fromForm || '',
+        customer_email: email || f.customer_email || '',
+        customer_phone: profile?.phone || user?.phone || f.customer_phone || '',
+        customer_document: profile?.document || user?.document || f.customer_document || '',
+        customer_zip_code: profile?.zip_code
+          ? String(profile.zip_code).replace(/\D/g, '').replace(/(\d{5})(\d{0,3})/, (_, a, b) => (b ? `${a}-${b}` : a))
+          : f.customer_zip_code || '',
+      };
+    });
   }, [profile, user]);
 
   const paymentMethods = methodsData?.methods || [];

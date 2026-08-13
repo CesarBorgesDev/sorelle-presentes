@@ -36,6 +36,7 @@ import { streamOrderInvoice, withInvoiceFlags, withInvoiceFlagsList } from '../s
 import { STORE_PICKUP_ID, getStorePickupConfig, resolveStorePickupShipping, buildStorePickupOption } from '../services/storePickup.js';
 import { enrichOrderItems, enrichOrdersItems } from '../utils/enrichOrderItems.js';
 import { consumeStockForOrder, restoreStockForOrder } from '../utils/stockInventory.js';
+import { resolvePersonName } from '../utils/userProfile.js';
 
 const router = Router();
 
@@ -243,8 +244,11 @@ async function startCheckout(req, res) {
   const paymentMethod = req.body.payment_method || await getCheckoutPaymentMethod();
   const isPickup = shippingServiceId === STORE_PICKUP_ID;
 
-  if (!customer_name?.trim() || !customer_email?.trim()) {
+  if (!customer_email?.trim()) {
     return res.status(400).json({ message: 'Nome e e-mail são obrigatórios' });
+  }
+  if (!resolvePersonName(customer_name, customer_email)) {
+    return res.status(400).json({ message: 'Informe o nome completo' });
   }
 
   const address = normalizeAddressInput(req.body);
@@ -304,6 +308,20 @@ async function startCheckout(req, res) {
     paymentMethod,
     shipping,
   });
+
+  const checkoutName = resolvePersonName(customer.customer_name, customer.customer_email);
+  if (checkoutName) {
+    await pool.query(
+      `UPDATE users
+       SET full_name = $1, updated_date = NOW()
+       WHERE id = $2
+         AND (
+           NULLIF(TRIM(full_name), '') IS NULL
+           OR LOWER(TRIM(full_name)) = LOWER(SPLIT_PART(email, '@', 1))
+         )`,
+      [checkoutName, req.user.id]
+    );
+  }
 
   await pool.query('DELETE FROM cart_items WHERE user_id = $1', [req.user.id]);
 

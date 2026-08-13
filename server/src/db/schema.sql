@@ -358,3 +358,23 @@ CREATE INDEX IF NOT EXISTS idx_product_views_created ON product_views(created_da
 CREATE INDEX IF NOT EXISTS idx_product_views_product ON product_views(product_id, created_date DESC);
 CREATE INDEX IF NOT EXISTS idx_product_views_visitor_product
   ON product_views(visitor_key, product_id, created_date DESC);
+
+-- Substitui nome igual ao prefixo do e-mail pelo nome real da última compra.
+UPDATE users u
+SET full_name = src.customer_name,
+    updated_date = NOW()
+FROM (
+  SELECT DISTINCT ON (LOWER(o.customer_email))
+    LOWER(o.customer_email) AS email,
+    o.customer_name
+  FROM orders o
+  WHERE NULLIF(TRIM(o.customer_name), '') IS NOT NULL
+    AND LOWER(TRIM(o.customer_name)) <> LOWER(SPLIT_PART(o.customer_email, '@', 1))
+  ORDER BY LOWER(o.customer_email), o.created_date DESC
+) src
+WHERE LOWER(u.email) = src.email
+  AND u.role = 'user'
+  AND (
+    NULLIF(TRIM(u.full_name), '') IS NULL
+    OR LOWER(TRIM(u.full_name)) = LOWER(SPLIT_PART(u.email, '@', 1))
+  );
