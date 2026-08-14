@@ -37,6 +37,7 @@ const STEP_LABELS = {
   criar_prepostagem: 'Criar pré-postagem',
   emitir_rotulo: 'Emitir rótulo',
   baixar_rotulo: 'Baixar rótulo',
+  declaracao_conteudo: 'Declaração de conteúdo',
   codigo_objeto: 'Obter código de rastreio',
   preflight: 'Pré-requisitos',
   desconhecido: 'Processamento',
@@ -273,9 +274,9 @@ function extractTrackingCodeFromPayload(payload) {
   return '';
 }
 
-async function correiosApiFetch(path, { method = 'GET', token, body } = {}) {
+async function correiosApiFetch(path, { method = 'GET', token, body, accept } = {}) {
   const headers = {
-    Accept: 'application/json, application/pdf, */*',
+    Accept: accept || 'application/json, application/pdf, text/html, */*',
     Authorization: `Bearer ${token}`,
   };
   if (body !== undefined) {
@@ -300,6 +301,10 @@ async function correiosApiFetch(path, { method = 'GET', token, body } = {}) {
   }
 
   const text = await response.text().catch(() => '');
+  if (contentType.includes('text/html')) {
+    return { ok: response.ok, status: response.status, data: text, contentType };
+  }
+
   let data = {};
   if (text) {
     try {
@@ -455,6 +460,94 @@ function saveCorreiosRotuloPdf(orderId, base64) {
   const filename = `etiqueta-${orderId}.pdf`;
   fs.writeFileSync(path.join(LABELS_DIR, filename), Buffer.from(cleaned, 'base64'));
   return `/api/uploads/labels/${filename}`;
+}
+
+function extractHtml(payload) {
+  if (!payload) return '';
+
+  if (Buffer.isBuffer(payload)) {
+    const text = payload.toString('utf8').trim();
+    if (text.startsWith('<') || /<html/i.test(text)) return text;
+    return '';
+  }
+
+  if (typeof payload === 'string') {
+    const text = payload.trim();
+    if (text.startsWith('<') || /<html/i.test(text)) return text;
+    return '';
+  }
+
+  if (typeof payload !== 'object') return '';
+
+  const candidates = [
+    payload.dados,
+    payload.data,
+    payload.arquivo,
+    payload.html,
+    payload.conteudo,
+    payload.declaracao,
+    Array.isArray(payload.itens) ? payload.itens[0]?.dados : null,
+  ];
+  for (const value of candidates) {
+    const nested = extractHtml(value);
+    if (nested) return nested;
+  }
+  return '';
+}
+
+function saveCorreiosDeclaracaoHtml(orderId, html) {
+  if (!fs.existsSync(LABELS_DIR)) {
+    fs.mkdirSync(LABELS_DIR, { recursive: true });
+  }
+  const content = String(html || '').trim();
+  if (content.length < 40) return null;
+  const filename = `declaracao-${orderId}.html`;
+  fs.writeFileSync(path.join(LABELS_DIR, filename), content, 'utf-8');
+  return `/api/uploads/labels/${filename}`;
+}
+
+/** Manual seção K: GET /v1/prepostagens/declaracaoconteudo/{ids} — HTML, status Pré-postado. */
+async function fetchDeclaracaoConteudo(token, prepostagemId) {
+  if (!prepostagemId) {
+    return { ok: false, status: null, html: '', data: null };
+  }
+  const response = await correiosApiFetch(
+    `/v1/prepostagens/declaracaoconteudo/${encodeURIComponent(prepostagemId)}`,
+    {
+      token,
+      accept: 'text/html, application/json, */*',
+    }
+  );
+  const html = extractHtml(response.data);
+  return {
+    ok: Boolean(response.ok && html),
+    status: response.status,
+    html,
+    data: typeof response.data === 'string'
+      ? { type: 'html', chars: response.data.length }
+      : response.data,
+  };
+}
+
+async function attachDeclaracao(token, prepostagemId, orderId) {
+  try {
+    const fetched = await fetchDeclaracaoConteudo(token, prepostagemId);
+    if (!fetched.ok) {
+      return {
+        ok: false,
+        url: null,
+        error: extractCorreiosError(
+          fetched.data,
+          fetched.status,
+          'Declaração de conteúdo indisponível'
+        ),
+      };
+    }
+    const url = orderId ? saveCorreiosDeclaracaoHtml(orderId, fetched.html) : null;
+    return { ok: Boolean(url || fetched.html), url, error: null };
+  } catch (err) {
+    return { ok: false, url: null, error: err.message || 'Falha ao baixar a declaração de conteúdo' };
+  }
 }
 
 async function cancelPrePostagem(token, { id, codigoObjeto } = {}) {
@@ -902,9 +995,9 @@ function nextStepsForStep(step, apiMsg = '') {
     }
     return steps;
   }
-  if (step === 'emitir_rotulo' || step === 'baixar_rotulo' || step === 'codigo_objeto') {
+  if (step === 'emitir_rotulo' || step === 'baixar_rotulo' || step === 'codigo_objeto' || step === 'declaracao_conteudo') {
     return [
-      'Verifique saldo de etiquetas do cartão no CWS.',
+      'Use Atualizar rótulo no pedido — o PDF oficial e a declaração saem só da API.',
       'Confirme se o serviço PAC/SEDEX está liberado no contrato.',
       'Use Testar pré-postagem em Frete → API Correios e tente de novo.',
     ];
@@ -1091,6 +1184,8 @@ export async function generateCorreiosTrackingCode(order) {
       if (labelUrl) labelSource = 'correios_pdf';
     }
 
+    const declaration = await attachDeclaracao(token, prepostagemId, order.id);
+
     return {
       tracking_code: trackingCode,
       prepostagem_id: prepostagemId,
@@ -1099,6 +1194,9 @@ export async function generateCorreiosTrackingCode(order) {
       label_url: labelUrl,
       label_source: labelSource,
       id_recibo: rotulo.idRecibo || null,
+      declaration_url: declaration.url || null,
+      declaration_ok: declaration.ok,
+      declaration_error: declaration.error || null,
       raw: { create: body, rotulo: rotulo.raw },
     };
   } catch (err) {
@@ -1190,6 +1288,8 @@ export async function generateCorreiosOfficialLabel(order) {
       if (labelUrl) labelSource = 'correios_pdf';
     }
 
+    const declaration = await attachDeclaracao(token, existingId, order.id);
+
     if (!trackingCode && !labelUrl) {
       throwCorreiosError({
         message: 'O rótulo foi solicitado, mas não houve código nem PDF.',
@@ -1212,6 +1312,9 @@ export async function generateCorreiosOfficialLabel(order) {
       label_url: labelUrl,
       label_source: labelSource,
       id_recibo: rotulo.idRecibo || null,
+      declaration_url: declaration.url || null,
+      declaration_ok: declaration.ok,
+      declaration_error: declaration.error || null,
       raw: { rotulo: rotulo.raw },
     };
   } catch (err) {
@@ -1531,6 +1634,19 @@ export async function testCorreiosPrePostagem({
       : { error: rotulo.emit_ok ? 'PDF não ficou pronto a tempo (idRecibo obtido).' : 'Emissão do rótulo falhou.' }),
   });
 
+  const declaration = rotulo.emit_ok
+    ? await fetchDeclaracaoConteudo(auth.token, prepostagemId)
+    : { ok: false, html: '', status: null };
+  steps.push({
+    name: 'declaracao_conteudo',
+    ok: declaration.ok,
+    endpoint: `GET /prepostagem/v1/prepostagens/declaracaoconteudo/${prepostagemId}`,
+    html: declaration.ok,
+    ...(declaration.ok
+      ? {}
+      : { error: rotulo.emit_ok ? 'HTML da declaração não retornou (status Pré-postado exigido).' : 'Emissão do rótulo falhou.' }),
+  });
+
   const trackingCode = rotulo.code || null;
   const cancel = await cancelPrePostagem(auth.token, {
     id: prepostagemId,
@@ -1553,7 +1669,7 @@ export async function testCorreiosPrePostagem({
     ok: flowOk,
     message: flowOk
       ? (cancel.ok
-        ? 'Pré-postagem OK (manual): criar → rótulo → código/PDF → cancelar. Pode gerar nos pedidos.'
+        ? 'Pré-postagem OK (manual): criar → rótulo → código/PDF → declaração → cancelar. Pode gerar nos pedidos.'
         : 'Fluxo de rótulo OK, mas o cancelamento automático falhou. Cancele no CWS se estiver pendente.')
       : 'Falha no fluxo de rótulo assíncrono. Veja as etapas abaixo.',
     steps,

@@ -18,11 +18,31 @@ import {
 } from '@/lib/orderLabels';
 import { getOrderItemCatalogPath, getOrderItemCode } from '@/lib/orderItemDisplay';
 import {
-  AlertCircle, CheckCircle2, Circle, ExternalLink, Loader2, Printer, ScanBarcode, Trash2, X,
+  AlertCircle, CheckCircle2, Circle, ExternalLink, FileText, Loader2, Printer, ScanBarcode, Trash2, X,
 } from 'lucide-react';
 
 const STATUS_OPTIONS = ['pendente', 'confirmado', 'em_preparo', 'enviado', 'entregue', 'cancelado'];
 const PAYMENT_STATUS_OPTIONS = ['aguardando_pagamento', 'pago', 'recusado', 'cancelado'];
+const PREPOSTAGEM_VALID_DAYS = 7;
+
+function isOfficialCorreiosPdf(url) {
+  return /\.pdf(\?|#|$)/i.test(String(url || ''));
+}
+
+function getPrePostagemValidity(order) {
+  if (!order?.correios_prepostagem_id) return null;
+  const startRaw = order.shipped_at;
+  if (!startRaw) {
+    return { expired: false, unknown: true, daysLeft: null };
+  }
+  const start = new Date(startRaw);
+  if (Number.isNaN(start.getTime())) {
+    return { expired: false, unknown: true, daysLeft: null };
+  }
+  const expiresAt = new Date(start.getTime() + PREPOSTAGEM_VALID_DAYS * 24 * 60 * 60 * 1000);
+  const daysLeft = Math.ceil((expiresAt.getTime() - Date.now()) / (24 * 60 * 60 * 1000));
+  return { expired: daysLeft <= 0, unknown: false, daysLeft, expiresAt };
+}
 
 export default function OrderDetailModal({ order, onClose, onUpdated, onDeleted }) {
   const queryClient = useQueryClient();
@@ -36,6 +56,7 @@ export default function OrderDetailModal({ order, onClose, onUpdated, onDeleted 
   const [trackingError, setTrackingError] = useState('');
   const [trackingCodeError, setTrackingCodeError] = useState(null);
   const [labelUrl, setLabelUrl] = useState(order.shipping_label_url || '');
+  const [declarationUrl, setDeclarationUrl] = useState(order.correios_declaracao_url || '');
   const [meProtocol, setMeProtocol] = useState(order.melhor_envio_protocol || '');
   const [meLabelError, setMeLabelError] = useState('');
   const [hasInvoicePdf, setHasInvoicePdf] = useState(Boolean(order.has_invoice_pdf));
@@ -51,6 +72,7 @@ export default function OrderDetailModal({ order, onClose, onUpdated, onDeleted 
     setMpVerifyMessage('');
     setMpVerifyError('');
     setLabelUrl(order.shipping_label_url || '');
+    setDeclarationUrl(order.correios_declaracao_url || '');
     setMeProtocol(order.melhor_envio_protocol || '');
     setMeLabelError('');
     setHasInvoicePdf(Boolean(order.has_invoice_pdf));
@@ -95,19 +117,23 @@ export default function OrderDetailModal({ order, onClose, onUpdated, onDeleted 
     mutationFn: () => api.orderShipping.generateLabel(order.id, { tracking_code: trackingCode }),
     onSuccess: (result) => {
       setTrackingCodeError(null);
+      if (result.declaration_url) {
+        setDeclarationUrl(result.declaration_url);
+      }
       if (result.label_url) {
         setLabelUrl(result.label_url);
       }
       if (result.tracking_code) {
         setTrackingCode(result.tracking_code);
       }
-      if (result.label_error) {
+      const warnings = Array.isArray(result.warnings) && result.warnings.length
+        ? result.warnings
+        : (result.label_error ? [result.label_error] : []);
+      if (warnings.length) {
         setTrackingCodeError({
-          message: result.label_source === 'correios_pdf'
-            ? 'Rótulo gerado, mas houve aviso.'
-            : 'PDF oficial indisponível; etiqueta HTML também falhou ou não foi gerada.',
-          details: [result.label_error],
-          next_steps: ['Confira saldo CWS e tente “Atualizar rótulo” novamente.'],
+          message: result.message || 'Rótulo solicitado, mas faltou PDF ou declaração.',
+          details: warnings,
+          next_steps: ['Use “Atualizar rótulo” para baixar o PDF oficial e a declaração de conteúdo.'],
         });
       }
       queryClient.invalidateQueries({ queryKey: ['orders'] });
@@ -115,7 +141,8 @@ export default function OrderDetailModal({ order, onClose, onUpdated, onDeleted 
       if (result.order) {
         onUpdated?.(result.order);
       }
-      if (result.label_url) {
+      const officialPdf = isOfficialCorreiosPdf(result.label_url);
+      if (officialPdf) {
         const href = result.label_url.startsWith('http')
           ? result.label_url
           : resolveMediaUrl(result.label_url);
@@ -215,13 +242,17 @@ export default function OrderDetailModal({ order, onClose, onUpdated, onDeleted 
       if (result.label_url) {
         setLabelUrl(result.label_url);
       }
-      if (result.label_error) {
+      if (result.declaration_url) {
+        setDeclarationUrl(result.declaration_url);
+      }
+      const warnings = Array.isArray(result.warnings) && result.warnings.length
+        ? result.warnings
+        : (result.label_error ? [result.label_error] : []);
+      if (warnings.length) {
         setTrackingCodeError({
-          message: result.label_source === 'correios_pdf'
-            ? 'Código gerado, mas houve aviso na etiqueta.'
-            : 'Código gerado, mas a etiqueta falhou (PDF oficial indisponível e HTML local também).',
-          details: [result.label_error],
-          next_steps: ['Use “Gerar etiqueta” manualmente após conferir o código.'],
+          message: result.message || 'Código gerado, mas o PDF oficial ou a declaração ficou pendente.',
+          details: warnings,
+          next_steps: ['Use “Atualizar rótulo” para baixar o PDF oficial e a declaração de conteúdo.'],
         });
       }
       queryClient.invalidateQueries({ queryKey: ['orders'] });
@@ -261,6 +292,9 @@ export default function OrderDetailModal({ order, onClose, onUpdated, onDeleted 
   });
 
   const canGenerateCorreiosCode = Boolean(correiosPreflight?.ready);
+  const prepostagemValidity = getPrePostagemValidity(order);
+  const officialLabelUrl = isOfficialCorreiosPdf(labelUrl) ? labelUrl : '';
+  const declarationHref = declarationUrl || order.correios_declaracao_url || '';
 
   const verifyMpMutation = useMutation({
     mutationFn: () => api.orders.verifyMercadoPagoPayment(order.id),
@@ -554,10 +588,21 @@ export default function OrderDetailModal({ order, onClose, onUpdated, onDeleted 
                   </Link>
                 </li>
                 <li>Neste pedido (PAC/SEDEX), clique em Gerar código Correios</li>
+                <li>Imprima o rótulo PDF oficial e a declaração de conteúdo</li>
+                <li>Leve o pacote à agência em até 7 dias</li>
               </ol>
               <p className="font-body text-[11px] text-muted-foreground mt-2">
-                Fluxo oficial: criar pré-postagem → emitir rótulo PDF → obter código. Pode marcar o pedido como Enviado.
+                Fluxo oficial: criar pré-postagem → emitir rótulo PDF → declaração de conteúdo. A etiqueta HTML local não vale no balcão.
               </p>
+              {order.correios_prepostagem_id ? (
+                <p className={`font-body text-xs mt-2 ${prepostagemValidity?.expired ? 'text-destructive' : 'text-foreground/80'}`}>
+                  {prepostagemValidity?.expired
+                    ? 'Pré-postagem expirada (7 dias). Se ainda não postou, gere novamente.'
+                    : prepostagemValidity?.unknown
+                      ? `Pré-postagem válida por ${PREPOSTAGEM_VALID_DAYS} dias após a geração. Poste na agência nesse prazo.`
+                      : `Postar na agência em até ${prepostagemValidity.daysLeft} dia(s) (validade de ${PREPOSTAGEM_VALID_DAYS} dias).`}
+                </p>
+              ) : null}
                 </>
               )}
             </div>
@@ -701,7 +746,30 @@ export default function OrderDetailModal({ order, onClose, onUpdated, onDeleted 
                   Gerar código Correios
                 </button>
               )}
-              {labelUrl && (
+              {!isMelhorEnvioOrder && officialLabelUrl && (
+                <a
+                  href={officialLabelUrl.startsWith('http') ? officialLabelUrl : resolveMediaUrl(officialLabelUrl)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 px-4 py-2.5 border border-border rounded-sm font-body text-sm hover:bg-secondary"
+                >
+                  Ver rótulo PDF
+                  <ExternalLink className="w-4 h-4" />
+                </a>
+              )}
+              {!isMelhorEnvioOrder && declarationHref ? (
+                <a
+                  href={declarationHref.startsWith('http') ? declarationHref : resolveMediaUrl(declarationHref)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 px-4 py-2.5 border border-border rounded-sm font-body text-sm hover:bg-secondary"
+                >
+                  <FileText className="w-4 h-4" />
+                  Declaração de conteúdo
+                  <ExternalLink className="w-4 h-4" />
+                </a>
+              ) : null}
+              {(isMelhorEnvioOrder || (!order.correios_prepostagem_id && labelUrl && !officialLabelUrl)) && labelUrl && (
                 <a
                   href={labelUrl.startsWith('http') ? labelUrl : resolveMediaUrl(labelUrl)}
                   target="_blank"
@@ -717,10 +785,10 @@ export default function OrderDetailModal({ order, onClose, onUpdated, onDeleted 
                   type="button"
                   title={
                     order.correios_prepostagem_id
-                      ? 'Reemitir rótulo PDF oficial da pré-postagem (Token CWS)'
+                      ? 'Reemitir rótulo PDF oficial e declaração (Token CWS)'
                       : canGenerateCorreiosCode
                         ? 'Criar pré-postagem e emitir rótulo PDF oficial'
-                        : 'Gera rótulo oficial (PAC/SEDEX) ou etiqueta HTML local'
+                        : 'Complete o checklist para gerar o rótulo oficial'
                   }
                   onClick={() => {
                     setTrackingCodeError(null);
@@ -745,6 +813,12 @@ export default function OrderDetailModal({ order, onClose, onUpdated, onDeleted 
                 Salvar envio e pagamento
               </button>
             </div>
+            {!isMelhorEnvioOrder && (officialLabelUrl || declarationHref) ? (
+              <p className="font-body text-[11px] text-muted-foreground">
+                {officialLabelUrl ? 'Rótulo: PDF oficial dos Correios' : 'Rótulo PDF ainda não disponível'}
+                {declarationHref ? ' · Declaração de conteúdo pronta para imprimir' : ' · Declaração pendente — use Atualizar rótulo'}
+              </p>
+            ) : null}
 
             <OrderTrackingPanel
               trackingCode={trackingCode}

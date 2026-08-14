@@ -1570,6 +1570,7 @@ export default function AdminSettings() {
                                 {step.id_recibo && <> · recibo {step.id_recibo}</>}
                                 {step.tracking_code && <> · {step.tracking_code}</>}
                                 {step.pdf != null && <> · pdf: {step.pdf ? 'sim' : 'não'}</>}
+                                {step.html != null && <> · html: {step.html ? 'sim' : 'não'}</>}
                                 {step.prepostagem_no_token != null && (
                                   <> · pré-postagem no token: {step.prepostagem_no_token ? 'sim' : 'não'}</>
                                 )}

@@ -42,6 +42,70 @@ async function loadOrderOr404(id, res) {
   return enrichOrderItems(pool, rowToEntity(result.rows[0]));
 }
 
+function correiosLabelWarnings(generated) {
+  const warnings = [];
+  if (!generated.label_url) {
+    warnings.push('PDF oficial indisponível. Use Atualizar rótulo — a etiqueta HTML local não vale no balcão.');
+  }
+  if (!generated.declaration_url) {
+    warnings.push(
+      generated.declaration_error
+        || 'Declaração de conteúdo indisponível. Use Atualizar rótulo para tentar de novo.'
+    );
+  }
+  return warnings;
+}
+
+function officialPdfUrl(url) {
+  return /\.pdf(\?|#|$)/i.test(String(url || '')) ? url : null;
+}
+
+function correiosLabelMessage(generated, { trackingCode } = {}) {
+  const hasPdf = Boolean(generated.label_url);
+  const hasDecl = Boolean(generated.declaration_url);
+  const hasCode = Boolean(trackingCode || generated.tracking_code);
+  if (hasPdf && hasDecl) {
+    return hasCode
+      ? 'Código, rótulo oficial e declaração de conteúdo gerados'
+      : 'Rótulo oficial e declaração de conteúdo gerados';
+  }
+  if (hasPdf && hasCode) {
+    return 'Código e rótulo oficial gerados; declaração pendente — use Atualizar rótulo';
+  }
+  if (hasCode) {
+    return 'Código gerado, mas o PDF oficial não ficou pronto. Use Atualizar rótulo.';
+  }
+  return 'Pré-postagem atualizada';
+}
+
+async function persistCorreiosLabelResult(order, generated, trackingCode) {
+  const result = await pool.query(
+    `UPDATE orders
+     SET tracking_code = COALESCE($1, tracking_code),
+         shipping_label_url = COALESCE($2, shipping_label_url),
+         correios_prepostagem_id = COALESCE($3, correios_prepostagem_id),
+         correios_id_recibo = COALESCE($4, correios_id_recibo),
+         correios_declaracao_url = COALESCE($5, correios_declaracao_url),
+         status = CASE
+           WHEN $1 IS NOT NULL AND status IN ('confirmado', 'em_preparo', 'pendente') THEN 'enviado'
+           ELSE status
+         END,
+         shipped_at = CASE WHEN $1 IS NOT NULL THEN COALESCE(shipped_at, NOW()) ELSE shipped_at END,
+         updated_date = NOW()
+     WHERE id = $6
+     RETURNING *`,
+    [
+      trackingCode || generated.tracking_code || null,
+      generated.label_url || null,
+      generated.prepostagem_id || null,
+      generated.id_recibo || null,
+      generated.declaration_url || null,
+      order.id,
+    ]
+  );
+  return result.rows[0];
+}
+
 router.get('/', async (req, res) => {
   try {
     const { sort = '-created_date', limit = '100' } = req.query;
@@ -92,60 +156,23 @@ router.post('/:id/etiqueta', async (req, res) => {
     // PAC/SEDEX: rótulo oficial via Token CWS (reemite se já houver pré-postagem)
     if (isCorreiosPrePostagemOrder(order)) {
       const generated = await generateCorreiosOfficialLabel(order);
-
-      let labelUrl = generated.label_url || null;
-      let labelSource = generated.label_source || null;
-      let labelError = null;
-
-      if (!labelUrl) {
-        try {
-          const label = await generateCorreiosShippingLabel(order, {
-            trackingCode: generated.tracking_code
-              || normalizeTrackingCode(req.body?.tracking_code || order.tracking_code),
-          });
-          labelUrl = label.label_url;
-          labelSource = 'html_local';
-        } catch (labelErr) {
-          console.error('Etiqueta HTML falhou após rótulo Correios:', labelErr);
-          labelError = labelErr.message || 'Falha ao gerar etiqueta HTML local';
-        }
-      }
-
       const trackingCode = generated.tracking_code
         || normalizeTrackingCode(req.body?.tracking_code || order.tracking_code)
         || null;
-
-      const result = await pool.query(
-        `UPDATE orders
-         SET tracking_code = COALESCE($1, tracking_code),
-             shipping_label_url = COALESCE($2, shipping_label_url),
-             correios_prepostagem_id = COALESCE($3, correios_prepostagem_id),
-             status = CASE
-               WHEN $1 IS NOT NULL AND status IN ('confirmado', 'em_preparo', 'pendente') THEN 'enviado'
-               ELSE status
-             END,
-             shipped_at = CASE WHEN $1 IS NOT NULL THEN COALESCE(shipped_at, NOW()) ELSE shipped_at END,
-             updated_date = NOW()
-         WHERE id = $4
-         RETURNING *`,
-        [trackingCode, labelUrl, generated.prepostagem_id || null, order.id]
-      );
+      const warnings = correiosLabelWarnings(generated);
+      const row = await persistCorreiosLabelResult(order, generated, trackingCode);
 
       return res.json({
-        message: labelError
-          ? 'Rótulo solicitado (PDF/HTML falhou)'
-          : labelSource === 'correios_pdf'
-            ? 'Rótulo oficial dos Correios gerado'
-            : trackingCode
-              ? 'Código gerado; etiqueta HTML local (PDF oficial indisponível)'
-              : 'Etiqueta gerada',
-        tracking_code: result.rows[0]?.tracking_code || trackingCode,
+        message: correiosLabelMessage(generated, { trackingCode }),
+        tracking_code: row?.tracking_code || trackingCode,
         prepostagem_id: generated.prepostagem_id || null,
         id_recibo: generated.id_recibo || null,
-        label_url: labelUrl,
-        label_source: labelSource,
-        label_error: labelError,
-        order: withInvoiceFlags(rowToEntity(result.rows[0])),
+        label_url: generated.label_url || officialPdfUrl(row?.shipping_label_url),
+        label_source: generated.label_source || (officialPdfUrl(row?.shipping_label_url) ? 'correios_pdf' : null),
+        declaration_url: generated.declaration_url || row?.correios_declaracao_url || null,
+        label_error: warnings[0] || null,
+        warnings,
+        order: withInvoiceFlags(rowToEntity(row)),
       });
     }
 
@@ -260,51 +287,20 @@ router.post('/:id/codigo-correios', async (req, res) => {
     if (!order) return;
 
     const generated = await generateCorreiosTrackingCode(order);
-
-    let labelUrl = generated.label_url || null;
-    let labelSource = generated.label_source || null;
-    let labelError = null;
-
-    // Manual: PDF oficial primeiro; HTML local só como fallback
-    if (!labelUrl) {
-      try {
-        const label = await generateCorreiosShippingLabel(order, {
-          trackingCode: generated.tracking_code,
-        });
-        labelUrl = label.label_url;
-        labelSource = 'html_local';
-      } catch (labelErr) {
-        console.error('Etiqueta HTML falhou após código Correios:', labelErr);
-        labelError = labelErr.message || 'Falha ao gerar etiqueta HTML local';
-      }
-    }
-
-    const result = await pool.query(
-      `UPDATE orders
-       SET tracking_code = $1,
-           shipping_label_url = COALESCE($2, shipping_label_url),
-           correios_prepostagem_id = COALESCE($3, correios_prepostagem_id),
-           status = CASE WHEN status IN ('confirmado', 'em_preparo', 'pendente') THEN 'enviado' ELSE status END,
-           shipped_at = COALESCE(shipped_at, NOW()),
-           updated_date = NOW()
-       WHERE id = $4
-       RETURNING *`,
-      [generated.tracking_code, labelUrl, generated.prepostagem_id || null, order.id]
-    );
+    const warnings = correiosLabelWarnings(generated);
+    const row = await persistCorreiosLabelResult(order, generated, generated.tracking_code);
 
     res.json({
-      message: labelError
-        ? 'Código de rastreio gerado (etiqueta falhou)'
-        : labelSource === 'correios_pdf'
-          ? 'Código e rótulo oficial dos Correios gerados'
-          : 'Código de rastreio gerado com sucesso',
+      message: correiosLabelMessage(generated, { trackingCode: generated.tracking_code }),
       tracking_code: generated.tracking_code,
       prepostagem_id: generated.prepostagem_id,
       id_recibo: generated.id_recibo || null,
-      label_url: labelUrl,
-      label_source: labelSource,
-      label_error: labelError,
-      order: withInvoiceFlags(rowToEntity(result.rows[0])),
+      label_url: generated.label_url || officialPdfUrl(row?.shipping_label_url),
+      label_source: generated.label_source || (officialPdfUrl(row?.shipping_label_url) ? 'correios_pdf' : null),
+      declaration_url: generated.declaration_url || row?.correios_declaracao_url || null,
+      label_error: warnings[0] || null,
+      warnings,
+      order: withInvoiceFlags(rowToEntity(row)),
     });
   } catch (err) {
     console.error('Erro ao gerar código Correios:', err);
