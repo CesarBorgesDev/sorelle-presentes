@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useLocation, Outlet } from 'react-router-dom';
 import { LayoutDashboard, Package, ShoppingBag, Menu, X, LogOut, Users, Settings, FileText, Boxes, Tag, FolderTree, UserCircle } from 'lucide-react';
-import { api } from '@/api/apiClient';
+import { useAuth } from '@/lib/AuthContext';
 
 const navItems = [
   { label: 'Dashboard', icon: LayoutDashboard, path: '/admin' },
@@ -18,6 +18,7 @@ const navItems = [
 
 export default function AdminLayout() {
   const location = useLocation();
+  const { logout } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   return (
@@ -63,7 +64,7 @@ export default function AdminLayout() {
             Ver Loja
           </Link>
           <button
-            onClick={() => api.auth.logout()}
+            onClick={() => logout(true)}
             className="w-full flex items-center gap-3 px-4 py-3 text-muted-foreground hover:text-destructive text-sm font-body tracking-wide transition-colors"
           >
             <LogOut className="w-4 h-4" />
