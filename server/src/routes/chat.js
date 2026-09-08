@@ -12,8 +12,9 @@ import {
   publicConversation,
   setMessageWaId,
 } from '../services/chatStore.js';
-import { notifyStoreNewSiteMessage, sendWhatsApp } from '../services/baileys.js';
+import { forwardSiteMessageToWhatsApp } from '../services/baileys.js';
 import { emitChatMessage, emitConversationUpdate } from '../services/realtime.js';
+import { maybeRunSalesBot } from '../services/salesBot.js';
 
 const router = Router();
 
@@ -133,19 +134,18 @@ router.post('/messages', async (req, res) => {
     emitChatMessage(fresh, message);
     emitConversationUpdate(fresh);
 
-    if (fresh?.visitor_jid) {
-      try {
-        const sent = await sendWhatsApp(fresh.visitor_jid, `📱 Pelo site:\n${body}`);
-        const waId = sent?.key?.id;
-        if (waId) await setMessageWaId(message.id, waId);
-      } catch (err) {
-        console.error('[chat] Falha ao enviar no WhatsApp:', err.message);
-      }
-    } else {
-      await notifyStoreNewSiteMessage(fresh, body);
+    try {
+      const sent = await forwardSiteMessageToWhatsApp(fresh, body);
+      const waId = sent?.key?.id;
+      if (waId) await setMessageWaId(message.id, waId);
+    } catch (err) {
+      console.error('[chat] Falha ao enviar no WhatsApp:', err.message);
     }
 
     res.status(201).json({ conversation: await publicConversation(fresh), message });
+    maybeRunSalesBot({ conversation: fresh, inboundText: body }).catch((err) => {
+      console.error('[bot] chat:', err.message);
+    });
   } catch (err) {
     console.error('[chat] send message:', err);
     res.status(500).json({ message: 'Não foi possível enviar a mensagem' });

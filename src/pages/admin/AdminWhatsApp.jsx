@@ -31,6 +31,8 @@ export default function AdminWhatsApp() {
   const [notifyPhone, setNotifyPhone] = useState('');
   const [notifySaving, setNotifySaving] = useState(false);
   const [notifyMessage, setNotifyMessage] = useState('');
+  const [botEnabled, setBotEnabled] = useState(true);
+  const [botSaving, setBotSaving] = useState(false);
   const [conversations, setConversations] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -67,15 +69,17 @@ export default function AdminWhatsApp() {
     let cancelled = false;
     (async () => {
       try {
-        const [status, notify, list] = await Promise.all([
+        const [status, notify, list, bot] = await Promise.all([
           api.whatsapp.status(),
           api.whatsapp.getNotifyPhone(),
           api.whatsapp.conversations({ status: 'open' }),
+          api.whatsapp.getBot(),
         ]);
         if (cancelled) return;
         setWaStatus(status);
         setNotifyPhone(notify.phone || '');
         setConversations(list);
+        setBotEnabled(bot.enabled !== false);
       } catch (err) {
         if (!cancelled) setError(err.message || 'Falha ao carregar o WhatsApp');
       }
@@ -156,6 +160,30 @@ export default function AdminWhatsApp() {
     }
   };
 
+  const toggleBot = async () => {
+    setBotSaving(true);
+    try {
+      const result = await api.whatsapp.saveBot(!botEnabled);
+      setBotEnabled(result.enabled !== false);
+    } catch (err) {
+      setError(err.message || 'Não foi possível atualizar o robô');
+    } finally {
+      setBotSaving(false);
+    }
+  };
+
+  const toggleConversationBot = async () => {
+    if (!selectedId || !selected) return;
+    try {
+      const updated = await api.whatsapp.updateConversation(selectedId, {
+        bot_paused: !selected.bot_paused,
+      });
+      upsertConversation(updated);
+    } catch (err) {
+      setError(err.message || 'Não foi possível atualizar o robô desta conversa');
+    }
+  };
+
   const saveNotify = async (event) => {
     event.preventDefault();
     setNotifySaving(true);
@@ -224,8 +252,9 @@ export default function AdminWhatsApp() {
               </p>
             </div>
             <p className="font-body text-sm text-muted-foreground leading-relaxed max-w-xl">
-              Escaneie o QR Code com o WhatsApp da loja (Aparelhos conectados). A sessão fica salva no servidor.
-              O número notificador recebe um aviso quando o visitante fala no site sem informar o WhatsApp.
+              Escaneie o QR Code com o WhatsApp da loja (Aparelhos conectados). Mensagens do site aparecem nesse
+              WhatsApp para você responder pelo celular. Sem o número do visitante, a conversa vai para o chat
+              “Você” (ou para o número notificador, se estiver preenchido).
             </p>
             <div className="flex flex-wrap gap-2">
               <button
@@ -265,6 +294,15 @@ export default function AdminWhatsApp() {
             {notifyMessage && (
               <p className="font-body text-xs text-muted-foreground">{notifyMessage}</p>
             )}
+            <label className="flex items-center gap-2 pt-2 font-body text-sm text-foreground">
+              <input
+                type="checkbox"
+                checked={botEnabled}
+                onChange={toggleBot}
+                disabled={botSaving}
+              />
+              Robô de atendimento (aquece o lead, indica produtos e tira dúvidas)
+            </label>
           </div>
           <div className="w-full lg:w-56 shrink-0 flex items-center justify-center bg-secondary/40 rounded-sm p-4 min-h-[14rem]">
             {waStatus.qr ? (
@@ -324,11 +362,21 @@ export default function AdminWhatsApp() {
         <div className="lg:col-span-8 bg-card border border-border rounded-sm overflow-hidden flex flex-col min-h-[24rem]">
           {selected ? (
             <>
-              <div className="px-4 py-3 border-b border-border">
-                <p className="font-body text-sm text-foreground">{selected.visitor_name || 'Visitante'}</p>
-                <p className="font-body text-xs text-muted-foreground">
-                  {selected.visitor_phone ? `WhatsApp ${selected.visitor_phone}` : 'Somente no site'}
-                </p>
+              <div className="px-4 py-3 border-b border-border flex items-start justify-between gap-3">
+                <div>
+                  <p className="font-body text-sm text-foreground">{selected.visitor_name || 'Visitante'}</p>
+                  <p className="font-body text-xs text-muted-foreground">
+                    {selected.visitor_phone ? `WhatsApp ${selected.visitor_phone}` : 'Somente no site'}
+                    {selected.bot_paused ? ' · robô pausado' : botEnabled ? ' · robô ativo' : ''}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={toggleConversationBot}
+                  className="shrink-0 px-3 py-1.5 border border-border font-body text-xs rounded-sm"
+                >
+                  {selected.bot_paused ? 'Reativar robô' : 'Pausar robô'}
+                </button>
               </div>
               <div ref={listRef} className="flex-1 overflow-y-auto p-4 space-y-2 bg-secondary/20">
                 {messages.map((message) => {

@@ -9,11 +9,13 @@ import {
   markAdminRead,
   setConversationStatus,
   setMessageWaId,
+  updateBotState,
 } from '../services/chatStore.js';
 import {
   getWhatsAppStatus,
   isWhatsAppConnected,
   logoutWhatsApp,
+  forwardSiteMessageToWhatsApp,
   sendWhatsApp,
   startWhatsApp,
 } from '../services/baileys.js';
@@ -65,6 +67,17 @@ router.get('/notify-phone', async (_req, res) => {
     display: formatPhoneDisplay(phone),
     connected: isWhatsAppConnected(),
   });
+});
+
+router.get('/bot', async (_req, res) => {
+  const enabled = (await getSetting('whatsapp_bot_enabled')) !== 'false';
+  res.json({ enabled });
+});
+
+router.put('/bot', async (req, res) => {
+  const enabled = req.body?.enabled !== false && req.body?.enabled !== 'false';
+  await setSetting('whatsapp_bot_enabled', enabled ? 'true' : 'false');
+  res.json({ enabled });
 });
 
 router.put('/notify-phone', async (req, res) => {
@@ -127,6 +140,8 @@ router.post('/conversations/:id/messages', async (req, res) => {
       return res.status(400).json({ message: 'Digite uma mensagem' });
     }
 
+    await updateBotState(conversation.id, { paused: true, stage: 'human' });
+
     const message = await addMessage({
       conversationId: conversation.id,
       direction: 'outbound',
@@ -139,14 +154,14 @@ router.post('/conversations/:id/messages', async (req, res) => {
     emitChatMessage(fresh, message);
     emitConversationUpdate(fresh);
 
-    if (fresh?.visitor_jid) {
-      try {
-        const sent = await sendWhatsApp(fresh.visitor_jid, body);
-        const waId = sent?.key?.id;
-        if (waId) await setMessageWaId(message.id, waId);
-      } catch (err) {
-        console.error('[whatsapp] Falha ao responder no WhatsApp:', err.message);
-      }
+    try {
+      const sent = fresh?.visitor_jid
+        ? await sendWhatsApp(fresh.visitor_jid, body)
+        : await forwardSiteMessageToWhatsApp(fresh, body, { fromAdmin: true });
+      const waId = sent?.key?.id;
+      if (waId) await setMessageWaId(message.id, waId);
+    } catch (err) {
+      console.error('[whatsapp] Falha ao responder no WhatsApp:', err.message);
     }
 
     res.status(201).json({ conversation: fresh, message });
@@ -162,7 +177,16 @@ router.patch('/conversations/:id', async (req, res) => {
     if (!conversation) {
       return res.status(404).json({ message: 'Conversa não encontrada' });
     }
-    const updated = await setConversationStatus(conversation.id, req.body?.status);
+    let updated = conversation;
+    if (req.body?.status) {
+      updated = await setConversationStatus(conversation.id, req.body.status);
+    }
+    if (typeof req.body?.bot_paused === 'boolean') {
+      updated = await updateBotState(conversation.id, {
+        paused: req.body.bot_paused,
+        stage: req.body.bot_paused ? 'human' : 'discover',
+      });
+    }
     emitConversationUpdate(updated);
     res.json(updated);
   } catch (err) {

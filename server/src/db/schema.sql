@@ -404,8 +404,20 @@ CREATE INDEX IF NOT EXISTS idx_whatsapp_messages_conversation_date
 CREATE UNIQUE INDEX IF NOT EXISTS idx_whatsapp_messages_wa_id
   ON whatsapp_messages(wa_message_id) WHERE wa_message_id IS NOT NULL;
 
+ALTER TABLE whatsapp_conversations ADD COLUMN IF NOT EXISTS bot_paused BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE whatsapp_conversations ADD COLUMN IF NOT EXISTS bot_stage VARCHAR(40) NOT NULL DEFAULT 'greeting';
+ALTER TABLE whatsapp_conversations ADD COLUMN IF NOT EXISTS bot_context JSONB NOT NULL DEFAULT '{}';
+
+ALTER TABLE whatsapp_messages DROP CONSTRAINT IF EXISTS whatsapp_messages_source_check;
+ALTER TABLE whatsapp_messages ADD CONSTRAINT whatsapp_messages_source_check
+  CHECK (source IN ('site', 'whatsapp', 'admin', 'bot'));
+
 INSERT INTO app_settings (key, value) VALUES
   ('whatsapp_notify_phone', '')
+ON CONFLICT (key) DO NOTHING;
+
+INSERT INTO app_settings (key, value) VALUES
+  ('whatsapp_bot_enabled', 'true')
 ON CONFLICT (key) DO NOTHING;
 
 -- Substitui nome igual ao prefixo do e-mail pelo nome real da última compra.

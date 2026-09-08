@@ -196,7 +196,7 @@ export default function WhatsAppChatWidget() {
 
   const subtitle = useMemo(() => {
     if (phone.trim()) return 'Também no seu WhatsApp';
-    return 'Respondemos por aqui';
+    return 'Chega no WhatsApp da loja';
   }, [phone]);
 
   return (

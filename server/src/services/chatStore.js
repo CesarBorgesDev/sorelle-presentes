@@ -12,6 +12,17 @@ export function newSessionToken() {
   return crypto.randomUUID();
 }
 
+function parseBotContext(raw) {
+  if (!raw) return {};
+  if (typeof raw === 'object' && !Array.isArray(raw)) return raw;
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
 function mapConversation(row) {
   if (!row) return null;
   return {
@@ -24,6 +35,9 @@ function mapConversation(row) {
     status: row.status,
     last_message_at: row.last_message_at,
     unread_admin: Number(row.unread_admin || 0),
+    bot_paused: Boolean(row.bot_paused),
+    bot_stage: row.bot_stage || 'greeting',
+    bot_context: parseBotContext(row.bot_context),
     last_message_preview: row.last_message_preview ?? undefined,
     created_date: row.created_date,
     updated_date: row.updated_date,
@@ -56,6 +70,34 @@ export async function getConversationById(id) {
   const result = await pool.query(
     'SELECT * FROM whatsapp_conversations WHERE id = $1 LIMIT 1',
     [id]
+  );
+  return mapConversation(result.rows[0]);
+}
+
+export function conversationTag(conversation) {
+  return String(conversation?.id || '').replace(/-/g, '').slice(0, 8).toLowerCase();
+}
+
+export async function getConversationByTag(tag) {
+  const clean = String(tag || '').replace(/[^0-9a-f]/gi, '').toLowerCase().slice(0, 8);
+  if (clean.length < 8) return null;
+  const result = await pool.query(
+    `SELECT * FROM whatsapp_conversations
+     WHERE REPLACE(id::text, '-', '') LIKE $1
+     LIMIT 1`,
+    [`${clean}%`]
+  );
+  return mapConversation(result.rows[0]);
+}
+
+export async function getLatestOpenConversation({ siteOnly = false } = {}) {
+  const result = await pool.query(
+    `SELECT * FROM whatsapp_conversations
+     WHERE status = 'open'
+       AND ($1::boolean = false OR visitor_jid IS NULL)
+     ORDER BY last_message_at DESC NULLS LAST, created_date DESC
+     LIMIT 1`,
+    [Boolean(siteOnly)]
   );
   return mapConversation(result.rows[0]);
 }
@@ -294,6 +336,25 @@ export async function attachVisitorProfile(conversation, {
      WHERE id = $1
      RETURNING *`,
     [conversation.id, name, phone, jid, nextUserId]
+  );
+  return mapConversation(result.rows[0]);
+}
+
+export async function updateBotState(conversationId, { stage, context, paused } = {}) {
+  const result = await pool.query(
+    `UPDATE whatsapp_conversations
+     SET bot_stage = COALESCE($2, bot_stage),
+         bot_context = COALESCE($3::jsonb, bot_context),
+         bot_paused = COALESCE($4, bot_paused),
+         updated_date = NOW()
+     WHERE id = $1
+     RETURNING *`,
+    [
+      conversationId,
+      stage || null,
+      context ? JSON.stringify(context) : null,
+      typeof paused === 'boolean' ? paused : null,
+    ]
   );
   return mapConversation(result.rows[0]);
 }

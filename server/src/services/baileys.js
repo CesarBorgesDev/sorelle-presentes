@@ -13,9 +13,13 @@ import QRCode from 'qrcode';
 import { getSetting } from './settings.js';
 import {
   addMessage,
+  conversationTag,
   createConversation,
   getConversationByJid,
+  getConversationByTag,
+  getLatestOpenConversation,
   hasWaMessage,
+  updateBotState,
 } from './chatStore.js';
 import {
   emitChatMessage,
@@ -39,6 +43,14 @@ let lastQr = null;
 let connectionStatus = 'disconnected';
 let connectedPhone = null;
 let shouldReconnect = true;
+const recentSentIds = new Set();
+const SITE_FORWARD_RE = /^💬/;
+
+function rememberSentId(id) {
+  if (!id) return;
+  recentSentIds.add(id);
+  setTimeout(() => recentSentIds.delete(id), 60_000);
+}
 
 function broadcastStatus() {
   emitWhatsAppStatus(getWhatsAppStatus());
@@ -116,24 +128,118 @@ async function getNotifyJid() {
   return phoneToJid(phone);
 }
 
+export function getSelfJid() {
+  const raw = sock?.user?.id;
+  if (!raw) return null;
+  const phone = jidToPhone(raw);
+  if (phone) return `${phone}@s.whatsapp.net`;
+  const user = String(raw).split(':')[0];
+  if (user.includes('@')) return user;
+  return `${user}@s.whatsapp.net`;
+}
+
+function isOwnJid(jid) {
+  if (!jid) return false;
+  if (isSameJid(jid, getSelfJid())) return true;
+  const lid = sock?.user?.lid;
+  if (lid && (jid === lid || String(jid).split(':')[0] === String(lid).split(':')[0])) {
+    return true;
+  }
+  const raw = sock?.user?.id;
+  return Boolean(raw && (jid === raw || String(jid).split(':')[0] === String(raw).split(':')[0]));
+}
+
+export async function resolveBridgeJid(conversation) {
+  if (conversation?.visitor_jid) return conversation.visitor_jid;
+  const notifyJid = await getNotifyJid();
+  if (notifyJid) return notifyJid;
+  return getSelfJid();
+}
+
+async function isBridgeInboxJid(jid) {
+  if (isOwnJid(jid)) return true;
+  const notifyJid = await getNotifyJid();
+  return Boolean(notifyJid && isSameJid(jid, notifyJid));
+}
+
 export async function sendWhatsApp(jid, text) {
   if (!isWhatsAppConnected() || !jid || !text) return null;
-  return sock.sendMessage(jid, { text: String(text).slice(0, 4000) });
+  const sent = await sock.sendMessage(jid, { text: String(text).slice(0, 4000) });
+  rememberSentId(sent?.key?.id);
+  return sent;
+}
+
+function buildSiteForwardText(conversation, text, { fromAdmin = false } = {}) {
+  const name = conversation?.visitor_name || 'Visitante';
+  const tag = conversationTag(conversation);
+  const body = String(text || '').trim();
+  if (conversation?.visitor_jid && !fromAdmin) {
+    return `💬 ${name} (site):\n${body}`;
+  }
+  if (fromAdmin && conversation?.visitor_jid) {
+    return body;
+  }
+  const who = fromAdmin ? 'Sorelle' : name;
+  return `💬 Site · ${who} [#${tag}]\n${body}`;
+}
+
+export async function forwardSiteMessageToWhatsApp(conversation, text, options = {}) {
+  if (!isWhatsAppConnected()) {
+    console.warn('[whatsapp] Mensagem do site não enviada: WhatsApp desconectado');
+    return null;
+  }
+  const jid = await resolveBridgeJid(conversation);
+  if (!jid) {
+    console.warn('[whatsapp] Sem destino para encaminhar a mensagem do site');
+    return null;
+  }
+  const payload = buildSiteForwardText(conversation, text, options);
+  try {
+    return await sendWhatsApp(jid, payload);
+  } catch (err) {
+    const fallback = sock?.user?.id;
+    if (fallback && fallback !== jid && !conversation?.visitor_jid) {
+      try {
+        return await sendWhatsApp(fallback, payload);
+      } catch (retryErr) {
+        console.error('[whatsapp] Falha ao encaminhar mensagem do site:', retryErr.message);
+        return null;
+      }
+    }
+    console.error('[whatsapp] Falha ao encaminhar mensagem do site:', err.message);
+    return null;
+  }
 }
 
 export async function notifyStoreNewSiteMessage(conversation, text) {
-  if (!isWhatsAppConnected()) return;
-  if (conversation?.visitor_jid) return;
-  const notifyJid = await getNotifyJid();
-  if (!notifyJid) return;
-  const name = conversation?.visitor_name || 'Visitante';
-  const preview = String(text || '').trim().slice(0, 200);
-  const body = `💬 Chat do site — ${name}\n${preview}\n\nResponda em Admin → Mensagens.`;
-  try {
-    await sendWhatsApp(notifyJid, body);
-  } catch (err) {
-    console.error('[whatsapp] Falha ao notificar loja:', err.message);
+  return forwardSiteMessageToWhatsApp(conversation, text);
+}
+
+function parseConversationTag(text) {
+  const match = String(text || '').match(/\[#([0-9a-f]{8})\]/i)
+    || String(text || '').match(/^#([0-9a-f]{8})\b/i);
+  return match?.[1] || null;
+}
+
+function isOurSiteForward(text) {
+  return SITE_FORWARD_RE.test(String(text || '').trim());
+}
+
+function stripReplyTag(text) {
+  return String(text || '')
+    .replace(/^\s*\[#[0-9a-f]{8}\]\s*/i, '')
+    .replace(/^\s*#[0-9a-f]{8}\s*/i, '')
+    .trim();
+}
+
+async function resolveBridgeConversation(text) {
+  const tag = parseConversationTag(text);
+  if (tag) {
+    const tagged = await getConversationByTag(tag);
+    if (tagged) return tagged;
   }
+  return (await getLatestOpenConversation({ siteOnly: true }))
+    || (await getLatestOpenConversation());
 }
 
 async function handleIncomingWaMessage(msg) {
@@ -141,16 +247,39 @@ async function handleIncomingWaMessage(msg) {
   const jid = msg.key.remoteJid;
   if (isIgnoredJid(jid)) return;
 
-  const notifyJid = await getNotifyJid();
-  if (notifyJid && isSameJid(jid, notifyJid)) return;
-
   const waMessageId = msg.key.id;
-  if (waMessageId && await hasWaMessage(waMessageId)) return;
+  if (waMessageId && (recentSentIds.has(waMessageId) || await hasWaMessage(waMessageId))) {
+    return;
+  }
 
   const text = extractWaText(msg.message);
   if (!text) return;
 
   const fromMe = Boolean(msg.key.fromMe);
+  const bridgeInbox = await isBridgeInboxJid(jid);
+
+  if (fromMe && isOurSiteForward(text)) return;
+
+  if (bridgeInbox) {
+    const conversation = await resolveBridgeConversation(text);
+    if (!conversation) return;
+    const body = stripReplyTag(text);
+    if (!body || isOurSiteForward(body)) return;
+    const message = await addMessage({
+      conversationId: conversation.id,
+      direction: 'outbound',
+      source: 'whatsapp',
+      body,
+      waMessageId,
+      incrementUnread: false,
+    });
+    if (!message) return;
+    emitChatMessage(conversation, message);
+    emitConversationUpdate(conversation);
+    updateBotState(conversation.id, { paused: true, stage: 'human' }).catch(() => {});
+    return;
+  }
+
   let conversation = await getConversationByJid(jid);
   if (!conversation) {
     if (fromMe) return;
@@ -175,6 +304,18 @@ async function handleIncomingWaMessage(msg) {
   const fresh = await getConversationByJid(jid);
   emitChatMessage(fresh || conversation, message);
   emitConversationUpdate(fresh || conversation);
+
+  if (fromMe) {
+    updateBotState((fresh || conversation).id, { paused: true, stage: 'human' }).catch(() => {});
+    return;
+  }
+
+  import('./salesBot.js')
+    .then(({ maybeRunSalesBot }) => maybeRunSalesBot({
+      conversation: fresh || conversation,
+      inboundText: text,
+    }))
+    .catch((err) => console.error('[bot] whatsapp:', err.message));
 }
 
 function scheduleReconnect() {

@@ -807,6 +807,17 @@ export const whatsappApi = {
     });
   },
 
+  getBot() {
+    return apiFetch('/whatsapp/bot');
+  },
+
+  saveBot(enabled) {
+    return apiFetch('/whatsapp/bot', {
+      method: 'PUT',
+      body: JSON.stringify({ enabled }),
+    });
+  },
+
   conversations(params = {}) {
     const search = new URLSearchParams();
     if (params.status) search.set('status', params.status);
