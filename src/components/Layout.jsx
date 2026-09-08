@@ -7,6 +7,7 @@ import { trackSiteVisit } from '@/lib/siteAnalytics';
 import Navbar from './Navbar';
 import Footer from './Footer';
 import CartDrawer from './CartDrawer';
+import WhatsAppChatWidget from './WhatsAppChatWidget';
 
 export default function Layout() {
   const [cartOpen, setCartOpen] = useState(false);
@@ -37,6 +38,7 @@ export default function Layout() {
         onClose={() => setCartOpen(false)}
         items={cartItems}
       />
+      <WhatsAppChatWidget />
     </div>
   );
 }

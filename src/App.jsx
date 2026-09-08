@@ -72,6 +72,8 @@ import InstitutionalPage from '@/pages/InstitutionalPage';
 
 import AdminContent from '@/pages/admin/AdminContent';
 
+import AdminWhatsApp from '@/pages/admin/AdminWhatsApp';
+
 import ApiStatus from '@/pages/ApiStatus';
 
 
@@ -150,6 +152,8 @@ function AppRoutes() {
             <Route path="/admin/clientes" element={<AdminCustomers />} />
 
             <Route path="/admin/afiliados" element={<AdminAffiliates />} />
+
+            <Route path="/admin/mensagens" element={<AdminWhatsApp />} />
 
             <Route path="/admin/configuracoes" element={<AdminSettings />} />
 

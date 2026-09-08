@@ -13,11 +13,15 @@
     "db:update-images": "node src/db/updateProductImages.js"
   },
   "dependencies": {
+    "@whiskeysockets/baileys": "^6.7.24",
     "bcryptjs": "^3.0.2",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
     "jsonwebtoken": "^9.0.2",
-    "pg": "^8.13.3"
+    "pg": "^8.13.3",
+    "pino": "^10.3.1",
+    "qrcode": "^1.5.4",
+    "socket.io": "^4.8.3"
   }
 }

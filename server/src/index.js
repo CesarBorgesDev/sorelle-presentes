@@ -1,3 +1,4 @@
+import http from 'http';
 import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -24,6 +25,10 @@ import categoryRoutes from './routes/categories.js';
 import melhorEnvioRoutes from './routes/melhorEnvio.js';
 import backupRoutes from './routes/backup.js';
 import analyticsRoutes from './routes/analytics.js';
+import chatRoutes from './routes/chat.js';
+import whatsappRoutes from './routes/whatsapp.js';
+import { initRealtime, closeRealtime } from './services/realtime.js';
+import { closeWhatsApp, startWhatsAppIfSessionExists } from './services/baileys.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -82,6 +87,8 @@ app.use('/api/categories', categoryRoutes);
 app.use('/api/melhor-envio', melhorEnvioRoutes);
 app.use('/api/backup', backupRoutes);
 app.use('/api/analytics', analyticsRoutes);
+app.use('/api/chat', chatRoutes);
+app.use('/api/whatsapp', whatsappRoutes);
 
 app.use((_req, res) => {
   res.status(404).json({ message: 'Rota não encontrada' });
@@ -94,14 +101,20 @@ app.use((err, _req, res, _next) => {
 
 assertRequiredConfig();
 
-const server = app.listen(config.port, config.host, () => {
+const httpServer = http.createServer(app);
+initRealtime(httpServer);
+
+const server = httpServer.listen(config.port, config.host, () => {
   console.log(`[Sorelle API] ${config.nodeEnv} → http://${config.host}:${config.port}`);
   console.log(`[Sorelle API] CORS FRONTEND=${config.frontendUrl || '(auto)'} | API=${config.appPublicUrl || '(auto)'}`);
+  startWhatsAppIfSessionExists();
 });
 
 function shutdown(signal) {
   console.log(`[Sorelle API] Encerrando (${signal})...`);
   server.close(async () => {
+    await closeWhatsApp().catch(() => {});
+    await closeRealtime().catch(() => {});
     await pool.end().catch(() => {});
     process.exit(0);
   });

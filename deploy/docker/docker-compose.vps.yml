@@ -50,6 +50,7 @@ services:
       CORREIOS_FALLBACK: ${CORREIOS_FALLBACK:-estimate}
     volumes:
       - sorelle_uploads:/app/uploads
+      - sorelle_baileys:/app/data/baileys-auth
     depends_on:
       db:
         condition: service_healthy
@@ -84,6 +85,7 @@ services:
 volumes:
   sorelle_pg_data:
   sorelle_uploads:
+  sorelle_baileys:
 
 networks:
   sorelle:

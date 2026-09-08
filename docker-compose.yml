@@ -50,6 +50,7 @@ services:
       GOOGLE_CALLBACK_URL: ${GOOGLE_CALLBACK_URL:-http://localhost:3000/api/auth/google/callback}
     volumes:
       - backend_uploads:/app/uploads
+      - backend_baileys:/app/data/baileys-auth
     depends_on:
       db:
         condition: service_healthy
@@ -82,6 +83,7 @@ services:
 volumes:
   postgres_data:
   backend_uploads:
+  backend_baileys:
 
 networks:
   sorelle:

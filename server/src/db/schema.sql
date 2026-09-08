@@ -364,6 +364,50 @@ CREATE INDEX IF NOT EXISTS idx_product_views_product ON product_views(product_id
 CREATE INDEX IF NOT EXISTS idx_product_views_visitor_product
   ON product_views(visitor_key, product_id, created_date DESC);
 
+-- Chat do site + WhatsApp (Baileys)
+CREATE TABLE IF NOT EXISTS whatsapp_conversations (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  session_token UUID NOT NULL UNIQUE,
+  visitor_name VARCHAR(255),
+  visitor_phone VARCHAR(32),
+  visitor_jid VARCHAR(64),
+  user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+  status VARCHAR(20) NOT NULL DEFAULT 'open'
+    CHECK (status IN ('open', 'closed')),
+  last_message_at TIMESTAMPTZ,
+  unread_admin INTEGER NOT NULL DEFAULT 0,
+  created_date TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_date TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_whatsapp_conversations_last_message
+  ON whatsapp_conversations(last_message_at DESC NULLS LAST, created_date DESC);
+CREATE INDEX IF NOT EXISTS idx_whatsapp_conversations_jid
+  ON whatsapp_conversations(visitor_jid) WHERE visitor_jid IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_whatsapp_conversations_status
+  ON whatsapp_conversations(status, last_message_at DESC NULLS LAST);
+
+CREATE TABLE IF NOT EXISTS whatsapp_messages (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  conversation_id UUID NOT NULL REFERENCES whatsapp_conversations(id) ON DELETE CASCADE,
+  direction VARCHAR(20) NOT NULL
+    CHECK (direction IN ('inbound', 'outbound')),
+  source VARCHAR(20) NOT NULL
+    CHECK (source IN ('site', 'whatsapp', 'admin')),
+  body TEXT NOT NULL,
+  wa_message_id VARCHAR(128),
+  created_date TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_whatsapp_messages_conversation_date
+  ON whatsapp_messages(conversation_id, created_date ASC);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_whatsapp_messages_wa_id
+  ON whatsapp_messages(wa_message_id) WHERE wa_message_id IS NOT NULL;
+
+INSERT INTO app_settings (key, value) VALUES
+  ('whatsapp_notify_phone', '')
+ON CONFLICT (key) DO NOTHING;
+
 -- Substitui nome igual ao prefixo do e-mail pelo nome real da última compra.
 UPDATE users u
 SET full_name = src.customer_name,

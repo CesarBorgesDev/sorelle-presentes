@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useLocation, Outlet } from 'react-router-dom';
-import { LayoutDashboard, Package, ShoppingBag, Menu, X, LogOut, Users, Settings, FileText, Boxes, Tag, FolderTree, UserCircle } from 'lucide-react';
+import { LayoutDashboard, Package, ShoppingBag, Menu, X, LogOut, Users, Settings, FileText, Boxes, Tag, FolderTree, UserCircle, MessageCircle } from 'lucide-react';
 import { useAuth } from '@/lib/AuthContext';
 
 const navItems = [
@@ -12,6 +12,7 @@ const navItems = [
   { label: 'Pedidos', icon: ShoppingBag, path: '/admin/pedidos' },
   { label: 'Clientes', icon: UserCircle, path: '/admin/clientes' },
   { label: 'Afiliados', icon: Users, path: '/admin/afiliados' },
+  { label: 'Mensagens', icon: MessageCircle, path: '/admin/mensagens' },
   { label: 'Conteúdo', icon: FileText, path: '/admin/conteudo' },
   { label: 'Configurações', icon: Settings, path: '/admin/configuracoes' },
 ];

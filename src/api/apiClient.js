@@ -20,6 +20,29 @@ export function getApiBase() {
   return resolveApiBase();
 }
 
+export function getSocketUrl() {
+  const base = resolveApiBase();
+  if (base.startsWith('http')) {
+    try {
+      return new URL(base).origin;
+    } catch {
+      return window.location.origin;
+    }
+  }
+  return window.location.origin;
+}
+
+const CHAT_SESSION_KEY = 'sorelle_chat_session';
+
+export function getChatSessionToken() {
+  return localStorage.getItem(CHAT_SESSION_KEY);
+}
+
+export function setChatSessionToken(token) {
+  if (token) localStorage.setItem(CHAT_SESSION_KEY, token);
+  else localStorage.removeItem(CHAT_SESSION_KEY);
+}
+
 class ApiError extends Error {
   constructor(message, status, details = {}) {
     super(message);
@@ -717,6 +740,99 @@ const categoriesApi = {
   },
 };
 
+function chatHeaders() {
+  const token = getChatSessionToken();
+  return token ? { 'X-Chat-Session': token } : {};
+}
+
+export const chatApi = {
+  async session(data = {}) {
+    const result = await apiFetch('/chat/session', {
+      method: 'POST',
+      headers: chatHeaders(),
+      body: JSON.stringify(data),
+    });
+    if (result?.session_token) setChatSessionToken(result.session_token);
+    return result;
+  },
+
+  async updateSession(data) {
+    const result = await apiFetch('/chat/session', {
+      method: 'PATCH',
+      headers: chatHeaders(),
+      body: JSON.stringify(data),
+    });
+    if (result?.session_token) setChatSessionToken(result.session_token);
+    return result;
+  },
+
+  listMessages() {
+    return apiFetch('/chat/messages', { headers: chatHeaders() });
+  },
+
+  sendMessage(body) {
+    return apiFetch('/chat/messages', {
+      method: 'POST',
+      headers: chatHeaders(),
+      body: JSON.stringify({ body }),
+    });
+  },
+};
+
+export const whatsappApi = {
+  status() {
+    return apiFetch('/whatsapp/status');
+  },
+
+  qr() {
+    return apiFetch('/whatsapp/qr');
+  },
+
+  connect() {
+    return apiFetch('/whatsapp/connect', { method: 'POST' });
+  },
+
+  logout() {
+    return apiFetch('/whatsapp/logout', { method: 'POST' });
+  },
+
+  getNotifyPhone() {
+    return apiFetch('/whatsapp/notify-phone');
+  },
+
+  saveNotifyPhone(phone) {
+    return apiFetch('/whatsapp/notify-phone', {
+      method: 'PUT',
+      body: JSON.stringify({ phone }),
+    });
+  },
+
+  conversations(params = {}) {
+    const search = new URLSearchParams();
+    if (params.status) search.set('status', params.status);
+    const qs = search.toString();
+    return apiFetch(`/whatsapp/conversations${qs ? `?${qs}` : ''}`);
+  },
+
+  messages(id) {
+    return apiFetch(`/whatsapp/conversations/${id}/messages`);
+  },
+
+  reply(id, body) {
+    return apiFetch(`/whatsapp/conversations/${id}/messages`, {
+      method: 'POST',
+      body: JSON.stringify({ body }),
+    });
+  },
+
+  updateConversation(id, data) {
+    return apiFetch(`/whatsapp/conversations/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  },
+};
+
 export const api = {
   auth,
   settings,
@@ -735,6 +851,8 @@ export const api = {
   productKits: productKitsApi,
   brands: brandsApi,
   categories: categoriesApi,
+  chat: chatApi,
+  whatsapp: whatsappApi,
   entities: {
     Product: createEntityClient('products'),
     ProductKit: createEntityClient('product-kits'),
