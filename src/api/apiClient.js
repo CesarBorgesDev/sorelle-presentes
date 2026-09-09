@@ -777,6 +777,14 @@ export const chatApi = {
       body: JSON.stringify({ body }),
     });
   },
+
+  chooseChannel(channel) {
+    return apiFetch('/chat/channel', {
+      method: 'POST',
+      headers: chatHeaders(),
+      body: JSON.stringify({ channel }),
+    });
+  },
 };
 
 export const whatsappApi = {

@@ -367,5 +367,8 @@ export async function publicConversation(conversation) {
     visitor_name: conversation.visitor_name,
     visitor_phone: conversation.visitor_phone,
     status: conversation.status,
+    bot_stage: conversation.bot_stage || 'choose',
+    bot_paused: Boolean(conversation.bot_paused),
+    channel: conversation.bot_context?.channel || null,
   };
 }

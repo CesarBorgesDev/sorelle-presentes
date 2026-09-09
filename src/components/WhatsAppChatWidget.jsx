@@ -26,6 +26,8 @@ export default function WhatsAppChatWidget() {
   const [open, setOpen] = useState(false);
   const [ready, setReady] = useState(false);
   const [needsProfile, setNeedsProfile] = useState(false);
+  const [needsChannel, setNeedsChannel] = useState(false);
+  const [choosingChannel, setChoosingChannel] = useState(false);
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [messages, setMessages] = useState([]);
@@ -65,12 +67,13 @@ export default function WhatsAppChatWidget() {
     socket.on('connect', () => {
       socket.emit('chat:join', { sessionToken: getChatSessionToken() });
     });
-    socket.on('chat:message', ({ message }) => {
+    socket.on('chat:message', ({ message, conversation }) => {
       if (!message?.id) return;
       setMessages((prev) => {
         if (prev.some((item) => item.id === message.id)) return prev;
         return [...prev, message];
       });
+      if (conversation?.channel) setNeedsChannel(false);
       if (!openRef.current && message.direction === 'outbound') {
         setUnread((count) => count + 1);
       }
@@ -85,6 +88,7 @@ export default function WhatsAppChatWidget() {
     connectSocket(session.session_token);
     const hasName = Boolean(session.visitor_name);
     setNeedsProfile(!hasName);
+    setNeedsChannel(!session.channel && !session.bot_paused);
     if (session.visitor_name) setName(session.visitor_name);
     if (session.visitor_phone) setPhone(session.visitor_phone);
     setReady(true);
@@ -144,6 +148,26 @@ export default function WhatsAppChatWidget() {
     } catch (err) {
       setError(err.message || 'Não foi possível iniciar o chat');
       setNeedsProfile(true);
+    }
+  };
+
+  const chooseChannel = async (channel) => {
+    setChoosingChannel(true);
+    setError('');
+    try {
+      if (!getChatSessionToken()) {
+        await bootstrap({
+          visitor_name: name.trim() || user?.full_name,
+          visitor_phone: phone.trim() || user?.phone,
+        });
+      }
+      const result = await api.chat.chooseChannel(channel);
+      if (result?.messages) setMessages(result.messages);
+      setNeedsChannel(false);
+    } catch (err) {
+      setError(err.message || 'Não foi possível escolher o atendimento');
+    } finally {
+      setChoosingChannel(false);
     }
   };
 
@@ -280,7 +304,7 @@ export default function WhatsAppChatWidget() {
               <div ref={listRef} className="flex-1 overflow-y-auto px-3 py-4 space-y-2 bg-[#efeae2]">
                 {messages.length === 0 && (
                   <p className="font-body text-xs text-center text-muted-foreground py-6">
-                    Envie uma mensagem. A Sorelle responde por aqui.
+                    Escolha como prefere ser atendido para começarmos.
                   </p>
                 )}
                 {messages.map((message) => {
@@ -301,6 +325,27 @@ export default function WhatsAppChatWidget() {
                   );
                 })}
               </div>
+              {needsChannel && (
+                <div className="px-3 pb-2 pt-1 grid grid-cols-2 gap-2 border-t border-border bg-card">
+                  <button
+                    type="button"
+                    disabled={choosingChannel}
+                    onClick={() => chooseChannel('bot')}
+                    className="py-2.5 px-2 rounded-sm text-white font-body text-xs tracking-wide uppercase disabled:opacity-50"
+                    style={{ backgroundColor: WA_GREEN }}
+                  >
+                    Atendimento robô
+                  </button>
+                  <button
+                    type="button"
+                    disabled={choosingChannel}
+                    onClick={() => chooseChannel('human')}
+                    className="py-2.5 px-2 rounded-sm border border-border font-body text-xs tracking-wide uppercase disabled:opacity-50"
+                  >
+                    Atendente humano
+                  </button>
+                </div>
+              )}
               <form onSubmit={sendMessage} className="p-2 border-t border-border bg-card flex gap-2 shrink-0">
                 <input
                   value={draft}

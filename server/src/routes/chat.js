@@ -14,7 +14,7 @@ import {
 } from '../services/chatStore.js';
 import { forwardSiteMessageToWhatsApp } from '../services/baileys.js';
 import { emitChatMessage, emitConversationUpdate } from '../services/realtime.js';
-import { maybeRunSalesBot } from '../services/salesBot.js';
+import { applyChannelChoice, ensureChannelPrompt, maybeRunSalesBot } from '../services/salesBot.js';
 
 const router = Router();
 
@@ -69,7 +69,9 @@ router.post('/session', optionalAuth, async (req, res) => {
       });
     }
 
-    res.json(await publicConversation(conversation));
+    await ensureChannelPrompt(conversation);
+    const fresh = await getConversationByToken(conversation.session_token);
+    res.json(await publicConversation(fresh || conversation));
   } catch (err) {
     console.error('[chat] session:', err);
     res.status(500).json({ message: 'Não foi possível iniciar o chat' });
@@ -97,6 +99,25 @@ router.patch('/session', optionalAuth, async (req, res) => {
   } catch (err) {
     console.error('[chat] patch session:', err);
     res.status(500).json({ message: 'Não foi possível atualizar o chat' });
+  }
+});
+
+router.post('/channel', async (req, res) => {
+  try {
+    const conversation = await requireConversation(req, res);
+    if (!conversation) return;
+    const raw = String(req.body?.channel || '').trim().toLowerCase();
+    const channel = raw === 'human' || raw === 'humano' ? 'human' : raw === 'bot' || raw === 'robo' ? 'bot' : '';
+    if (!channel) {
+      return res.status(400).json({ message: 'Escolha robô ou humano' });
+    }
+    await applyChannelChoice(conversation, channel);
+    const fresh = await getConversationByToken(conversation.session_token);
+    const messages = await listMessages(fresh.id);
+    res.json({ conversation: await publicConversation(fresh), messages });
+  } catch (err) {
+    console.error('[chat] channel:', err);
+    res.status(500).json({ message: 'Não foi possível escolher o atendimento' });
   }
 });
 
