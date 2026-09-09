@@ -99,30 +99,6 @@ function wantsBotBack(text) {
     || normalized === 'assistente';
 }
 
-function detectChannelChoice(text) {
-  const normalized = normalizeText(text);
-  if (!normalized) return null;
-  if (
-    normalized === '1'
-    || ['robo', 'robot', 'automatico', 'assistente'].includes(normalized)
-    || /^(quero|prefiro|escolher?)\s+(o\s+)?(robo|assistente|automatico)/.test(normalized)
-  ) {
-    return 'bot';
-  }
-  if (
-    normalized === '2'
-    || ['humano', 'atendente', 'pessoa', 'vendedor', 'vendedora'].includes(normalized)
-    || /^(quero|prefiro|escolher?)\s+(um\s+|uma\s+)?(humano|atendente|pessoa|vendedor)/.test(normalized)
-  ) {
-    return 'human';
-  }
-  return null;
-}
-
-function choicePrompt(conversation) {
-  return `${greet(conversation)} Bem-vindo à ${STORE.name}!\n\nComo você prefere ser atendido?\n\n1. Robô — indico produtos, envio links e tiro dúvidas na hora\n2. Humano — um atendente logo entra em contato\n\nResponda *1* ou *2*.`;
-}
-
 function humanHandoffReply(conversation) {
   return `${greet(conversation)} Vou passar você para um atendente humano, que logo entrará em contato.`;
 }
@@ -291,18 +267,6 @@ export async function isBotEnabled() {
   return value !== 'false';
 }
 
-export function buildChannelChoice(conversation, { alreadyAsked = false } = {}) {
-  const context = { ...(conversation.bot_context || {}) };
-  return {
-    reply: alreadyAsked
-      ? 'Para começarmos, escolha o atendimento:\n\n1. Robô\n2. Humano'
-      : choicePrompt(conversation),
-    stage: 'choose',
-    context,
-    paused: false,
-  };
-}
-
 export function buildHumanHandoff(conversation, context = {}) {
   return {
     reply: humanHandoffReply(conversation),
@@ -334,30 +298,22 @@ export async function handleSalesBot({ conversation, inboundText }) {
   if (!text) return null;
 
   const context = { ...(conversation.bot_context || {}) };
-  let stage = conversation.bot_stage || 'choose';
+  let stage = conversation.bot_stage === 'choose' ? 'discover' : (conversation.bot_stage || 'discover');
   const name = firstName(conversation);
-  const channelPicked = detectChannelChoice(text);
 
-  if (!context.channel || stage === 'choose') {
-    if (channelPicked === 'human' || (!channelPicked && wantsHuman(text))) {
-      return buildHumanHandoff(conversation, context);
-    }
-    if (channelPicked === 'bot') {
-      return buildBotWelcome(conversation, context);
-    }
-    return buildChannelChoice(conversation, { alreadyAsked: stage === 'choose' });
-  }
+  if (!context.channel) context.channel = 'bot';
+  if (!context.channelChosenAt) context.channelChosenAt = new Date().toISOString();
 
   if (conversation.bot_paused && context.channel === 'human') {
-    if (wantsBotBack(text) || channelPicked === 'bot') {
-      return buildBotWelcome(conversation, context);
+    if (wantsBotBack(text)) {
+      return buildBotWelcome(conversation, { ...context, channel: 'bot' });
     }
     return null;
   }
 
   if (conversation.bot_paused) return null;
 
-  if (wantsHuman(text) || channelPicked === 'human') {
+  if (wantsHuman(text)) {
     return buildHumanHandoff(conversation, context);
   }
 
@@ -537,23 +493,10 @@ export async function maybeRunSalesBot({ conversation, inboundText }) {
   }
 }
 
-export async function ensureChannelPrompt(conversation) {
-  if (!conversation || !(await isBotEnabled())) return null;
-  if (conversation.bot_context?.channel) return null;
-  const history = await listMessages(conversation.id, { limit: 50 });
-  const alreadyAsked = history.some((item) => item.source === 'bot' && conversation.bot_stage === 'choose')
-    || history.some((item) => item.source === 'bot' && String(item.body || '').includes('Como você prefere ser atendido'));
-  if (alreadyAsked) return null;
-  return dispatchBotReply(conversation, buildChannelChoice(conversation));
-}
-
 export async function applyChannelChoice(conversation, channel) {
   if (!conversation) return null;
   if (channel === 'human') {
     return dispatchBotReply(conversation, buildHumanHandoff(conversation, conversation.bot_context || {}));
   }
-  if (channel === 'bot') {
-    return dispatchBotReply(conversation, buildBotWelcome(conversation, conversation.bot_context || {}));
-  }
-  return dispatchBotReply(conversation, buildChannelChoice(conversation, { alreadyAsked: true }));
+  return null;
 }

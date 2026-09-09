@@ -14,7 +14,7 @@ import {
 } from '../services/chatStore.js';
 import { forwardSiteMessageToWhatsApp } from '../services/baileys.js';
 import { emitChatMessage, emitConversationUpdate } from '../services/realtime.js';
-import { applyChannelChoice, ensureChannelPrompt, maybeRunSalesBot } from '../services/salesBot.js';
+import { applyChannelChoice, maybeRunSalesBot } from '../services/salesBot.js';
 
 const router = Router();
 
@@ -69,9 +69,7 @@ router.post('/session', optionalAuth, async (req, res) => {
       });
     }
 
-    await ensureChannelPrompt(conversation);
-    const fresh = await getConversationByToken(conversation.session_token);
-    res.json(await publicConversation(fresh || conversation));
+    res.json(await publicConversation(conversation));
   } catch (err) {
     console.error('[chat] session:', err);
     res.status(500).json({ message: 'Não foi possível iniciar o chat' });
@@ -107,9 +105,9 @@ router.post('/channel', async (req, res) => {
     const conversation = await requireConversation(req, res);
     if (!conversation) return;
     const raw = String(req.body?.channel || '').trim().toLowerCase();
-    const channel = raw === 'human' || raw === 'humano' ? 'human' : raw === 'bot' || raw === 'robo' ? 'bot' : '';
+    const channel = raw === 'human' || raw === 'humano' ? 'human' : '';
     if (!channel) {
-      return res.status(400).json({ message: 'Escolha robô ou humano' });
+      return res.status(400).json({ message: 'Informe o atendimento humano' });
     }
     await applyChannelChoice(conversation, channel);
     const fresh = await getConversationByToken(conversation.session_token);

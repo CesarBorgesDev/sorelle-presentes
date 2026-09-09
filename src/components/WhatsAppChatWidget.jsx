@@ -26,8 +26,8 @@ export default function WhatsAppChatWidget() {
   const [open, setOpen] = useState(false);
   const [ready, setReady] = useState(false);
   const [needsProfile, setNeedsProfile] = useState(false);
-  const [needsChannel, setNeedsChannel] = useState(false);
-  const [choosingChannel, setChoosingChannel] = useState(false);
+  const [humanRequested, setHumanRequested] = useState(false);
+  const [requestingHuman, setRequestingHuman] = useState(false);
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [messages, setMessages] = useState([]);
@@ -73,7 +73,9 @@ export default function WhatsAppChatWidget() {
         if (prev.some((item) => item.id === message.id)) return prev;
         return [...prev, message];
       });
-      if (conversation?.channel) setNeedsChannel(false);
+      if (conversation?.channel === 'human' || conversation?.bot_paused) {
+        setHumanRequested(true);
+      }
       if (!openRef.current && message.direction === 'outbound') {
         setUnread((count) => count + 1);
       }
@@ -88,7 +90,7 @@ export default function WhatsAppChatWidget() {
     connectSocket(session.session_token);
     const hasName = Boolean(session.visitor_name);
     setNeedsProfile(!hasName);
-    setNeedsChannel(!session.channel && !session.bot_paused);
+    setHumanRequested(session.channel === 'human' || Boolean(session.bot_paused));
     if (session.visitor_name) setName(session.visitor_name);
     if (session.visitor_phone) setPhone(session.visitor_phone);
     setReady(true);
@@ -151,8 +153,9 @@ export default function WhatsAppChatWidget() {
     }
   };
 
-  const chooseChannel = async (channel) => {
-    setChoosingChannel(true);
+  const requestHuman = async () => {
+    if (humanRequested || requestingHuman) return;
+    setRequestingHuman(true);
     setError('');
     try {
       if (!getChatSessionToken()) {
@@ -161,13 +164,13 @@ export default function WhatsAppChatWidget() {
           visitor_phone: phone.trim() || user?.phone,
         });
       }
-      const result = await api.chat.chooseChannel(channel);
+      const result = await api.chat.chooseChannel('human');
       if (result?.messages) setMessages(result.messages);
-      setNeedsChannel(false);
+      setHumanRequested(true);
     } catch (err) {
-      setError(err.message || 'Não foi possível escolher o atendimento');
+      setError(err.message || 'Não foi possível chamar um atendente');
     } finally {
-      setChoosingChannel(false);
+      setRequestingHuman(false);
     }
   };
 
@@ -304,7 +307,7 @@ export default function WhatsAppChatWidget() {
               <div ref={listRef} className="flex-1 overflow-y-auto px-3 py-4 space-y-2 bg-[#efeae2]">
                 {messages.length === 0 && (
                   <p className="font-body text-xs text-center text-muted-foreground py-6">
-                    Escolha como prefere ser atendido para começarmos.
+                    Envie uma mensagem. A Sorelle responde por aqui.
                   </p>
                 )}
                 {messages.map((message) => {
@@ -325,27 +328,22 @@ export default function WhatsAppChatWidget() {
                   );
                 })}
               </div>
-              {needsChannel && (
-                <div className="px-3 pb-2 pt-1 grid grid-cols-2 gap-2 border-t border-border bg-card">
+              <div className="px-3 py-2 border-t border-border bg-card">
+                {humanRequested ? (
+                  <p className="font-body text-[11px] text-muted-foreground text-center">
+                    Um atendente humano logo entrará em contato.
+                  </p>
+                ) : (
                   <button
                     type="button"
-                    disabled={choosingChannel}
-                    onClick={() => chooseChannel('bot')}
-                    className="py-2.5 px-2 rounded-sm text-white font-body text-xs tracking-wide uppercase disabled:opacity-50"
-                    style={{ backgroundColor: WA_GREEN }}
+                    disabled={requestingHuman || !ready}
+                    onClick={requestHuman}
+                    className="w-full py-2 rounded-sm border border-border font-body text-xs tracking-wide uppercase disabled:opacity-50 hover:bg-secondary"
                   >
-                    Atendimento robô
+                    {requestingHuman ? 'Chamando…' : 'Falar com atendente humano'}
                   </button>
-                  <button
-                    type="button"
-                    disabled={choosingChannel}
-                    onClick={() => chooseChannel('human')}
-                    className="py-2.5 px-2 rounded-sm border border-border font-body text-xs tracking-wide uppercase disabled:opacity-50"
-                  >
-                    Atendente humano
-                  </button>
-                </div>
-              )}
+                )}
+              </div>
               <form onSubmit={sendMessage} className="p-2 border-t border-border bg-card flex gap-2 shrink-0">
                 <input
                   value={draft}
