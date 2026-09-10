@@ -40,13 +40,13 @@ export default function CartDrawer({ open, onClose, items = [] }) {
         if (!nextOpen) onClose();
       }}
     >
-      <SheetContent className="w-full sm:max-w-lg bg-background flex flex-col">
-        <SheetHeader className="border-b border-border pb-4">
+      <SheetContent className="w-full sm:max-w-lg bg-background flex flex-col overflow-hidden h-full max-h-[100dvh] p-4 sm:p-6 pb-[max(1rem,env(safe-area-inset-bottom))]">
+        <SheetHeader className="border-b border-border pb-4 shrink-0">
           <SheetTitle className="font-display text-xl tracking-wider">Seu Carrinho</SheetTitle>
         </SheetHeader>
 
         {items.length === 0 ? (
-          <div className="flex-1 flex items-center justify-center">
+          <div className="flex-1 min-h-0 flex items-center justify-center">
             <div className="text-center">
               <Package className="w-12 h-12 text-muted-foreground/40 mx-auto mb-4" />
               <p className="font-body text-muted-foreground">Seu carrinho está vazio</p>
@@ -54,7 +54,7 @@ export default function CartDrawer({ open, onClose, items = [] }) {
           </div>
         ) : (
           <>
-            <div className="flex-1 overflow-y-auto py-4 space-y-6">
+            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain py-4 space-y-6">
               {items.map((item) => (
                 <div key={item.id} className="flex gap-4">
                   <div className="w-20 h-24 rounded-sm overflow-hidden bg-secondary flex-shrink-0">
@@ -94,7 +94,7 @@ export default function CartDrawer({ open, onClose, items = [] }) {
               ))}
             </div>
 
-            <SheetFooter className="border-t border-border pt-4 flex-col gap-3">
+            <SheetFooter className="border-t border-border pt-4 flex-col gap-3 shrink-0">
               <div className="w-full space-y-2">
                 <div className="flex justify-between font-body text-sm">
                   <span className="text-muted-foreground">Subtotal</span>

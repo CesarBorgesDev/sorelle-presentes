@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/api/apiClient';
@@ -45,6 +45,7 @@ export default function Checkout() {
   const [shippingError, setShippingError] = useState('');
   const [cepLoading, setCepLoading] = useState(false);
   const [cepError, setCepError] = useState('');
+  const shippingPrefillKey = useRef('');
 
   const [form, setForm] = useState({
     customer_name: resolvePersonName(user?.full_name, user?.email),
@@ -176,12 +177,35 @@ export default function Checkout() {
     if (quoteResult.status === 'fulfilled') {
       const quote = quoteResult.value;
       setShippingQuote(quote);
-      const firstAvailable = quote.options?.find((o) => o.available);
+      const firstAvailable = quote.options?.find((o) => o.available && o.id !== STORE_PICKUP_ID);
       if (firstAvailable) setShippingServiceId(firstAvailable.id);
     } else {
       setShippingError(quoteResult.reason?.message || 'Erro ao calcular frete');
     }
   }, [applyAddressFromCep]);
+
+  useEffect(() => {
+    if (deliveryMode !== 'delivery') {
+      shippingPrefillKey.current = '';
+      return;
+    }
+    if (cartLoading || items.length === 0) return;
+    const digits = String(form.customer_zip_code || '').replace(/\D/g, '');
+    if (digits.length !== 8) return;
+    if (shippingLoading || shippingQuote || shippingServiceId) return;
+    if (shippingPrefillKey.current === digits) return;
+    shippingPrefillKey.current = digits;
+    fetchCepAndShipping(digits);
+  }, [
+    deliveryMode,
+    cartLoading,
+    items.length,
+    form.customer_zip_code,
+    shippingLoading,
+    shippingQuote,
+    shippingServiceId,
+    fetchCepAndShipping,
+  ]);
 
   const subtotal = items.reduce((sum, item) => sum + item.price * (item.quantity || 1), 0);
   const isPickup = deliveryMode === 'pickup';
@@ -285,7 +309,9 @@ export default function Checkout() {
     });
   };
 
-  const inputClass = 'w-full px-3 py-2.5 bg-background border border-border rounded-sm font-body text-sm focus:outline-none focus:ring-1 focus:ring-ring';
+  const inputClass = 'w-full px-3 py-2.5 bg-background border border-border rounded-sm font-body text-base sm:text-sm focus:outline-none focus:ring-1 focus:ring-ring';
+  const cepDigits = String(form.customer_zip_code || '').replace(/\D/g, '');
+  const cepReady = cepDigits.length === 8;
   const labelClass = 'block font-body text-xs text-muted-foreground tracking-wider uppercase mb-1.5';
   const isLoading = cartLoading || methodsLoading;
   const checkoutUnavailable = !isLoading && paymentMethods.length === 0;
@@ -306,7 +332,7 @@ export default function Checkout() {
         : 'Finalizar compra';
 
   return (
-    <div className="max-w-3xl mx-auto px-4 pt-24 lg:pt-32 pb-10">
+    <div className="max-w-3xl mx-auto px-4 pt-24 lg:pt-32 pb-32 lg:pb-10">
       <button onClick={() => navigate(-1)} className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-6 font-body">
         <ArrowLeft className="w-4 h-4" />
         Voltar
@@ -393,6 +419,8 @@ export default function Checkout() {
                     value={form.customer_zip_code}
                     onChange={(e) => handleCepChange(e.target.value)}
                     placeholder="00000-000"
+                    inputMode="numeric"
+                    autoComplete="postal-code"
                   />
                   {cepLoading && (
                     <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-muted-foreground" />
@@ -479,7 +507,7 @@ export default function Checkout() {
                 </div>
               </div>
 
-              {(shippingLoading || shippingQuote || shippingError) && (
+              {(shippingLoading || shippingQuote || shippingError || cepReady) && (
                 <div>
                   <label className={labelClass}>Frete *</label>
                   {shippingLoading && (
@@ -490,6 +518,11 @@ export default function Checkout() {
                   )}
                   {shippingError && (
                     <p className="text-sm text-destructive font-body">{shippingError}</p>
+                  )}
+                  {!shippingLoading && !shippingQuote && !shippingError && cepReady && (
+                    <p className="text-sm text-muted-foreground font-body py-2">
+                      Calculando frete para o CEP informado...
+                    </p>
                   )}
                   {shippingQuote && !shippingLoading && (
                     <>
@@ -593,26 +626,36 @@ export default function Checkout() {
               </div>
             </div>
 
-            {error && (
-              <div className="p-3 rounded-sm bg-destructive/10 text-destructive text-sm font-body">{error}</div>
-            )}
-
-            <Button
-              type="submit"
-              disabled={checkoutMutation.isPending || !shippingServiceId || !paymentMethod}
-              className="w-full py-6 font-body tracking-wider"
-            >
-              {checkoutMutation.isPending ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Processando...
-                </>
-              ) : (
-                <>
-                  {checkoutButtonLabel} — R$ {total.toFixed(2).replace('.', ',')}
-                </>
+            <div className="fixed bottom-0 inset-x-0 z-10 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] bg-background/95 backdrop-blur-sm border-t border-border space-y-2 lg:static lg:inset-auto lg:px-0 lg:border-0 lg:bg-transparent lg:backdrop-blur-none lg:pt-0 lg:pb-0">
+              {error && (
+                <div className="p-3 rounded-sm bg-destructive/10 text-destructive text-sm font-body">{error}</div>
               )}
-            </Button>
+
+              {!isPickup && !shippingServiceId && (
+                <p className="text-sm text-muted-foreground font-body">
+                  {cepReady
+                    ? 'Selecione uma opção de frete para finalizar a compra.'
+                    : 'Informe o CEP para calcular o frete e finalizar a compra.'}
+                </p>
+              )}
+
+              <Button
+                type="submit"
+                disabled={checkoutMutation.isPending}
+                className="w-full py-6 h-auto min-h-12 whitespace-normal text-center font-body tracking-wider"
+              >
+                {checkoutMutation.isPending ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Processando...
+                  </>
+                ) : (
+                  <>
+                    {checkoutButtonLabel} — R$ {total.toFixed(2).replace('.', ',')}
+                  </>
+                )}
+              </Button>
+            </div>
           </form>
 
           <div className="lg:col-span-2 bg-card border border-border rounded-sm p-5 h-fit">

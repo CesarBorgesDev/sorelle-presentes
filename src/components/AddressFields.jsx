@@ -57,6 +57,7 @@ export default function AddressFields({
             className={inputClassName}
             required
             disabled={disabled}
+            inputMode="numeric"
             autoComplete="postal-code"
           />
           {cepLoading && (

@@ -25,6 +25,8 @@ export default function Layout() {
   });
 
   const cartCount = cartItems.reduce((sum, item) => sum + (item.quantity || 1), 0);
+  const hideChat = location.pathname.startsWith('/checkout')
+    || location.pathname.startsWith('/pagamento');
 
   return (
     <div className="min-h-screen bg-background">
@@ -38,7 +40,7 @@ export default function Layout() {
         onClose={() => setCartOpen(false)}
         items={cartItems}
       />
-      <WhatsAppChatWidget />
+      {!hideChat && <WhatsAppChatWidget />}
     </div>
   );
 }
