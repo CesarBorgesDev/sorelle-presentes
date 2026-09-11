@@ -449,16 +449,14 @@ async function startCheckout(req, res) {
            payment_gateway = 'mercado_pago',
            mercado_pago_payment_id = $2,
            pix_qr_code_text = COALESCE($3, pix_qr_code_text),
-           pix_qr_code_image = COALESCE($4, pix_qr_code_image),
-           boleto_url = COALESCE($5, boleto_url),
-           boleto_digitable_line = COALESCE($6, boleto_digitable_line),
+           boleto_url = COALESCE($4, boleto_url),
+           boleto_digitable_line = COALESCE($5, boleto_digitable_line),
            updated_date = NOW()
-       WHERE id = $7`,
+       WHERE id = $6`,
       [
         gatewayOrderNumber,
         paymentResult.id || null,
         paymentResult.pixQrCode || null,
-        paymentResult.pixQrCodeImage || null,
         paymentResult.boletoUrl || null,
         paymentResult.boletoDigitableLine || null,
         order.id,
@@ -703,7 +701,7 @@ router.get('/pedido/:id/pix', requireAuth, async (req, res) => {
   try {
     const result = await pool.query(
       `SELECT id, total, payment_method, payment_status, payment_gateway,
-              pix_qr_code_image, pix_qr_code_text, mercado_pago_payment_id
+              pix_qr_code_text, mercado_pago_payment_id
        FROM orders WHERE id = $1 AND LOWER(customer_email) = LOWER($2)`,
       [req.params.id, req.user.email]
     );
@@ -728,7 +726,6 @@ router.get('/pedido/:id/pix', requireAuth, async (req, res) => {
         payment_status: order.payment_status,
         provider: 'mercado_pago',
         pix_qr_code_text: order.pix_qr_code_text || null,
-        pix_qr_code_image: order.pix_qr_code_image || null,
       });
     }
 

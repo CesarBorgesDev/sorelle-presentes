@@ -17,6 +17,28 @@ const REJECTED_MESSAGES = {
   cc_rejected_other_reason: 'Pagamento recusado pelo banco. Tente outro cartão ou PIX.',
 };
 
+function extractMpErrorRaw(data) {
+  const cause = Array.isArray(data?.cause) ? data.cause[0] : null;
+  const candidates = [cause?.description, data?.message, data?.error];
+  const raw = candidates.find((value) => {
+    const text = String(value ?? '').trim();
+    return text && text.toLowerCase() !== 'null' && text.toLowerCase() !== 'bad_request';
+  });
+  return String(raw || '').replace(/null$/i, '').trim();
+}
+
+function friendlyMercadoPagoError(data, httpStatus) {
+  const raw = extractMpErrorRaw(data);
+  const code = Number(data?.cause?.[0]?.code);
+  const normalized = raw.toLowerCase();
+
+  if (code === 13253 || /without key enabled for qr render/i.test(normalized)) {
+    return 'A conta Mercado Pago ainda não tem chave PIX habilitada. No app ou site do Mercado Pago (a mesma conta do Access Token), vá em Pix, cadastre uma chave aleatória e tente finalizar de novo.';
+  }
+
+  return raw || `Erro Mercado Pago (${httpStatus})`;
+}
+
 function onlyDigits(value) {
   return String(value || '').replace(/\D/g, '');
 }
@@ -45,23 +67,12 @@ function userMessageForPayment(payment) {
   return null;
 }
 
-function toDataUri(base64) {
-  if (!base64) return null;
-  const value = String(base64).trim();
-  if (!value) return null;
-  if (value.startsWith('data:')) return value;
-  return `data:image/png;base64,${value}`;
-}
-
 function extractPix(payment) {
   const data = payment?.point_of_interaction?.transaction_data || {};
   const qrCode = data.qr_code || null;
-  const qrCodeBase64 = data.qr_code_base64 || null;
-  if (!qrCode && !qrCodeBase64) return null;
+  if (!qrCode) return null;
   return {
     qrCode,
-    qrCodeBase64,
-    qrCodeImage: toDataUri(qrCodeBase64),
     ticketUrl: data.ticket_url || null,
   };
 }
@@ -97,7 +108,6 @@ function normalizePayment(payment) {
     authorizationCode: payment.authorization_code || null,
     userMessage: userMessageForPayment(payment),
     pixQrCode: pix?.qrCode || null,
-    pixQrCodeImage: pix?.qrCodeImage || null,
     boletoUrl: boleto?.url || null,
     boletoDigitableLine: boleto?.digitableLine || null,
     threeDsUrl: extractThreeDsUrl(payment),
@@ -203,10 +213,7 @@ async function mpFetch(path, { method = 'GET', body, config, headers: extraHeade
   }
 
   if (!response.ok) {
-    const message = data?.message
-      || data?.error
-      || data?.cause?.[0]?.description
-      || `Erro Mercado Pago (${response.status})`;
+    const message = friendlyMercadoPagoError(data, response.status);
     console.error('[MercadoPago] API error:', response.status, message, data?.cause || '');
     const err = new Error(message);
     err.status = response.status >= 500 ? 502 : 400;

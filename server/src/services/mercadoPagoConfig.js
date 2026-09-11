@@ -139,5 +139,13 @@ export function getMercadoPagoRequirements(config) {
         : 'Use credenciais de teste (TEST-...)',
       manual: true,
     },
+    {
+      id: 'pix_key',
+      label: 'Chave PIX cadastrada na conta Mercado Pago',
+      required: true,
+      done: false,
+      hint: 'Obrigatório para Pix Copia e Cola. Na conta do Access Token: Pix → cadastrar chave aleatória. Chave de telefone sozinha costuma falhar.',
+      manual: true,
+    },
   ];
 }

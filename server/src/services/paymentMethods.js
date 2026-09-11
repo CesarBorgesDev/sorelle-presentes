@@ -223,7 +223,7 @@ export async function getAvailablePaymentMethods({ pickup = false } = {}) {
 
     let description = def.description;
     if (providerInfo.provider === 'mercado_pago') {
-      if (methodId === 'pix') description = 'QR Code na loja, confirmação automática';
+      if (methodId === 'pix') description = 'Pix Copia e Cola na loja, confirmação automática';
       else if (methodId === 'cartao_credito' || methodId === 'cartao_debito') {
         description = 'Pague na loja, sem sair do site';
       } else if (methodId === 'boleto') {

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/api/apiClient';
-import { CheckCircle2, Clock, Copy, Loader2, QrCode } from 'lucide-react';
+import { CheckCircle2, Clock, Copy, Loader2 } from 'lucide-react';
 
 const paymentStatusLabels = {
   aguardando_pagamento: 'Aguardando confirmação',
@@ -83,7 +83,7 @@ export default function PixPayment() {
         {isPaid ? (
           <CheckCircle2 className="w-14 h-14 text-green-600 mx-auto mb-4" />
         ) : (
-          <QrCode className="w-14 h-14 text-primary mx-auto mb-4" />
+          <Copy className="w-14 h-14 text-primary mx-auto mb-4" />
         )}
         <h1 className="font-display text-2xl tracking-wide mb-2">
           {isPaid ? 'PIX recebido!' : 'Pague com PIX'}
@@ -92,7 +92,7 @@ export default function PixPayment() {
           {isPaid
             ? 'Seu pagamento foi registrado. Obrigado pela compra!'
             : data.provider === 'mercado_pago'
-              ? 'Pague com PIX pelo app do seu banco. A confirmação é automática nesta página.'
+              ? 'Copie o código e cole no Pix do seu banco. A confirmação é automática nesta página.'
               : 'Transfira o valor exato para a chave abaixo. A confirmação é feita manualmente pela loja.'}
         </p>
       </div>
@@ -112,39 +112,27 @@ export default function PixPayment() {
 
         {!isPaid && data.provider === 'mercado_pago' && (
           <>
-            {data.pix_qr_code_image && (
-              <div className="flex justify-center">
-                <img
-                  src={data.pix_qr_code_image}
-                  alt="QR Code PIX"
-                  className="w-52 h-52 bg-white p-2 rounded-sm"
-                />
-              </div>
-            )}
-            {!data.pix_qr_code_image && !data.pix_qr_code_text && (
+            {!data.pix_qr_code_text && (
               <p className="text-xs text-muted-foreground text-center">
-                Gerando QR Code do PIX... esta página atualiza automaticamente.
+                Gerando código Pix... esta página atualiza automaticamente.
               </p>
             )}
             {data.pix_qr_code_text && (
-              <div>
-                <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Pix Copia e Cola</p>
-                <div className="flex gap-2">
-                  <code className="flex-1 p-3 bg-secondary rounded-sm text-xs break-all">{data.pix_qr_code_text}</code>
-                  <button
-                    type="button"
-                    onClick={() => copyValue(data.pix_qr_code_text)}
-                    className="shrink-0 px-3 py-2 border border-border rounded-sm hover:bg-secondary transition-colors"
-                    title="Copiar código"
-                  >
-                    <Copy className="w-4 h-4" />
-                  </button>
-                </div>
-                {copied && <p className="text-xs text-green-600 mt-1">Código copiado!</p>}
+              <div className="space-y-3">
+                <p className="text-xs text-muted-foreground uppercase tracking-wider">Pix Copia e Cola</p>
+                <code className="block p-3 bg-secondary rounded-sm text-xs break-all">{data.pix_qr_code_text}</code>
+                <button
+                  type="button"
+                  onClick={() => copyValue(data.pix_qr_code_text)}
+                  className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 bg-primary text-primary-foreground rounded-sm font-body text-sm tracking-wider hover:opacity-80"
+                >
+                  <Copy className="w-4 h-4" />
+                  {copied ? 'Código copiado!' : 'Copiar código Pix'}
+                </button>
               </div>
             )}
             <p className="text-xs text-muted-foreground">
-              Abra o app do banco, escolha PIX e escaneie o QR Code ou cole o código. Esta página atualiza automaticamente.
+              Abra o app do banco, escolha Pix Copia e Cola, cole o código e confirme. Esta página atualiza automaticamente.
             </p>
           </>
         )}

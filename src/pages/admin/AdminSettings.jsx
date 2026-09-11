@@ -2521,7 +2521,7 @@ export default function AdminSettings() {
                 <div>
                   <h2 className="font-display text-lg tracking-wide text-foreground">Mercado Pago (Checkout Transparente)</h2>
                   <p className="font-body text-sm text-muted-foreground mt-1">
-                    O cliente paga na própria loja via API: PIX com QR Code, cartão tokenizado ou boleto. Sem redirecionar ao site do Mercado Pago.
+                    O cliente paga na própria loja via API: PIX Copia e Cola, cartão tokenizado ou boleto. Sem redirecionar ao site do Mercado Pago.
                   </p>
                   <a
                     href={MERCADO_PAGO_DOCS_URL}
@@ -2547,6 +2547,11 @@ export default function AdminSettings() {
                     : 'Configure o Access Token para ativar'}
                 </div>
               )}
+
+              <div className="p-3 rounded-sm bg-amber-500/10 border border-amber-500/30 font-body text-sm text-amber-800 dark:text-amber-300">
+                PIX exige chave cadastrada na conta do Access Token. No Mercado Pago, abra <strong>Pix</strong> e crie uma
+                {' '}<strong>chave aleatória</strong>. Sem isso a API não gera o código Copia e Cola.
+              </div>
 
               <div className="p-4 bg-secondary/50 rounded-sm border border-border">
                 <p className="font-body text-xs text-muted-foreground uppercase tracking-wider mb-3">
@@ -2655,11 +2660,13 @@ export default function AdminSettings() {
               <div className="p-4 bg-secondary/30 rounded-sm border border-border font-body text-xs text-muted-foreground space-y-1">
                 <p className="text-foreground font-medium text-sm mb-2">Como funciona</p>
                 <p>• A loja cria o pagamento na API do Mercado Pago (`/v1/payments`) e o cliente não sai do site</p>
-                <p>• PIX: QR Code e copia-e-cola na página de pagamento; cartão: tokenização no navegador (PCI)</p>
+                <p>• PIX: código Copia e Cola na página de pagamento (sem QR Code); cartão: tokenização no navegador (PCI)</p>
                 <p>• O Mercado Pago notifica o backend via webhook quando o pagamento muda de status</p>
                 <p>• Na página de status, o pedido é reconsultado automaticamente se ainda estiver pendente</p>
                 <p>• Em <strong>Checkout</strong>, selecione Mercado Pago como gateway de pagamento online</p>
                 <p>• Informe Access Token e Public Key (a Public Key é obrigatória para cartão)</p>
+                <p>• Para PIX, a conta do Access Token precisa ter uma <strong>chave PIX aleatória</strong> cadastrada no Mercado Pago. Sem isso a API devolve erro de QR Code.</p>
+                <p>• Se a chave for só telefone ou o MP tiver apagado as chaves, cadastre uma chave aleatória nova e teste de novo</p>
               </div>
             </TabsContent>
 
