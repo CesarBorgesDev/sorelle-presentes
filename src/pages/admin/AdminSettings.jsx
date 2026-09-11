@@ -25,7 +25,7 @@ const MODELS = [
 const CIELO_DOCS_URL = 'https://docs.cielo.com.br/ecommerce-cielo/page/explore-api';
 const CIELO_CHECKOUT_DOCS_URL = 'https://developercielo.github.io/manual/checkout-cielo';
 const SIPAG_DOCS_URL = 'https://www.sipag.com.br/servicos.html';
-const MERCADO_PAGO_DOCS_URL = 'https://www.mercadopago.com.br/developers/pt/docs/checkout-pro/landing';
+const MERCADO_PAGO_DOCS_URL = 'https://www.mercadopago.com.br/developers/pt/docs/checkout-api-payments/overview';
 const MELHOR_ENVIO_DOCS_URL = 'https://docs.melhorenvio.com.br/docs/criando-um-novo-aplicativo';
 const MELHOR_ENVIO_AREA_DEV_SANDBOX = 'https://sandbox.melhorenvio.com.br/painel/integracoes/area-dev';
 const MELHOR_ENVIO_AREA_DEV_PROD = 'https://melhorenvio.com.br/painel/integracoes/area-dev';
@@ -862,7 +862,7 @@ export default function AdminSettings() {
                       {(payment?.payment_gateways || [
                         { id: 'cielo', label: 'Cielo (Checkout Cielo)' },
                         { id: 'sipag', label: 'SiPag (IPG Online / Fiserv)' },
-                        { id: 'mercado_pago', label: 'Mercado Pago (Checkout Pro)' },
+                        { id: 'mercado_pago', label: 'Mercado Pago (API / Checkout Transparente)' },
                       ]).map((option) => (
                         <option key={option.id} value={option.id}>{option.label}</option>
                       ))}
@@ -2519,9 +2519,9 @@ export default function AdminSettings() {
               <div className="flex items-start gap-3">
                 <CreditCard className="w-5 h-5 text-primary mt-0.5 shrink-0" />
                 <div>
-                  <h2 className="font-display text-lg tracking-wide text-foreground">Mercado Pago (Checkout Pro)</h2>
+                  <h2 className="font-display text-lg tracking-wide text-foreground">Mercado Pago (Checkout Transparente)</h2>
                   <p className="font-body text-sm text-muted-foreground mt-1">
-                    O cliente é redirecionado à página do Mercado Pago para pagar com Pix, cartão, débito ou boleto.
+                    O cliente paga na própria loja via API: PIX com QR Code, cartão tokenizado ou boleto. Sem redirecionar ao site do Mercado Pago.
                   </p>
                   <a
                     href={MERCADO_PAGO_DOCS_URL}
@@ -2529,7 +2529,7 @@ export default function AdminSettings() {
                     rel="noopener noreferrer"
                     className="inline-flex items-center gap-1 font-body text-xs text-primary hover:underline mt-2"
                   >
-                    Documentação Checkout Pro
+                    Documentação Checkout Transparente
                     <ExternalLink className="w-3 h-3" />
                   </a>
                 </div>
@@ -2578,7 +2578,7 @@ export default function AdminSettings() {
                 </div>
 
                 <div className="sm:col-span-2">
-                  <label className={labelClass}>Public Key (opcional)</label>
+                  <label className={labelClass}>Public Key *</label>
                   {mercadoPago?.has_public_key && (
                     <p className="font-body text-xs text-muted-foreground mb-2">
                       Atual: <span className="font-mono text-foreground">{mercadoPago.public_key_masked}</span>
@@ -2628,7 +2628,7 @@ export default function AdminSettings() {
                     placeholder="http://localhost:3000"
                   />
                   <p className="font-body text-xs text-muted-foreground mt-1">
-                    Após pagar, o cliente volta para:{' '}
+                    Após o pagamento, o cliente permanece na loja em:{' '}
                     <span className="font-mono break-all">{mercadoPago?.returnUrlExample || '—'}</span>
                   </p>
                 </div>
@@ -2654,10 +2654,12 @@ export default function AdminSettings() {
 
               <div className="p-4 bg-secondary/30 rounded-sm border border-border font-body text-xs text-muted-foreground space-y-1">
                 <p className="text-foreground font-medium text-sm mb-2">Como funciona</p>
-                <p>• A loja cria uma Preference e redireciona o cliente ao Checkout Pro</p>
+                <p>• A loja cria o pagamento na API do Mercado Pago (`/v1/payments`) e o cliente não sai do site</p>
+                <p>• PIX: QR Code e copia-e-cola na página de pagamento; cartão: tokenização no navegador (PCI)</p>
                 <p>• O Mercado Pago notifica o backend via webhook quando o pagamento muda de status</p>
-                <p>• Na página de retorno, o status é reconsultado automaticamente se ainda estiver pendente</p>
+                <p>• Na página de status, o pedido é reconsultado automaticamente se ainda estiver pendente</p>
                 <p>• Em <strong>Checkout</strong>, selecione Mercado Pago como gateway de pagamento online</p>
+                <p>• Informe Access Token e Public Key (a Public Key é obrigatória para cartão)</p>
               </div>
             </TabsContent>
 

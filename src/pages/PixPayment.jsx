@@ -91,7 +91,9 @@ export default function PixPayment() {
         <p className="font-body text-sm text-muted-foreground">
           {isPaid
             ? 'Seu pagamento foi registrado. Obrigado pela compra!'
-            : 'Transfira o valor exato para a chave abaixo. A confirmação é feita manualmente pela loja.'}
+            : data.provider === 'mercado_pago'
+              ? 'Pague com PIX pelo app do seu banco. A confirmação é automática nesta página.'
+              : 'Transfira o valor exato para a chave abaixo. A confirmação é feita manualmente pela loja.'}
         </p>
       </div>
 
@@ -108,7 +110,46 @@ export default function PixPayment() {
           </span>
         </div>
 
-        {!isPaid && (
+        {!isPaid && data.provider === 'mercado_pago' && (
+          <>
+            {data.pix_qr_code_image && (
+              <div className="flex justify-center">
+                <img
+                  src={data.pix_qr_code_image}
+                  alt="QR Code PIX"
+                  className="w-52 h-52 bg-white p-2 rounded-sm"
+                />
+              </div>
+            )}
+            {!data.pix_qr_code_image && !data.pix_qr_code_text && (
+              <p className="text-xs text-muted-foreground text-center">
+                Gerando QR Code do PIX... esta página atualiza automaticamente.
+              </p>
+            )}
+            {data.pix_qr_code_text && (
+              <div>
+                <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Pix Copia e Cola</p>
+                <div className="flex gap-2">
+                  <code className="flex-1 p-3 bg-secondary rounded-sm text-xs break-all">{data.pix_qr_code_text}</code>
+                  <button
+                    type="button"
+                    onClick={() => copyValue(data.pix_qr_code_text)}
+                    className="shrink-0 px-3 py-2 border border-border rounded-sm hover:bg-secondary transition-colors"
+                    title="Copiar código"
+                  >
+                    <Copy className="w-4 h-4" />
+                  </button>
+                </div>
+                {copied && <p className="text-xs text-green-600 mt-1">Código copiado!</p>}
+              </div>
+            )}
+            <p className="text-xs text-muted-foreground">
+              Abra o app do banco, escolha PIX e escaneie o QR Code ou cole o código. Esta página atualiza automaticamente.
+            </p>
+          </>
+        )}
+
+        {!isPaid && data.provider !== 'mercado_pago' && (
           <>
             <div>
               <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Titular</p>

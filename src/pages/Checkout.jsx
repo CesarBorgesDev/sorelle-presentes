@@ -8,6 +8,8 @@ import { useAuth } from '@/lib/AuthContext';
 import { completarCadastroUrl, isProfileComplete, resolvePersonName } from '@/lib/profile';
 import { Button } from '@/components/ui/button';
 import { Loader2, ArrowLeft, Truck, FlaskConical, CreditCard, QrCode, FileText, Store, Banknote, Wallet } from 'lucide-react';
+import MercadoPagoCardForm from '@/components/MercadoPagoCardForm';
+import { getMercadoPagoDeviceId, loadMercadoPagoSecurity } from '@/lib/mercadoPagoSdk';
 
 const STORE_PICKUP_ID = 'retirada_loja';
 
@@ -45,7 +47,9 @@ export default function Checkout() {
   const [shippingError, setShippingError] = useState('');
   const [cepLoading, setCepLoading] = useState(false);
   const [cepError, setCepError] = useState('');
+  const [cardBusy, setCardBusy] = useState(false);
   const shippingPrefillKey = useRef('');
+  const cardFormRef = useRef(null);
 
   const [form, setForm] = useState({
     customer_name: resolvePersonName(user?.full_name, user?.email),
@@ -117,6 +121,14 @@ export default function Checkout() {
   const paymentMethods = methodsData?.methods || [];
   const selectedPayment = paymentMethods.find((method) => method.id === paymentMethod);
   const isTestMode = selectedPayment?.isTestMode;
+  const mercadoPago = methodsData?.mercado_pago;
+  const isMercadoPago = selectedPayment?.provider === 'mercado_pago';
+  const isMercadoPagoCard = isMercadoPago
+    && (paymentMethod === 'cartao_credito' || paymentMethod === 'cartao_debito');
+
+  useEffect(() => {
+    if (isMercadoPago) loadMercadoPagoSecurity();
+  }, [isMercadoPago]);
 
   useEffect(() => {
     if (!paymentMethods.length) return;
@@ -237,6 +249,14 @@ export default function Checkout() {
         navigate(result.redirect_url || `/pagamento/retorno?pedido=${result.order_id}`);
         return;
       }
+      if (result.three_ds_url) {
+        window.location.href = result.three_ds_url;
+        return;
+      }
+      if (result.type === 'mercado_pago') {
+        navigate(result.redirect_url || `/pagamento/retorno?pedido=${result.order_id}`);
+        return;
+      }
       if (result.checkout_url) {
         window.location.href = result.checkout_url;
         return;
@@ -289,7 +309,7 @@ export default function Checkout() {
     }
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     if (!shippingServiceId) {
@@ -301,11 +321,32 @@ export default function Checkout() {
       return;
     }
 
+    let mercadoPagoPayload;
+    if (isMercadoPagoCard) {
+      try {
+        setCardBusy(true);
+        mercadoPagoPayload = await cardFormRef.current?.tokenize();
+        if (!mercadoPagoPayload?.token) {
+          throw new Error('Não foi possível validar o cartão. Recarregue a página e tente novamente.');
+        }
+      } catch (err) {
+        setError(err.message || 'Não foi possível validar o cartão');
+        return;
+      } finally {
+        setCardBusy(false);
+      }
+    } else if (isMercadoPago) {
+      mercadoPagoPayload = {
+        device_id: getMercadoPagoDeviceId(),
+      };
+    }
+
     checkoutMutation.mutate({
       ...form,
       customer_zip_code: form.customer_zip_code.replace(/\D/g, ''),
       shipping_service_id: shippingServiceId,
       payment_method: paymentMethod,
+      ...(mercadoPagoPayload ? { mercado_pago: mercadoPagoPayload } : {}),
     });
   };
 
@@ -327,9 +368,15 @@ export default function Checkout() {
     ? 'Finalizar pedido de teste'
     : usesGatewayCheckout
       ? `Pagar com ${paymentMethodLabels[paymentMethod] || 'pagamento'} na ${gatewayLabel}`
-      : paymentMethod === 'pix'
-        ? 'Pagar com PIX'
-        : 'Finalizar compra';
+      : isMercadoPago && paymentMethod === 'boleto'
+        ? 'Gerar boleto'
+        : isMercadoPago && paymentMethod === 'cartao_credito'
+          ? 'Pagar com cartão de crédito'
+          : isMercadoPago && paymentMethod === 'cartao_debito'
+            ? 'Pagar com cartão de débito'
+            : paymentMethod === 'pix'
+              ? 'Pagar com PIX'
+              : 'Finalizar compra';
 
   return (
     <div className="max-w-3xl mx-auto px-4 pt-24 lg:pt-32 pb-32 lg:pb-10">
@@ -624,6 +671,19 @@ export default function Checkout() {
                   </div>
                 </div>
               </div>
+
+              {isMercadoPagoCard && (
+                <MercadoPagoCardForm
+                  ref={cardFormRef}
+                  publicKey={mercadoPago?.public_key}
+                  amount={total}
+                  document={form.customer_document}
+                  paymentType={paymentMethod === 'cartao_debito' ? 'debit' : 'credit'}
+                  maxInstallments={selectedPayment?.max_installments || 12}
+                  inputClass={inputClass}
+                  labelClass={labelClass}
+                />
+              )}
             </div>
 
             <div className="fixed bottom-0 inset-x-0 z-10 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] bg-background/95 backdrop-blur-sm border-t border-border space-y-2 lg:static lg:inset-auto lg:px-0 lg:border-0 lg:bg-transparent lg:backdrop-blur-none lg:pt-0 lg:pb-0">
@@ -641,10 +701,10 @@ export default function Checkout() {
 
               <Button
                 type="submit"
-                disabled={checkoutMutation.isPending}
+                disabled={checkoutMutation.isPending || cardBusy}
                 className="w-full py-6 h-auto min-h-12 whitespace-normal text-center font-body tracking-wider"
               >
-                {checkoutMutation.isPending ? (
+                {checkoutMutation.isPending || cardBusy ? (
                   <>
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                     Processando...

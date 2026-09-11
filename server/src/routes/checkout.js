@@ -24,11 +24,13 @@ import { normalizeAddressInput, validateAddressFields } from '../utils/address.j
 import { applyCieloPaymentUpdate, refreshCieloOrderStatus } from '../services/cieloNotifications.js';
 import { createSipagPaymentUrl } from '../services/sipag.js';
 import { refreshSipagOrderStatus } from '../services/sipagNotifications.js';
-import { createMercadoPagoPreference } from '../services/mercadoPago.js';
+import { createMercadoPagoPayment } from '../services/mercadoPago.js';
 import {
   handleMercadoPagoWebhook,
   refreshMercadoPagoOrderStatus,
+  applyMercadoPagoPaymentUpdate,
 } from '../services/mercadoPagoNotifications.js';
+import { getMercadoPagoConfig, getMercadoPagoPublicClientConfig } from '../services/mercadoPagoConfig.js';
 import { trackCorreiosPackage } from '../services/correiosTracking.js';
 import { normalizeProductQuantity } from '../utils/productStock.js';
 import { resolveVariantAvailability } from '../utils/productVariants.js';
@@ -302,6 +304,13 @@ async function startCheckout(req, res) {
     return res.status(400).json({ message: err.message });
   }
 
+  if (providerInfo.provider === 'mercado_pago') {
+    const document = String(customer_document || '').replace(/\D/g, '');
+    if (document.length !== 11 && document.length !== 14) {
+      return res.status(400).json({ message: 'Informe um CPF ou CNPJ válido para pagar' });
+    }
+  }
+
   const order = await createOrderFromCart({
     userId: req.user.id,
     customer,
@@ -402,13 +411,28 @@ async function startCheckout(req, res) {
   if (providerInfo.provider === 'mercado_pago') {
     const mercadoPagoConfig = providerInfo.mercadoPagoConfig;
     const maxInstallments = await getMaxInstallmentsForAmount(order.total);
+    const mpClient = req.body.mercado_pago || {};
 
-    let preferenceResult;
+    if ((paymentMethod === 'cartao_credito' || paymentMethod === 'cartao_debito') && !String(mpClient.token || '').trim()) {
+      await cancelOrderAndRestoreStock(order.id, req.user?.id);
+      const err = new Error('Não foi possível tokenizar o cartão. Recarregue a página e tente novamente.');
+      err.status = 400;
+      throw err;
+    }
+
+    let paymentResult;
     try {
-      preferenceResult = await createMercadoPagoPreference({
+      paymentResult = await createMercadoPagoPayment({
         order,
         customer,
         paymentMethod,
+        card: {
+          token: mpClient.token,
+          paymentMethodId: mpClient.payment_method_id,
+          issuerId: mpClient.issuer_id,
+          installments: mpClient.installments,
+        },
+        deviceId: mpClient.device_id,
         maxInstallments,
         config: mercadoPagoConfig,
       });
@@ -417,25 +441,50 @@ async function startCheckout(req, res) {
       throw err;
     }
 
-    const gatewayOrderNumber = preferenceResult.preferenceId || buildOrderNumber(order.id);
+    const gatewayOrderNumber = paymentResult.id || buildOrderNumber(order.id);
 
     await pool.query(
       `UPDATE orders
        SET gateway_order_number = $1,
            payment_gateway = 'mercado_pago',
-           mercado_pago_preference_id = $2,
+           mercado_pago_payment_id = $2,
+           pix_qr_code_text = COALESCE($3, pix_qr_code_text),
+           pix_qr_code_image = COALESCE($4, pix_qr_code_image),
+           boleto_url = COALESCE($5, boleto_url),
+           boleto_digitable_line = COALESCE($6, boleto_digitable_line),
            updated_date = NOW()
-       WHERE id = $3`,
-      [gatewayOrderNumber, preferenceResult.preferenceId || null, order.id]
+       WHERE id = $7`,
+      [
+        gatewayOrderNumber,
+        paymentResult.id || null,
+        paymentResult.pixQrCode || null,
+        paymentResult.pixQrCodeImage || null,
+        paymentResult.boletoUrl || null,
+        paymentResult.boletoDigitableLine || null,
+        order.id,
+      ]
     );
+
+    const orderWithGateway = { ...order, payment_gateway: 'mercado_pago' };
+    await applyMercadoPagoPaymentUpdate(pool, orderWithGateway, paymentResult);
+
+    if (paymentResult.paymentStatus === 'recusado' || paymentResult.paymentStatus === 'cancelado') {
+      await cancelOrderAndRestoreStock(order.id, req.user?.id);
+      const err = new Error(paymentResult.userMessage || 'Pagamento recusado. Verifique os dados e tente novamente.');
+      err.status = 402;
+      throw err;
+    }
 
     return res.json({
       type: 'mercado_pago',
-      checkout_url: preferenceResult.checkoutUrl,
       order_id: order.id,
       gateway_order_number: gatewayOrderNumber,
-      preference_id: preferenceResult.preferenceId,
       payment_method: paymentMethod,
+      payment_status: paymentResult.paymentStatus,
+      three_ds_url: paymentResult.threeDsUrl || null,
+      redirect_url: paymentMethod === 'pix'
+        ? `/pagamento/pix?pedido=${order.id}`
+        : `/pagamento/retorno?pedido=${order.id}`,
     });
   }
 
@@ -506,10 +555,12 @@ router.get('/metodos', requireAuth, async (req, res) => {
     const isPickup = req.query.pickup === 'true';
     const methods = await getAvailablePaymentMethods({ pickup: isPickup });
     const storePickup = await getStorePickupConfig();
+    const mercadoPagoConfig = await getMercadoPagoConfig();
     res.json({
       methods,
       store_pickup: storePickup,
       checkout_method: await getCheckoutPaymentMethod(),
+      mercado_pago: getMercadoPagoPublicClientConfig(mercadoPagoConfig),
     });
   } catch (err) {
     console.error('Erro ao listar métodos de pagamento:', err);
@@ -651,7 +702,9 @@ router.get('/pedido/:id/nota-fiscal/:type', requireAuth, async (req, res) => {
 router.get('/pedido/:id/pix', requireAuth, async (req, res) => {
   try {
     const result = await pool.query(
-      'SELECT id, total, payment_method, payment_status, customer_name FROM orders WHERE id = $1 AND LOWER(customer_email) = LOWER($2)',
+      `SELECT id, total, payment_method, payment_status, payment_gateway,
+              pix_qr_code_image, pix_qr_code_text, mercado_pago_payment_id
+       FROM orders WHERE id = $1 AND LOWER(customer_email) = LOWER($2)`,
       [req.params.id, req.user.email]
     );
 
@@ -659,9 +712,24 @@ router.get('/pedido/:id/pix', requireAuth, async (req, res) => {
       return res.status(404).json({ message: 'Pedido não encontrado' });
     }
 
-    const order = rowToEntity(result.rows[0]);
+    let order = rowToEntity(result.rows[0]);
     if (order.payment_method !== 'pix') {
       return res.status(400).json({ message: 'Este pedido não utiliza PIX' });
+    }
+
+    if (order.payment_gateway === 'mercado_pago') {
+      if (order.payment_status === 'aguardando_pagamento') {
+        order = rowToEntity(await refreshMercadoPagoOrderStatus(pool, order));
+      }
+
+      return res.json({
+        order_id: order.id,
+        total: order.total,
+        payment_status: order.payment_status,
+        provider: 'mercado_pago',
+        pix_qr_code_text: order.pix_qr_code_text || null,
+        pix_qr_code_image: order.pix_qr_code_image || null,
+      });
     }
 
     const providerInfo = await resolvePaymentProvider('pix');
@@ -702,7 +770,7 @@ router.post('/cielo/notificacao', (req, res) => handleCieloWebhook(req, res, 'no
 router.post('/cielo/mudanca-status', (req, res) => handleCieloWebhook(req, res, 'mudança de status'));
 
 /**
- * Webhook Mercado Pago (Checkout Pro).
+ * Webhook Mercado Pago (Checkout Transparente / Payments API).
  * Cadastre no painel: {APP_PUBLIC_URL}/api/checkout/mercado-pago/webhook
  */
 router.post('/mercado-pago/webhook', async (req, res) => {

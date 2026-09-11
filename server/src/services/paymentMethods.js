@@ -55,9 +55,9 @@ export const PAYMENT_METHOD_DEFS = {
 
 export const CHECKOUT_OPTIONS = [
   { id: 'pix', label: 'PIX', hint: 'Gateway (Cielo/SiPag/Mercado Pago) ou chave PIX manual' },
-  { id: 'cartao_credito', label: 'Cartão de crédito', hint: 'Redireciona ao gateway configurado' },
+  { id: 'cartao_credito', label: 'Cartão de crédito', hint: 'Cobrança online no gateway configurado' },
   { id: 'cartao_debito', label: 'Cartão de débito', hint: 'Débito online no gateway configurado' },
-  { id: 'boleto', label: 'Boleto bancário', hint: 'Redireciona ao gateway configurado' },
+  { id: 'boleto', label: 'Boleto bancário', hint: 'Boleto gerado pelo gateway configurado' },
   { id: 'dinheiro', label: 'Dinheiro na retirada', hint: 'Disponível apenas com retirada na loja' },
   { id: 'pagar_na_loja', label: 'Pagar na loja', hint: 'Cliente paga ao retirar o pedido' },
   { id: 'test', label: 'Modo teste', hint: 'Aprova o pedido automaticamente, sem cobrança real' },
@@ -221,10 +221,20 @@ export async function getAvailablePaymentMethods({ pickup = false } = {}) {
     const providerInfo = await resolveMethodProvider(methodId);
     if (!providerInfo) continue;
 
+    let description = def.description;
+    if (providerInfo.provider === 'mercado_pago') {
+      if (methodId === 'pix') description = 'QR Code na loja, confirmação automática';
+      else if (methodId === 'cartao_credito' || methodId === 'cartao_debito') {
+        description = 'Pague na loja, sem sair do site';
+      } else if (methodId === 'boleto') {
+        description = 'Boleto gerado na loja';
+      }
+    }
+
     methods.push({
       id: methodId,
       label: def.label,
-      description: def.description,
+      description,
       provider: providerInfo.provider,
       isTestMode: providerInfo.isTestMode || false,
       pickup_only: Boolean(def.pickupOnly),

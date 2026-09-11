@@ -68,14 +68,22 @@ export async function applyMercadoPagoPaymentUpdate(pool, order, paymentInfo) {
          mercado_pago_payment_id = COALESCE($2::varchar, mercado_pago_payment_id),
          mercado_pago_preference_id = COALESCE($3::varchar, mercado_pago_preference_id),
          mercado_pago_authorization_code = COALESCE($4::varchar, mercado_pago_authorization_code),
+         pix_qr_code_text = COALESCE($5::text, pix_qr_code_text),
+         pix_qr_code_image = COALESCE($6::text, pix_qr_code_image),
+         boleto_url = COALESCE($7::text, boleto_url),
+         boleto_digitable_line = COALESCE($8::text, boleto_digitable_line),
          updated_date = NOW()
-     WHERE id = $5::uuid
+     WHERE id = $9::uuid
      RETURNING *`,
     [
       paymentInfo.paymentStatus,
       paymentInfo.id || null,
       paymentInfo.preferenceId || null,
       paymentInfo.authorizationCode || null,
+      paymentInfo.pixQrCode || null,
+      paymentInfo.pixQrCodeImage || null,
+      paymentInfo.boletoUrl || null,
+      paymentInfo.boletoDigitableLine || null,
       order.id,
     ]
   );

@@ -109,6 +109,7 @@ async function apiFetch(path, options = {}) {
 
     const fallbackByStatus = {
       401: 'Não autorizado',
+      402: 'Pagamento recusado',
       403: 'Acesso negado',
       404: 'Recurso não encontrado',
       409: 'Este e-mail já está cadastrado',

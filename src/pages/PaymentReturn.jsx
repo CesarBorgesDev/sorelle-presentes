@@ -1,5 +1,5 @@
 import React from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, Navigate, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/api/apiClient';
 import { CheckCircle2, Clock, Loader2, Store } from 'lucide-react';
@@ -62,6 +62,14 @@ export default function PaymentReturn() {
   const isPaid = order?.payment_status === 'pago';
   const isPickupConfirmed = isPickup && (isPaid || payAtPickup);
 
+  if (
+    order?.payment_method === 'pix'
+    && order?.payment_gateway === 'mercado_pago'
+    && order?.payment_status === 'aguardando_pagamento'
+  ) {
+    return <Navigate to={`/pagamento/pix?pedido=${orderId}`} replace />;
+  }
+
   const title = isPickupConfirmed
     ? 'Pedido registrado!'
     : isPaid
@@ -76,7 +84,7 @@ export default function PaymentReturn() {
       : 'Seu pedido foi confirmado. Aguarde nosso e-mail antes de retirar na loja.'
     : isPaid
       ? 'Seu pedido foi confirmado. Em breve você receberá novidades por e-mail.'
-      : 'Estamos aguardando a confirmação da Cielo. Esta página atualiza automaticamente.';
+      : 'Estamos aguardando a confirmação do pagamento. Esta página atualiza automaticamente.';
 
   const Icon = isPickupConfirmed || isPaid ? CheckCircle2 : isPickup ? Store : Clock;
 

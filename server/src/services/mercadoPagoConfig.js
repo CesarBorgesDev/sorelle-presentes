@@ -75,6 +75,15 @@ export async function getMercadoPagoConfig() {
   };
 }
 
+export function getMercadoPagoPublicClientConfig(config) {
+  if (!config?.isReady) return null;
+  return {
+    public_key: config.publicKey || null,
+    environment: config.environment,
+    cards_enabled: Boolean(config.publicKey),
+  };
+}
+
 export function getMercadoPagoRequirements(config) {
   return [
     {
@@ -86,14 +95,14 @@ export function getMercadoPagoRequirements(config) {
     },
     {
       id: 'public_key',
-      label: 'Public Key configurada (opcional no Checkout Pro)',
-      required: false,
+      label: 'Public Key configurada (obrigatória para cartão)',
+      required: true,
       done: Boolean(config.publicKey),
-      hint: 'Útil se no futuro usar Bricks; não é obrigatória para redirect',
+      hint: 'Suas integrações → Credenciais. Usada no checkout da loja para tokenizar o cartão (nunca envia o número ao servidor).',
     },
     {
       id: 'frontend_url',
-      label: 'URL do site (retorno após pagamento)',
+      label: 'URL do site (página de status do pedido)',
       required: true,
       done: Boolean(config.frontendUrl),
       hint: 'Ex.: https://sorellepresentes.com.br ou http://localhost:3000',
