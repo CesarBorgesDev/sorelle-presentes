@@ -43,6 +43,16 @@ function formatMoney(value) {
   return Number(value || 0).toFixed(2).replace('.', ',');
 }
 
+function hideInstallmentInterest(message, installments, amount) {
+  const fallback = `${installments}x de R$ ${formatMoney(amount)}`;
+  const cleaned = String(message || '')
+    .replace(/\s*\([^)]*(?:juros|interest|CET|CFT|TEA)[^)]*\)/gi, '')
+    .replace(/\s*(?:com\s+)?juros(?:\s+de)?\s+[\d.,]+\s*%(?:\s*a\.?\s*m\.?)?/gi, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+  return cleaned || fallback;
+}
+
 const MercadoPagoCardForm = forwardRef(function MercadoPagoCardForm({
   publicKey,
   amount,
@@ -157,8 +167,11 @@ const MercadoPagoCardForm = forwardRef(function MercadoPagoCardForm({
           .filter((option) => Number(option.installments) >= 1 && Number(option.installments) <= ceiling)
           .map((option) => ({
             installments: Number(option.installments),
-            recommended_message: option.recommended_message
-              || `${option.installments}x de R$ ${formatMoney(option.installment_amount)}`,
+            recommended_message: hideInstallmentInterest(
+              option.recommended_message,
+              option.installments,
+              option.installment_amount
+            ),
             issuer_id: result?.[0]?.issuer?.id,
           }));
 

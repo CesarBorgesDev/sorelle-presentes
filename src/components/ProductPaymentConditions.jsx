@@ -4,11 +4,7 @@ import { CreditCard, QrCode } from 'lucide-react';
 import { api } from '@/api/apiClient';
 import { formatMoney } from '@/lib/orderLabels';
 import { resolveMaxInstallments } from '@/lib/installmentScale';
-import {
-  calcInstallmentAmount,
-  calcInstallmentTotal,
-  getInterestPercentForInstallments,
-} from '@/lib/installmentInterest';
+import { calcInstallmentAmount, calcInstallmentTotal } from '@/lib/installmentInterest';
 
 function calcPixPrice(price, discountPercent) {
   if (!discountPercent || discountPercent <= 0) return null;
@@ -33,7 +29,6 @@ export default function ProductPaymentConditions({ price, originalPrice }) {
     )
     : 1;
 
-  const interestPercent = getInterestPercentForInstallments(interestRates, maxInstallments);
   const installmentValue = conditions?.shows_installments && maxInstallments >= 2
     ? calcInstallmentAmount(price, maxInstallments, interestRates)
     : null;
@@ -55,11 +50,9 @@ export default function ProductPaymentConditions({ price, originalPrice }) {
             <span className="text-primary">{formatMoney(installmentValue)}</span>
           </p>
           <p className="font-body text-sm text-muted-foreground mt-1">
-            {interestPercent > 0
-              ? `com juros de ${interestPercent}% no cartão de crédito`
-              : 'sem juros no cartão de crédito'}
+            no cartão de crédito
           </p>
-          {interestPercent > 0 && installmentTotal != null && (
+          {installmentTotal != null && installmentTotal > price && (
             <p className="font-body text-xs text-muted-foreground mt-0.5">
               Total parcelado: {formatMoney(installmentTotal)}
             </p>
