@@ -143,7 +143,19 @@ function onlyDigits(value) {
 
 function parseBrazilianMoney(value) {
   if (value == null || value === '') return null;
-  const normalized = String(value).replace('.', '').replace(',', '.');
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : null;
+  }
+  const raw = String(value).trim();
+  if (!raw) return null;
+  const hasComma = raw.includes(',');
+  const hasDot = raw.includes('.');
+  let normalized = raw.replace(/[^\d,.-]/g, '');
+  if (hasComma && hasDot) {
+    normalized = normalized.replace(/\./g, '').replace(',', '.');
+  } else if (hasComma) {
+    normalized = normalized.replace(',', '.');
+  }
   const num = Number(normalized);
   return Number.isFinite(num) ? num : null;
 }
@@ -267,10 +279,20 @@ function buildEstimatedShippingQuote({ cfg, destinationZip, packageInfo, fallbac
 }
 
 function parseApiErrorMessage(body, status) {
+  const payload = Array.isArray(body) ? body[0] : body;
+  if (Array.isArray(payload?.msgs) && payload.msgs.length) return payload.msgs.join('; ');
+  if (payload?.message) return String(payload.message);
+  if (payload?.causa) return String(payload.causa);
   if (Array.isArray(body?.msgs) && body.msgs.length) return body.msgs.join('; ');
   if (body?.message) return String(body.message);
   if (body?.causa) return String(body.causa);
   return `Correios retornou erro ${status}`;
+}
+
+function unwrapCorreiosBody(body) {
+  if (Array.isArray(body)) return body[0] && typeof body[0] === 'object' ? body[0] : {};
+  if (body && typeof body === 'object') return body;
+  return {};
 }
 
 async function fetchWithTimeout(url, options = {}, timeoutMs = 15000) {
@@ -360,6 +382,8 @@ async function fetchCorreiosRestQuote({ destinationZip, packageInfo, config }) {
 
       const priceBody = await priceRes.json().catch(() => ({}));
       const prazoBody = await prazoRes.json().catch(() => ({}));
+      const pricePayload = unwrapCorreiosBody(priceBody);
+      const prazoPayload = unwrapCorreiosBody(prazoBody);
 
       if (!priceRes.ok) {
         return {
@@ -373,8 +397,10 @@ async function fetchCorreiosRestQuote({ destinationZip, packageInfo, config }) {
         };
       }
 
-      const price = parseBrazilianMoney(priceBody.pcFinal);
-      const deadline = Number(prazoBody.prazoEntrega);
+      const price = parseBrazilianMoney(
+        pricePayload.pcFinal ?? pricePayload.pcBase ?? pricePayload.valor
+      );
+      const deadline = Number(prazoPayload.prazoEntrega ?? prazoPayload.prazo);
       if (price == null || price < 0) {
         return {
           id: service.id,

@@ -14,6 +14,17 @@ import { resolveMaxInstallments } from '@/lib/installmentScale';
 
 const STORE_PICKUP_ID = 'retirada_loja';
 
+function isDeliveryShippingOption(option) {
+  return Boolean(option?.available)
+    && option.id !== STORE_PICKUP_ID
+    && option.pickup !== true
+    && option.service_code !== 'pickup';
+}
+
+function formatShippingPrice(price) {
+  return Number(price || 0).toFixed(2).replace('.', ',');
+}
+
 const PAYMENT_ICONS = {
   pix: QrCode,
   cartao_credito: CreditCard,
@@ -50,6 +61,7 @@ export default function Checkout() {
   const [cepError, setCepError] = useState('');
   const [cardBusy, setCardBusy] = useState(false);
   const shippingPrefillKey = useRef('');
+  const shippingFetchSeq = useRef(0);
   const cardFormRef = useRef(null);
 
   const [form, setForm] = useState({
@@ -164,20 +176,22 @@ export default function Checkout() {
   const fetchCepAndShipping = useCallback(async (zip) => {
     const digits = zip.replace(/\D/g, '');
     if (digits.length !== 8) return;
+    const seq = ++shippingFetchSeq.current;
 
     setShippingLoading(true);
     setCepLoading(true);
     setShippingError('');
     setCepError('');
-    setShippingQuote(null);
-    setShippingServiceId('');
 
     const [quoteResult, addressResult] = await Promise.allSettled([
       api.shipping.quote(digits),
       api.shipping.lookupCep(digits),
     ]);
 
+    if (seq !== shippingFetchSeq.current) return;
+
     setCepLoading(false);
+    setShippingLoading(false);
 
     if (addressResult.status === 'fulfilled') {
       applyAddressFromCep(addressResult.value);
@@ -185,15 +199,22 @@ export default function Checkout() {
       setCepError(addressResult.reason?.message || 'CEP não encontrado');
     }
 
-    setShippingLoading(false);
-
     if (quoteResult.status === 'fulfilled') {
       const quote = quoteResult.value;
+      const firstAvailable = (quote.options || []).find(isDeliveryShippingOption);
       setShippingQuote(quote);
-      const firstAvailable = quote.options?.find((o) => o.available && o.id !== STORE_PICKUP_ID);
-      if (firstAvailable) setShippingServiceId(firstAvailable.id);
+      setShippingServiceId(firstAvailable?.id || '');
+      if (!firstAvailable) {
+        setShippingError('Nenhuma opção de entrega disponível para este CEP');
+      }
     } else {
-      setShippingError(quoteResult.reason?.message || 'Erro ao calcular frete');
+      const message = quoteResult.reason?.message || 'Erro ao calcular frete';
+      setShippingQuote(null);
+      setShippingServiceId('');
+      setShippingError(message);
+      if (/carrinho vazio/i.test(message)) {
+        shippingPrefillKey.current = '';
+      }
     }
   }, [applyAddressFromCep]);
 
@@ -220,6 +241,16 @@ export default function Checkout() {
     fetchCepAndShipping,
   ]);
 
+  useEffect(() => {
+    if (deliveryMode !== 'delivery' || shippingLoading || !shippingQuote?.options) return;
+    const deliveryOptions = shippingQuote.options.filter(isDeliveryShippingOption);
+    if (deliveryOptions.length === 0) return;
+    const stillValid = deliveryOptions.some((option) => String(option.id) === String(shippingServiceId));
+    if (!stillValid) {
+      setShippingServiceId(deliveryOptions[0].id);
+    }
+  }, [deliveryMode, shippingLoading, shippingQuote, shippingServiceId]);
+
   const subtotal = items.reduce((sum, item) => sum + item.price * (item.quantity || 1), 0);
   const isPickup = deliveryMode === 'pickup';
   const selectedShipping = isPickup
@@ -229,7 +260,7 @@ export default function Checkout() {
         price: 0,
         deadline_days: storePickup?.deadline_days || 3,
       }
-    : shippingQuote?.options?.find((o) => o.id === shippingServiceId && o.available);
+    : shippingQuote?.options?.find((o) => String(o.id) === String(shippingServiceId) && isDeliveryShippingOption(o));
   const shippingCost = selectedShipping?.price || 0;
   const pixDiscountPercent = selectedPayment?.pix_discount_percent || 0;
   const pixDiscount = paymentMethod === 'pix' && pixDiscountPercent > 0
@@ -312,6 +343,7 @@ export default function Checkout() {
       setShippingServiceId('');
       setShippingError('');
       setCepError('');
+      shippingPrefillKey.current = '';
     }
   };
 
@@ -570,7 +602,21 @@ export default function Checkout() {
                     </div>
                   )}
                   {shippingError && (
-                    <p className="text-sm text-destructive font-body">{shippingError}</p>
+                    <div className="space-y-2">
+                      <p className="text-sm text-destructive font-body">{shippingError}</p>
+                      {cepReady && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            shippingPrefillKey.current = '';
+                            fetchCepAndShipping(cepDigits);
+                          }}
+                          className="text-sm font-body text-primary underline underline-offset-2"
+                        >
+                          Tentar novamente
+                        </button>
+                      )}
+                    </div>
                   )}
                   {!shippingLoading && !shippingQuote && !shippingError && cepReady && (
                     <p className="text-sm text-muted-foreground font-body py-2">
@@ -585,25 +631,33 @@ export default function Checkout() {
                       </p>
                     )}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      {shippingQuote.options.filter((o) => o.available && o.id !== STORE_PICKUP_ID).map((option) => {
-                        const selected = shippingServiceId === option.id;
+                      {shippingQuote.options.filter(isDeliveryShippingOption).map((option) => {
+                        const selected = String(shippingServiceId) === String(option.id);
                         return (
-                          <button
+                          <label
                             key={option.id}
-                            type="button"
                             onClick={() => setShippingServiceId(option.id)}
-                            className={`p-4 rounded-sm border text-left transition-colors font-body ${
+                            className={`p-4 rounded-sm border text-left transition-colors font-body cursor-pointer touch-manipulation select-none ${
                               selected
                                 ? 'border-primary bg-primary/5 ring-1 ring-primary'
                                 : 'border-border hover:border-primary/50'
                             }`}
                           >
+                            <input
+                              type="radio"
+                              name="shipping_service"
+                              value={option.id}
+                              checked={selected}
+                              onChange={() => setShippingServiceId(option.id)}
+                              className="sr-only"
+                              required
+                            />
                             <Truck className={`w-4 h-4 mb-2 ${selected ? 'text-primary' : 'text-muted-foreground'}`} />
                             <p className="text-sm font-medium">{option.label}</p>
                             <p className="text-xs text-muted-foreground mt-0.5">
-                              R$ {option.price.toFixed(2).replace('.', ',')} · {option.deadline_days} dia(s) úteis
+                              R$ {formatShippingPrice(option.price)} · {option.deadline_days || '—'} dia(s) úteis
                             </p>
-                          </button>
+                          </label>
                         );
                       })}
                     </div>
