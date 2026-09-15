@@ -8,6 +8,8 @@ import FeaturedProducts from '../components/FeaturedProducts';
 import CategoryBanner from '../components/CategoryBanner';
 import BrandsCarousel from '../components/BrandsCarousel';
 import WhatsAppGroupBanner from '../components/WhatsAppGroupBanner';
+import SeoHead from '@/components/SeoHead';
+import { DEFAULT_DESCRIPTION, organizationJsonLd, websiteJsonLd } from '@/lib/seo';
 
 export default function Home() {
   const { data: banners = DEFAULT_HOME_BANNERS } = useQuery({
@@ -37,6 +39,12 @@ export default function Home() {
 
   return (
     <div>
+      <SeoHead
+        title="Sorelle Presentes — Casa, Decoração & Fragrâncias"
+        description={DEFAULT_DESCRIPTION}
+        path="/"
+        jsonLd={[organizationJsonLd(), websiteJsonLd()]}
+      />
       <HeroSection config={banners} />
 
       <FeaturedProducts

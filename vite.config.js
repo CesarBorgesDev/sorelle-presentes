@@ -20,6 +20,26 @@ export default defineConfig({
         changeOrigin: true,
         ws: true,
       },
+      '/sitemap.xml': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+        rewrite: () => '/api/sitemap.xml',
+      },
+    },
+  },
+  preview: {
+    port: 3000,
+    proxy: {
+      '/api': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+        ws: true,
+      },
+      '/sitemap.xml': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+        rewrite: () => '/api/sitemap.xml',
+      },
     },
   },
   plugins: [react()],

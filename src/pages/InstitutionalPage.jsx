@@ -5,6 +5,8 @@ import ReactMarkdown from 'react-markdown';
 import { motion } from 'framer-motion';
 import { Loader2, ArrowLeft } from 'lucide-react';
 import { api } from '@/api/apiClient';
+import SeoHead from '@/components/SeoHead';
+import { stripHtml } from '@/lib/seo';
 
 export default function InstitutionalPage({ pageSlug }) {
   const { slug: paramSlug } = useParams();
@@ -27,6 +29,7 @@ export default function InstitutionalPage({ pageSlug }) {
   if (error || !page) {
     return (
       <div className="min-h-[60vh] flex flex-col items-center justify-center pt-24 px-6 text-center">
+        <SeoHead title="Página não encontrada" path={`/${slug || ''}`} noIndex />
         <h1 className="font-display text-2xl text-foreground mb-4">Página não encontrada</h1>
         <Link to="/" className="font-body text-sm text-primary hover:underline inline-flex items-center gap-2">
           <ArrowLeft className="w-4 h-4" />
@@ -36,8 +39,15 @@ export default function InstitutionalPage({ pageSlug }) {
     );
   }
 
+  const pageDescription = stripHtml(page.content) || page.title;
+
   return (
     <div className="pt-20 lg:pt-32 pb-20 lg:pb-28">
+      <SeoHead
+        title={page.title}
+        description={pageDescription}
+        path={`/${slug}`}
+      />
       <motion.div
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}

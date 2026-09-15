@@ -9,6 +9,8 @@ import { Button } from '@/components/ui/button';
 import { formatCurrency, getKitItemPrices } from '@/lib/kitPricing';
 import { isProductAvailable } from '@/lib/productStock';
 import { resolveMediaUrl } from '@/lib/resolveMediaUrl';
+import SeoHead from '@/components/SeoHead';
+import { SITE_NAME, stripHtml, toCanonicalUrl } from '@/lib/seo';
 
 export default function KitDetail() {
   const { id } = useParams();
@@ -81,6 +83,7 @@ export default function KitDetail() {
   if (isError || !kit) {
     return (
       <div className="pt-20 lg:pt-32 text-center py-32 px-6">
+        <SeoHead title="Kit não encontrado" path={`/kit/${id}`} noIndex />
         <p className="font-body text-muted-foreground mb-6">Kit não encontrado.</p>
         <Link to="/" className="font-body text-sm text-foreground underline underline-offset-4">
           Voltar para a loja
@@ -90,9 +93,36 @@ export default function KitDetail() {
   }
 
   const hasDiscount = kit.discount_amount != null && kit.discount_amount > 0;
+  const kitImage = resolveMediaUrl(kit.anchor_product?.image_url || allProducts[0]?.image_url);
+  const kitDescription = stripHtml(
+    kit.description || `Kit ${kit.name} com ${allProducts.length} itens na ${SITE_NAME}.`
+  );
+  const kitJsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'Product',
+    name: kit.name,
+    description: kitDescription,
+    image: kitImage || undefined,
+    brand: { '@type': 'Brand', name: SITE_NAME },
+    offers: {
+      '@type': 'Offer',
+      url: toCanonicalUrl(`/kit/${kit.id}`),
+      priceCurrency: 'BRL',
+      price: Number(kit.kit_price ?? kit.price ?? 0).toFixed(2),
+      availability: canPurchase ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
+    },
+  };
 
   return (
     <div className="pt-20 lg:pt-32">
+      <SeoHead
+        title={kit.name}
+        description={kitDescription}
+        path={`/kit/${kit.id}`}
+        image={kitImage}
+        type="product"
+        jsonLd={kitJsonLd}
+      />
       <div className="max-w-5xl mx-auto px-6 lg:px-16 py-8 lg:py-12">
         <Link
           to={kit.anchor_product ? `/produto/${kit.anchor_product.id}` : '/'}

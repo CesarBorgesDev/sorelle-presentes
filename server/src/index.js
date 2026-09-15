@@ -27,6 +27,7 @@ import backupRoutes from './routes/backup.js';
 import analyticsRoutes from './routes/analytics.js';
 import chatRoutes from './routes/chat.js';
 import whatsappRoutes from './routes/whatsapp.js';
+import seoRoutes from './routes/seo.js';
 import { initRealtime, closeRealtime } from './services/realtime.js';
 import { closeWhatsApp, startWhatsAppIfSessionExists } from './services/baileys.js';
 
@@ -89,6 +90,7 @@ app.use('/api/backup', backupRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/whatsapp', whatsappRoutes);
+app.use('/api', seoRoutes);
 
 app.use((_req, res) => {
   res.status(404).json({ message: 'Rota não encontrada' });

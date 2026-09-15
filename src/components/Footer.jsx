@@ -106,7 +106,7 @@ export default function Footer() {
       <div className="border-t border-background/10">
         <div className="max-w-7xl mx-auto px-6 lg:px-16 py-6 flex flex-col md:flex-row items-center justify-between gap-4">
           <p className="font-body text-xs text-background/40">
-            © 2024 Sorelle Presentes. Todos os direitos reservados.
+            © {new Date().getFullYear()} Sorelle Presentes. Todos os direitos reservados.
           </p>
           <p className="font-body text-xs text-background/40">
             Feito com amor para seu lar

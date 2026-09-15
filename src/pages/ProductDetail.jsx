@@ -30,6 +30,8 @@ import {
   CollapsibleTrigger,
 } from '@/components/ui/collapsible';
 import { useCategoryLabels, formatCategoryLabel } from '@/hooks/useCategories';
+import SeoHead from '@/components/SeoHead';
+import { SITE_NAME, stripHtml, toCanonicalUrl, DEFAULT_OG_IMAGE } from '@/lib/seo';
 
 function ProductAccordionSection({ title, children, defaultOpen = false }) {
   const [open, setOpen] = useState(defaultOpen);
@@ -206,12 +208,56 @@ export default function ProductDetail() {
   if (!product) {
     return (
       <div className="pt-20 lg:pt-32 text-center py-32">
+        <SeoHead title="Produto não encontrado" path={`/produto/${id}`} noIndex />
         <p className="font-body text-muted-foreground">Produto não encontrado.</p>
       </div>
     );
   }
 
   const allImages = getVariantImages(product, selectedColorId, selectedSize).map(resolveMediaUrl);
+  const productDescription = stripHtml(product.description || product.product_specifications || `Compre ${product.name} na ${SITE_NAME}.`);
+  const productImages = allImages.filter(Boolean).slice(0, 6);
+  const productJsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'Product',
+    name: product.name,
+    description: productDescription,
+    image: productImages.length ? productImages : DEFAULT_OG_IMAGE,
+    sku: product.sku || product.internal_code || String(product.id),
+    brand: { '@type': 'Brand', name: SITE_NAME },
+    offers: {
+      '@type': 'Offer',
+      url: toCanonicalUrl(`/produto/${product.id}`),
+      priceCurrency: 'BRL',
+      price: Number(variantPricing.price || product.price || 0).toFixed(2),
+      availability: available ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
+      itemCondition: 'https://schema.org/NewCondition',
+    },
+  };
+  const breadcrumbJsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      {
+        '@type': 'ListItem',
+        position: 1,
+        name: 'Início',
+        item: toCanonicalUrl('/'),
+      },
+      {
+        '@type': 'ListItem',
+        position: 2,
+        name: formatCategoryLabel(categoryLabels, product.category),
+        item: toCanonicalUrl(`/categoria/${product.category}`),
+      },
+      {
+        '@type': 'ListItem',
+        position: 3,
+        name: product.name,
+        item: toCanonicalUrl(`/produto/${product.id}`),
+      },
+    ],
+  };
 
   const thumbnailButtonClass = (isActive) => (
     `rounded-sm overflow-hidden border-2 transition-all ${
@@ -221,6 +267,14 @@ export default function ProductDetail() {
 
   return (
     <div className="pt-20 lg:pt-32">
+      <SeoHead
+        title={product.name}
+        description={productDescription}
+        path={`/produto/${product.id}`}
+        image={allImages[0] || DEFAULT_OG_IMAGE}
+        type="product"
+        jsonLd={[productJsonLd, breadcrumbJsonLd]}
+      />
       <div className="max-w-7xl mx-auto px-6 lg:px-16 py-8 lg:py-12">
         <Link
           to={`/categoria/${product.category}`}
@@ -246,7 +300,7 @@ export default function ProductDetail() {
                       onClick={() => setActiveImage(i)}
                       className={`w-[72px] h-[88px] ${thumbnailButtonClass(activeImage === i)}`}
                     >
-                      <ProductImage src={img} alt="" className="w-full h-full" />
+                      <ProductImage src={img} alt={`${product.name} — foto ${i + 1}`} className="w-full h-full" />
                     </button>
                   ))}
                 </div>
@@ -267,6 +321,7 @@ export default function ProductDetail() {
                     src={allImages[activeImage]}
                     alt={product.name}
                     className="aspect-[4/5] rounded-sm w-full"
+                    fetchPriority="high"
                   />
 
                   <span className="absolute top-3 right-3 bg-background/80 backdrop-blur-sm p-2 rounded-full text-foreground opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none">
@@ -312,7 +367,7 @@ export default function ProductDetail() {
                     onClick={() => setActiveImage(i)}
                     className={`w-16 h-20 shrink-0 ${thumbnailButtonClass(activeImage === i)}`}
                   >
-                    <ProductImage src={img} alt="" className="w-full h-full" />
+                    <ProductImage src={img} alt={`${product.name} — foto ${i + 1}`} className="w-full h-full" />
                   </button>
                 ))}
               </div>

@@ -9,6 +9,7 @@ import ProductListRow from '@/components/ProductListRow';
 import ProductViewToggle, { useProductViewMode } from '@/components/ProductViewToggle';
 import { isProductAvailable } from '@/lib/productStock';
 import { useProductSortOrder, sortProducts } from '@/hooks/useProductSort';
+import SeoHead from '@/components/SeoHead';
 
 function normalizeSearchTerm(value) {
   return String(value || '').trim().toLowerCase();
@@ -74,6 +75,16 @@ export default function SearchProducts() {
 
   return (
     <div className="pt-20 lg:pt-32">
+      <SeoHead
+        title={normalizedQuery ? `Busca: ${normalizedQuery}` : 'Buscar produtos'}
+        description={
+          normalizedQuery
+            ? `Resultados da busca por ${normalizedQuery} na Sorelle Presentes.`
+            : 'Busque produtos de casa, decoração e fragrâncias na Sorelle Presentes.'
+        }
+        path="/busca"
+        noIndex
+      />
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}

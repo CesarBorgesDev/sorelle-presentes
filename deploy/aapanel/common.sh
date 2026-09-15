@@ -99,6 +99,14 @@ nginx_api_location_block() {
         proxy_read_timeout 120s;
         client_max_body_size 15m;
     }
+    location = /sitemap.xml {
+        proxy_pass http://127.0.0.1:3001/api/sitemap.xml;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
 EOF
 }
 
@@ -144,6 +152,50 @@ def block_matches(block: str) -> bool:
 def has_api_location(block: str) -> bool:
     return bool(re.search(r"location\s+\^~\s+/api\b", block) or re.search(r"location\s+/api\b", block))
 
+def has_sitemap_location(block: str) -> bool:
+    return bool(re.search(r"location\s+=\s+/sitemap\.xml\b", block))
+
+def insert_block(cleaned: str, snippet: str) -> tuple[str, bool]:
+    patterns = (
+        r"(\n)([ \t]*location[ \t]+\^[ \t]*~[ \t]+/[ \t]*\{)",
+        r"(\n)([ \t]*location[ \t]+/[ \t]*\{)",
+        r"(\n)([ \t]*location[ \t]+~\s)",
+        r"(\n)([ \t]*error_page[ \t])",
+        r"(\n)([ \t]*access_log[ \t])",
+    )
+    for pattern in patterns:
+        new, n = re.subn(pattern, r"\1" + snippet + r"\2", cleaned, count=1)
+        if n:
+            return new, True
+    new, n = re.subn(r"\n\}\s*$", "\n" + snippet + "\n}\n", cleaned, count=1)
+    if n:
+        return new, True
+    return cleaned, False
+
+def patch_server_block(block: str) -> tuple[str, bool]:
+    cleaned = include_re.sub("", block)
+    changed = cleaned != block
+
+    if not has_api_location(cleaned):
+        cleaned, inserted = insert_block(cleaned, api_block)
+        changed = changed or inserted
+
+    if not has_sitemap_location(cleaned):
+        sitemap_block = (
+            "    location = /sitemap.xml {\n"
+            "        proxy_pass http://127.0.0.1:3001/api/sitemap.xml;\n"
+            "        proxy_http_version 1.1;\n"
+            "        proxy_set_header Host $host;\n"
+            "        proxy_set_header X-Real-IP $remote_addr;\n"
+            "        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n"
+            "        proxy_set_header X-Forwarded-Proto $scheme;\n"
+            "    }\n"
+        )
+        cleaned, inserted = insert_block(cleaned, sitemap_block)
+        changed = changed or inserted
+
+    return cleaned, changed
+
 def iter_server_blocks(text: str):
     pos = 0
     while pos < len(text):
@@ -167,28 +219,6 @@ def iter_server_blocks(text: str):
             break
         yield start, end, text[start:end]
         pos = end
-
-def patch_server_block(block: str) -> tuple[str, bool]:
-    cleaned = include_re.sub("", block)
-    if has_api_location(cleaned):
-        return cleaned, cleaned != block
-
-    patterns = (
-        r"(\n)([ \t]*location[ \t]+\^[ \t]*~[ \t]+/[ \t]*\{)",
-        r"(\n)([ \t]*location[ \t]+/[ \t]*\{)",
-        r"(\n)([ \t]*location[ \t]+~\s)",
-        r"(\n)([ \t]*error_page[ \t])",
-        r"(\n)([ \t]*access_log[ \t])",
-    )
-    for pattern in patterns:
-        new, n = re.subn(pattern, r"\1" + api_block + r"\2", cleaned, count=1)
-        if n:
-            return new, True
-
-    new, n = re.subn(r"\n\}\s*$", "\n" + api_block + "\n}\n", cleaned, count=1)
-    if n:
-        return new, True
-    return cleaned, cleaned != block
 
 def patch_file(text: str) -> tuple[str, bool]:
     text = include_re.sub("", text)

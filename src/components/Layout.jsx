@@ -30,8 +30,14 @@ export default function Layout() {
 
   return (
     <div className="min-h-screen bg-background">
+      <a
+        href="#conteudo"
+        className="sr-only focus:not-sr-only focus:absolute focus:z-[100] focus:top-3 focus:left-3 focus:bg-background focus:text-foreground focus:px-4 focus:py-2 focus:text-sm focus:rounded-sm"
+      >
+        Ir para o conteúdo
+      </a>
       <Navbar cartCount={cartCount} onCartClick={() => setCartOpen(true)} />
-      <main>
+      <main id="conteudo">
         <Outlet />
       </main>
       <Footer />

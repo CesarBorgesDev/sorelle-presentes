@@ -1,0 +1,17 @@
+User-agent: *
+Allow: /
+
+Disallow: /admin
+Disallow: /admin/
+Disallow: /checkout
+Disallow: /conta
+Disallow: /login
+Disallow: /register
+Disallow: /completar-cadastro
+Disallow: /forgot-password
+Disallow: /reset-password
+Disallow: /auth/
+Disallow: /pagamento/
+Disallow: /diagnostico-api
+
+Sitemap: https://sorellepresentes.com.br/sitemap.xml

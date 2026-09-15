@@ -10,6 +10,8 @@ import PageNotFound from './lib/PageNotFound';
 
 import { AuthProvider } from '@/lib/AuthContext';
 
+import RouteSeo from '@/components/RouteSeo';
+
 import ScrollToTop from './components/ScrollToTop';
 
 import ProtectedRoute from '@/components/ProtectedRoute';
@@ -188,7 +190,7 @@ function App() {
         <Router>
 
           <ScrollToTop />
-
+          <RouteSeo />
           <AppRoutes />
 
         </Router>

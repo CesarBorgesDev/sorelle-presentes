@@ -8,11 +8,13 @@ import ProductListRow from '../components/ProductListRow';
 import ProductViewToggle, { useProductViewMode } from '../components/ProductViewToggle';
 import { useCategories, useCategoriesFlat } from '@/hooks/useCategories';
 import { useProductSortOrder, sortOrderToApiSort } from '@/hooks/useProductSort';
+import SeoHead from '@/components/SeoHead';
+import { SITE_NAME, toCanonicalUrl } from '@/lib/seo';
 
 export default function Category() {
   const { slug } = useParams();
   const { data: categoryTree = [] } = useCategories();
-  const { data: flatCategories = [] } = useCategoriesFlat();
+  const { data: flatCategories = [], isSuccess: categoriesLoaded } = useCategoriesFlat();
   const [viewMode, setViewMode] = useProductViewMode('sorelle-category-view');
   const sortOrder = useProductSortOrder();
   const apiSort = sortOrderToApiSort(sortOrder);
@@ -59,6 +61,19 @@ export default function Category() {
 
   return (
     <div className="pt-20 lg:pt-32">
+      <SeoHead
+        title={meta.title}
+        description={meta.description || `Confira a coleção ${meta.title} da ${SITE_NAME}.`}
+        path={`/categoria/${slug}`}
+        noIndex={categoriesLoaded && !categoryInfo}
+        jsonLd={{
+          '@context': 'https://schema.org',
+          '@type': 'CollectionPage',
+          name: meta.title,
+          description: meta.description || `Confira a coleção ${meta.title} da ${SITE_NAME}.`,
+          url: toCanonicalUrl(`/categoria/${slug}`),
+        }}
+      />
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}

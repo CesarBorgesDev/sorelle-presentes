@@ -41,8 +41,11 @@ export default function HeroSection({ config }) {
         >
           <img
             src={resolveMediaUrl(activeSlide.image)}
-            alt={activeSlide.label || 'Sorelle'}
+            alt={activeSlide.label || 'Sorelle Presentes'}
             className="w-full h-full object-cover"
+            fetchPriority="high"
+            loading="eager"
+            decoding="async"
           />
           <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-black/20 to-black/60" />
         </motion.div>

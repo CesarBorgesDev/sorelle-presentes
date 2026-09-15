@@ -6,6 +6,8 @@ export default function ProductImage({
   alt = '',
   className = '',
   imgClassName = '',
+  loading = 'lazy',
+  fetchPriority,
   ...props
 }) {
   if (!src) return null;
@@ -16,7 +18,8 @@ export default function ProductImage({
         src={src}
         alt={alt}
         className={`w-full h-full object-cover ${imgClassName}`}
-        loading="lazy"
+        loading={fetchPriority === 'high' ? 'eager' : loading}
+        fetchPriority={fetchPriority}
         decoding="async"
         {...props}
       />
