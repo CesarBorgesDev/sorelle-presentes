@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Loader2, ArrowLeft, Truck, FlaskConical, CreditCard, QrCode, FileText, Store, Banknote, Wallet } from 'lucide-react';
 import MercadoPagoCardForm from '@/components/MercadoPagoCardForm';
 import { getMercadoPagoDeviceId, loadMercadoPagoSecurity } from '@/lib/mercadoPagoSdk';
+import { resolveMaxInstallments } from '@/lib/installmentScale';
 
 const STORE_PICKUP_ID = 'retirada_loja';
 
@@ -235,6 +236,11 @@ export default function Checkout() {
     ? subtotal * (pixDiscountPercent / 100)
     : 0;
   const total = subtotal + shippingCost - pixDiscount;
+  const creditMaxInstallments = resolveMaxInstallments(
+    total,
+    methodsData?.installment?.scale,
+    methodsData?.installment?.max_installments || selectedPayment?.max_installments || 12
+  );
 
   const checkoutMutation = useMutation({
     mutationFn: (data) => api.checkout.start(data),
@@ -679,7 +685,8 @@ export default function Checkout() {
                   amount={total}
                   document={form.customer_document}
                   paymentType={paymentMethod === 'cartao_debito' ? 'debit' : 'credit'}
-                  maxInstallments={selectedPayment?.max_installments || 12}
+                  maxInstallments={creditMaxInstallments}
+                  interestRates={methodsData?.installment?.interest_rates}
                   inputClass={inputClass}
                   labelClass={labelClass}
                 />

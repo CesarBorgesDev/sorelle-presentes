@@ -31,6 +31,12 @@ import {
   applyMercadoPagoPaymentUpdate,
 } from '../services/mercadoPagoNotifications.js';
 import { getMercadoPagoConfig, getMercadoPagoPublicClientConfig } from '../services/mercadoPagoConfig.js';
+import { getCieloConfig } from '../services/cieloConfig.js';
+import { getInstallmentScale } from '../services/installmentScale.js';
+import {
+  getInstallmentInterestRates,
+  resolveChargedInstallmentAmount,
+} from '../services/installmentInterest.js';
 import { trackCorreiosPackage } from '../services/correiosTracking.js';
 import { normalizeProductQuantity } from '../utils/productStock.js';
 import { resolveVariantAvailability } from '../utils/productVariants.js';
@@ -420,6 +426,23 @@ async function startCheckout(req, res) {
       throw err;
     }
 
+    if (paymentMethod === 'cartao_credito') {
+      const selectedInstallments = Math.min(
+        Math.max(1, Number(mpClient.installments) || 1),
+        Math.min(12, Math.max(1, Number(maxInstallments) || 12)),
+      );
+      const interestRates = await getInstallmentInterestRates();
+      const chargedTotal = resolveChargedInstallmentAmount(order.total, selectedInstallments, interestRates);
+      if (chargedTotal > Number(order.total)) {
+        await pool.query(
+          'UPDATE orders SET total = $1, updated_date = NOW() WHERE id = $2',
+          [chargedTotal, order.id]
+        );
+        order = { ...order, total: chargedTotal };
+      }
+      mpClient.installments = selectedInstallments;
+    }
+
     let paymentResult;
     try {
       paymentResult = await createMercadoPagoPayment({
@@ -554,11 +577,17 @@ router.get('/metodos', requireAuth, async (req, res) => {
     const methods = await getAvailablePaymentMethods({ pickup: isPickup });
     const storePickup = await getStorePickupConfig();
     const mercadoPagoConfig = await getMercadoPagoConfig();
+    const cieloConfig = await getCieloConfig();
     res.json({
       methods,
       store_pickup: storePickup,
       checkout_method: await getCheckoutPaymentMethod(),
       mercado_pago: getMercadoPagoPublicClientConfig(mercadoPagoConfig),
+      installment: {
+        scale: await getInstallmentScale(),
+        interest_rates: await getInstallmentInterestRates(),
+        max_installments: cieloConfig.maxInstallments,
+      },
     });
   } catch (err) {
     console.error('Erro ao listar métodos de pagamento:', err);

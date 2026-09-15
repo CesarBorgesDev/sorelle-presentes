@@ -66,6 +66,37 @@ export async function getInstallmentInterestRates() {
   return parseInstallmentInterestRates(raw);
 }
 
+export function getInterestPercentForInstallments(rates, installments) {
+  const n = Math.round(Number(installments) || 0);
+  const tiers = parseInstallmentInterestRates(rates);
+  const match = tiers.find((tier) => tier.installments === n);
+  return match ? match.interest_percent : 0;
+}
+
+export function calcInstallmentAmount(principal, installments, rates = []) {
+  const amount = Number(principal) || 0;
+  const n = Math.round(Number(installments) || 0);
+  if (amount <= 0 || n < 1) return null;
+  const interestPercent = getInterestPercentForInstallments(rates, n);
+  const total = amount * (1 + interestPercent / 100);
+  return Math.round((total / n) * 100) / 100;
+}
+
+export function calcInstallmentTotal(principal, installments, rates = []) {
+  const installment = calcInstallmentAmount(principal, installments, rates);
+  if (installment == null) return null;
+  const n = Math.round(Number(installments) || 0);
+  return Math.round(installment * n * 100) / 100;
+}
+
+export function resolveChargedInstallmentAmount(principal, installments, rates = []) {
+  const amount = Number(Number(principal).toFixed(2));
+  const n = Math.round(Number(installments) || 0);
+  if (!(amount > 0) || n < 2) return amount;
+  if (getInterestPercentForInstallments(rates, n) <= 0) return amount;
+  return Number((calcInstallmentTotal(amount, n, rates) ?? amount).toFixed(2));
+}
+
 /** @deprecated use getInstallmentInterestRates */
 export async function getInstallmentInterestPercent() {
   const rates = await getInstallmentInterestRates();

@@ -15,7 +15,7 @@ export default function ProductPaymentConditions({ price, originalPrice }) {
   const { data: conditions } = useQuery({
     queryKey: ['payment-conditions'],
     queryFn: () => api.checkout.getPaymentConditions(),
-    staleTime: 5 * 60 * 1000,
+    staleTime: 30 * 1000,
   });
 
   if (!price) return null;

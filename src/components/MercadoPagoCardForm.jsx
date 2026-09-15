@@ -11,6 +11,10 @@ import {
   createMercadoPagoInstance,
   getMercadoPagoDeviceId,
 } from '@/lib/mercadoPagoSdk';
+import {
+  calcInstallmentAmount,
+  getInterestPercentForInstallments,
+} from '@/lib/installmentInterest';
 
 function onlyDigits(value) {
   return String(value || '').replace(/\D/g, '');
@@ -43,14 +47,23 @@ function formatMoney(value) {
   return Number(value || 0).toFixed(2).replace('.', ',');
 }
 
-function hideInstallmentInterest(message, installments, amount) {
-  const fallback = `${installments}x de R$ ${formatMoney(amount)}`;
-  const cleaned = String(message || '')
-    .replace(/\s*\([^)]*(?:juros|interest|CET|CFT|TEA)[^)]*\)/gi, '')
-    .replace(/\s*(?:com\s+)?juros(?:\s+de)?\s+[\d.,]+\s*%(?:\s*a\.?\s*m\.?)?/gi, '')
-    .replace(/\s{2,}/g, ' ')
-    .trim();
-  return cleaned || fallback;
+function hasMercadoPagoBuyerInterest(option) {
+  return Number(option?.installment_rate || 0) > 0;
+}
+
+function buildStoreInstallmentOptions(amount, maxInstallments, interestRates) {
+  const ceiling = Math.min(12, Math.max(1, Number(maxInstallments) || 1));
+  const options = [];
+  for (let n = 1; n <= ceiling; n += 1) {
+    const installmentValue = calcInstallmentAmount(amount, n, interestRates);
+    if (installmentValue == null) continue;
+    options.push({
+      installments: n,
+      recommended_message: `${n}x de R$ ${formatMoney(installmentValue)}`,
+      interest_percent: getInterestPercentForInstallments(interestRates, n),
+    });
+  }
+  return options;
 }
 
 const MercadoPagoCardForm = forwardRef(function MercadoPagoCardForm({
@@ -59,6 +72,7 @@ const MercadoPagoCardForm = forwardRef(function MercadoPagoCardForm({
   document,
   paymentType = 'credit',
   maxInstallments = 12,
+  interestRates = [],
   inputClass,
   labelClass,
 }, ref) {
@@ -162,18 +176,41 @@ const MercadoPagoCardForm = forwardRef(function MercadoPagoCardForm({
         if (cancelled) return;
 
         const payerCosts = result?.[0]?.payer_costs || [];
-        const ceiling = Math.min(12, Math.max(1, Number(maxInstallments) || 12));
-        const options = payerCosts
-          .filter((option) => Number(option.installments) >= 1 && Number(option.installments) <= ceiling)
-          .map((option) => ({
-            installments: Number(option.installments),
-            recommended_message: hideInstallmentInterest(
-              option.recommended_message,
-              option.installments,
-              option.installment_amount
-            ),
-            issuer_id: result?.[0]?.issuer?.id,
+        const storeOptions = buildStoreInstallmentOptions(amount, maxInstallments, interestRates);
+        const issuerIdFromMp = result?.[0]?.issuer?.id;
+        const byCount = new Map(
+          payerCosts.map((option) => [Number(option.installments), option])
+        );
+
+        let options;
+        if (payerCosts.length === 0) {
+          options = storeOptions.map((option) => ({
+            ...option,
+            issuer_id: issuerIdFromMp,
           }));
+        } else {
+          options = storeOptions
+            .filter((option) => {
+              const mpOption = byCount.get(option.installments);
+              if (!mpOption) return false;
+              if (option.interest_percent <= 0 && hasMercadoPagoBuyerInterest(mpOption)) {
+                return false;
+              }
+              return true;
+            })
+            .map((option) => ({
+              ...option,
+              issuer_id: issuerIdFromMp,
+            }));
+        }
+
+        if (options.length === 0) {
+          const oneTime = storeOptions.find((option) => option.installments === 1)
+            || storeOptions[0];
+          options = oneTime
+            ? [{ ...oneTime, issuer_id: issuerIdFromMp }]
+            : [];
+        }
 
         setInstallmentOptions(options);
         setInstallments((current) => (
@@ -195,7 +232,7 @@ const MercadoPagoCardForm = forwardRef(function MercadoPagoCardForm({
     return () => {
       cancelled = true;
     };
-  }, [amount, bin, expectedType, isCredit, maxInstallments, ready]);
+  }, [amount, bin, expectedType, interestRates, isCredit, maxInstallments, ready]);
 
   const issuerId = useMemo(
     () => installmentOptions.find((option) => option.installments === installments)?.issuer_id
