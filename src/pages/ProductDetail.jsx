@@ -16,6 +16,7 @@ import ImageLightbox from '@/components/ImageLightbox';
 import {
   buildVariantLabel,
   ensureVariantStockMatrix,
+  getDefaultVariantSelection,
   getVariantImages,
   getVariantStock,
   getSizeSpecification,
@@ -86,16 +87,19 @@ export default function ProductDetail() {
   const variants = ensureVariantStockMatrix(product?.variants);
   const hasVariants = hasProductVariants(variants);
   const hasSizeGrid = usesSizeStock(variants);
-  const selectedColor = variants.colors.find((color) => color.id === selectedColorId) || null;
-  const selectedSizeSpecification = selectedSize
-    ? getSizeSpecification(variants, selectedSize)
+  const defaultVariant = getDefaultVariantSelection(product);
+  const effectiveColorId = selectedColorId || defaultVariant.colorId;
+  const effectiveSize = selectedSize || defaultVariant.size;
+  const selectedColor = variants.colors.find((color) => color.id === effectiveColorId) || null;
+  const selectedSizeSpecification = effectiveSize
+    ? getSizeSpecification(variants, effectiveSize)
     : '';
 
-  const availability = resolveVariantAvailability(product, selectedColorId, selectedSize);
+  const availability = resolveVariantAvailability(product, effectiveColorId, effectiveSize);
   const available = availability.available;
   const stockQuantity = availability.quantity;
   const maxQuantity = available ? stockQuantity : 0;
-  const variantPricing = resolveVariantPrice(product, selectedColorId, selectedSize);
+  const variantPricing = resolveVariantPrice(product, effectiveColorId, effectiveSize);
 
   useEffect(() => {
     if (!product) return;
@@ -174,10 +178,10 @@ export default function ProductDetail() {
     }
 
     setCartError('');
-    const variantLabel = buildVariantLabel(selectedColor?.name, selectedSize);
+    const variantLabel = buildVariantLabel(selectedColor?.name, effectiveSize);
     const displayName = variantLabel ? `${product.name} - ${variantLabel}` : product.name;
-    const displayImage = getVariantImages(product, selectedColorId, selectedSize)[0] || product.image_url;
-    const pricing = resolveVariantPrice(product, selectedColorId, selectedSize);
+    const displayImage = getVariantImages(product, effectiveColorId, effectiveSize)[0] || product.image_url;
+    const pricing = resolveVariantPrice(product, effectiveColorId, effectiveSize);
 
     addToCartMutation.mutate({
       product_id: product.id,
@@ -185,8 +189,8 @@ export default function ProductDetail() {
       product_image: displayImage,
       price: pricing.price,
       quantity,
-      variant_color: selectedColorId || null,
-      variant_size: selectedSize || null,
+      variant_color: effectiveColorId || null,
+      variant_size: effectiveSize || null,
     });
   };
 
@@ -214,7 +218,7 @@ export default function ProductDetail() {
     );
   }
 
-  const allImages = getVariantImages(product, selectedColorId, selectedSize).map(resolveMediaUrl);
+  const allImages = getVariantImages(product, effectiveColorId, effectiveSize).map(resolveMediaUrl);
   const productDescription = stripHtml(product.description || product.product_specifications || `Compre ${product.name} na ${SITE_NAME}.`);
   const productImages = allImages.filter(Boolean).slice(0, 6);
   const productJsonLd = {
@@ -224,6 +228,7 @@ export default function ProductDetail() {
     description: productDescription,
     image: productImages.length ? productImages : DEFAULT_OG_IMAGE,
     sku: product.sku || product.internal_code || String(product.id),
+    mpn: product.internal_code || product.sku || String(product.id),
     brand: { '@type': 'Brand', name: SITE_NAME },
     offers: {
       '@type': 'Offer',

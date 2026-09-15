@@ -107,6 +107,14 @@ nginx_api_location_block() {
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
     }
+    location = /merchant-feed.xml {
+        proxy_pass http://127.0.0.1:3001/api/feeds/google-merchant.xml;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
 EOF
 }
 
@@ -155,6 +163,9 @@ def has_api_location(block: str) -> bool:
 def has_sitemap_location(block: str) -> bool:
     return bool(re.search(r"location\s+=\s+/sitemap\.xml\b", block))
 
+def has_merchant_feed_location(block: str) -> bool:
+    return bool(re.search(r"location\s+=\s+/merchant-feed\.xml\b", block))
+
 def insert_block(cleaned: str, snippet: str) -> tuple[str, bool]:
     patterns = (
         r"(\n)([ \t]*location[ \t]+\^[ \t]*~[ \t]+/[ \t]*\{)",
@@ -192,6 +203,20 @@ def patch_server_block(block: str) -> tuple[str, bool]:
             "    }\n"
         )
         cleaned, inserted = insert_block(cleaned, sitemap_block)
+        changed = changed or inserted
+
+    if not has_merchant_feed_location(cleaned):
+        merchant_block = (
+            "    location = /merchant-feed.xml {\n"
+            "        proxy_pass http://127.0.0.1:3001/api/feeds/google-merchant.xml;\n"
+            "        proxy_http_version 1.1;\n"
+            "        proxy_set_header Host $host;\n"
+            "        proxy_set_header X-Real-IP $remote_addr;\n"
+            "        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n"
+            "        proxy_set_header X-Forwarded-Proto $scheme;\n"
+            "    }\n"
+        )
+        cleaned, inserted = insert_block(cleaned, merchant_block)
         changed = changed or inserted
 
     return cleaned, changed

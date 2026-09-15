@@ -173,6 +173,27 @@ export function getVariantStock(variants, colorId, size) {
   return 0;
 }
 
+export function getDefaultVariantSelection(product) {
+  const variants = ensureVariantStockMatrix(product?.variants);
+  if (!hasProductVariants(variants)) {
+    return { colorId: '', size: '' };
+  }
+
+  const firstAvailableColor = variants.colors.find(
+    (color) => getVariantStock(variants, color.id, null) > 0
+  ) || variants.colors[0];
+  const colorId = firstAvailableColor?.id || '';
+
+  let size = '';
+  if (variants.sizes.length > 0) {
+    size = variants.sizes.find(
+      (value) => getVariantStock(variants, colorId, value) > 0
+    ) || '';
+  }
+
+  return { colorId, size };
+}
+
 function getStockEntry(variants, colorId, size) {
   const normalized = ensureVariantStockMatrix(variants);
   const color = colorId ? String(colorId).trim() : null;

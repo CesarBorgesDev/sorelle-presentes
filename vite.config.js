@@ -25,6 +25,11 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: () => '/api/sitemap.xml',
       },
+      '/merchant-feed.xml': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+        rewrite: () => '/api/feeds/google-merchant.xml',
+      },
     },
   },
   preview: {
@@ -39,6 +44,11 @@ export default defineConfig({
         target: 'http://localhost:3001',
         changeOrigin: true,
         rewrite: () => '/api/sitemap.xml',
+      },
+      '/merchant-feed.xml': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+        rewrite: () => '/api/feeds/google-merchant.xml',
       },
     },
   },
