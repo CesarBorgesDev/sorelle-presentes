@@ -29,6 +29,8 @@ import chatRoutes from './routes/chat.js';
 import whatsappRoutes from './routes/whatsapp.js';
 import seoRoutes from './routes/seo.js';
 import merchantFeedRoutes from './routes/merchantFeed.js';
+import omnichannelRoutes from './routes/omnichannel.js';
+import { startOmnichannelScheduler, stopOmnichannelScheduler } from './services/omnichannel/sync.js';
 import { initRealtime, closeRealtime } from './services/realtime.js';
 import { closeWhatsApp, startWhatsAppIfSessionExists } from './services/baileys.js';
 
@@ -93,6 +95,7 @@ app.use('/api/chat', chatRoutes);
 app.use('/api/whatsapp', whatsappRoutes);
 app.use('/api', seoRoutes);
 app.use('/api', merchantFeedRoutes);
+app.use('/api/omnichannel', omnichannelRoutes);
 
 app.use((_req, res) => {
   res.status(404).json({ message: 'Rota não encontrada' });
@@ -112,11 +115,13 @@ const server = httpServer.listen(config.port, config.host, () => {
   console.log(`[Sorelle API] ${config.nodeEnv} → http://${config.host}:${config.port}`);
   console.log(`[Sorelle API] CORS FRONTEND=${config.frontendUrl || '(auto)'} | API=${config.appPublicUrl || '(auto)'}`);
   startWhatsAppIfSessionExists();
+  startOmnichannelScheduler();
 });
 
 function shutdown(signal) {
   console.log(`[Sorelle API] Encerrando (${signal})...`);
   server.close(async () => {
+    stopOmnichannelScheduler();
     await closeWhatsApp().catch(() => {});
     await closeRealtime().catch(() => {});
     await pool.end().catch(() => {});

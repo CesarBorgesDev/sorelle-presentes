@@ -76,6 +76,8 @@ import AdminContent from '@/pages/admin/AdminContent';
 
 import AdminWhatsApp from '@/pages/admin/AdminWhatsApp';
 
+import AdminOmnichannel from '@/pages/admin/AdminOmnichannel';
+
 import ApiStatus from '@/pages/ApiStatus';
 
 
@@ -156,6 +158,8 @@ function AppRoutes() {
             <Route path="/admin/afiliados" element={<AdminAffiliates />} />
 
             <Route path="/admin/mensagens" element={<AdminWhatsApp />} />
+
+            <Route path="/admin/omnichannel" element={<AdminOmnichannel />} />
 
             <Route path="/admin/configuracoes" element={<AdminSettings />} />
 

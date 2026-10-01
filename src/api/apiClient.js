@@ -853,6 +853,55 @@ export const whatsappApi = {
   },
 };
 
+export const omnichannelApi = {
+  overview() {
+    return apiFetch('/omnichannel');
+  },
+
+  saveChannel(channel, credentials) {
+    return apiFetch(`/omnichannel/channels/${channel}`, {
+      method: 'PUT',
+      body: JSON.stringify({ credentials }),
+    });
+  },
+
+  connect(channel, credentials) {
+    return apiFetch(`/omnichannel/channels/${channel}/connect`, {
+      method: 'POST',
+      body: JSON.stringify({ credentials }),
+    });
+  },
+
+  disconnect(channel) {
+    return apiFetch(`/omnichannel/channels/${channel}/disconnect`, { method: 'POST' });
+  },
+
+  saveCategory(productId, channel, categoryId) {
+    return apiFetch('/omnichannel/listings', {
+      method: 'PUT',
+      body: JSON.stringify({ product_id: productId, channel, category_id: categoryId }),
+    });
+  },
+
+  publish(productIds, channels) {
+    return apiFetch('/omnichannel/publish', {
+      method: 'POST',
+      body: JSON.stringify({ product_ids: productIds, channels }),
+    });
+  },
+
+  sync() {
+    return apiFetch('/omnichannel/sync', { method: 'POST' });
+  },
+
+  saveSettings(syncMinutes) {
+    return apiFetch('/omnichannel/settings', {
+      method: 'PUT',
+      body: JSON.stringify({ sync_minutes: syncMinutes }),
+    });
+  },
+};
+
 export const api = {
   auth,
   settings,
@@ -873,6 +922,7 @@ export const api = {
   categories: categoriesApi,
   chat: chatApi,
   whatsapp: whatsappApi,
+  omnichannel: omnichannelApi,
   entities: {
     Product: createEntityClient('products'),
     ProductKit: createEntityClient('product-kits'),

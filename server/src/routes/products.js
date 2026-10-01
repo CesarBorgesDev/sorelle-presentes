@@ -7,6 +7,7 @@ import { normalizeProductStockFields } from '../utils/productStock.js';
 import { assertInternalCodeAvailable, findInternalCodeConflict } from '../utils/productInternalCode.js';
 import { applyVariantsToProductPayload, getTotalVariantStock, usesVariantStock, ensureVariantStockMatrix } from '../utils/productVariants.js';
 import { listProductStockMovements, recordStockAdjustment } from '../utils/stockInventory.js';
+import { notifyProductStockChanged } from '../services/omnichannel/sync.js';
 import { normalizeProductQuantity } from '../utils/productStock.js';
 
 const router = Router();
@@ -246,6 +247,7 @@ router.patch('/:id', requireAuth, requireAdmin, async (req, res) => {
         userId: req.user?.id,
         note: 'Ajuste no cadastro do produto',
       });
+      notifyProductStockChanged(updated.id);
     }
 
     res.json(updated);

@@ -133,7 +133,7 @@ ALTER TABLE orders ADD COLUMN IF NOT EXISTS gateway_order_number VARCHAR(64);
 ALTER TABLE orders DROP CONSTRAINT IF EXISTS orders_payment_method_check;
 ALTER TABLE orders ADD CONSTRAINT orders_payment_method_check
   CHECK (payment_method IS NULL OR payment_method IN (
-    'pix', 'cartao_credito', 'cartao_debito', 'boleto', 'dinheiro', 'pagar_na_loja', 'cielo', 'test'
+    'pix', 'cartao_credito', 'cartao_debito', 'boleto', 'dinheiro', 'pagar_na_loja', 'cielo', 'test', 'marketplace'
   ));
 
 ALTER TABLE orders DROP CONSTRAINT IF EXISTS orders_payment_status_check;
@@ -439,3 +439,70 @@ WHERE LOWER(u.email) = src.email
     NULLIF(TRIM(u.full_name), '') IS NULL
     OR LOWER(TRIM(u.full_name)) = LOWER(SPLIT_PART(u.email, '@', 1))
   );
+
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS sales_channel VARCHAR(32) NOT NULL DEFAULT 'loja';
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS external_order_id VARCHAR(128);
+ALTER TABLE orders DROP CONSTRAINT IF EXISTS orders_sales_channel_check;
+ALTER TABLE orders ADD CONSTRAINT orders_sales_channel_check
+  CHECK (sales_channel IN ('loja', 'mercado_livre', 'magalu', 'shopee', 'temu', 'tiktok_shop'));
+CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_sales_channel_external
+  ON orders (sales_channel, external_order_id)
+  WHERE external_order_id IS NOT NULL AND external_order_id <> '';
+
+CREATE TABLE IF NOT EXISTS channel_accounts (
+  channel VARCHAR(32) PRIMARY KEY,
+  status VARCHAR(20) NOT NULL DEFAULT 'disconnected'
+    CHECK (status IN ('disconnected', 'connected', 'error')),
+  credentials JSONB NOT NULL DEFAULT '{}',
+  shop_id VARCHAR(128),
+  shop_name VARCHAR(255),
+  last_error TEXT,
+  connected_at TIMESTAMPTZ,
+  updated_date TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS channel_listings (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  product_id UUID NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  channel VARCHAR(32) NOT NULL,
+  variant_key VARCHAR(160) NOT NULL DEFAULT '',
+  external_id VARCHAR(128),
+  external_sku VARCHAR(160),
+  external_variant_id VARCHAR(128),
+  category_id VARCHAR(128),
+  status VARCHAR(20) NOT NULL DEFAULT 'pending'
+    CHECK (status IN ('pending', 'published', 'error', 'paused')),
+  last_error TEXT,
+  last_sync_at TIMESTAMPTZ,
+  created_date TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_date TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (product_id, channel, variant_key)
+);
+
+CREATE INDEX IF NOT EXISTS idx_channel_listings_channel ON channel_listings(channel);
+CREATE INDEX IF NOT EXISTS idx_channel_listings_external ON channel_listings(channel, external_id);
+
+CREATE TABLE IF NOT EXISTS channel_orders (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  channel VARCHAR(32) NOT NULL,
+  external_order_id VARCHAR(128) NOT NULL,
+  order_id UUID REFERENCES orders(id) ON DELETE SET NULL,
+  raw_payload JSONB NOT NULL DEFAULT '{}',
+  imported_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (channel, external_order_id)
+);
+
+CREATE TABLE IF NOT EXISTS channel_sync_logs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  channel VARCHAR(32),
+  action VARCHAR(40) NOT NULL,
+  success BOOLEAN NOT NULL DEFAULT FALSE,
+  message TEXT,
+  created_date TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_channel_sync_logs_created ON channel_sync_logs(created_date DESC);
+
+INSERT INTO app_settings (key, value) VALUES
+  ('omnichannel_sync_minutes', '15')
+ON CONFLICT (key) DO NOTHING;
