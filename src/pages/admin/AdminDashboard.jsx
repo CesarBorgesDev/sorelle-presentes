@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/api/apiClient';
 import { resolveMediaUrl } from '@/lib/resolveMediaUrl';
@@ -19,6 +19,16 @@ function formatLocation(origin) {
   return parts.join(', ') || 'Não identificado';
 }
 
+function formatDayShort(iso) {
+  const [, month, day] = String(iso || '').split('-');
+  return day && month ? `${day}/${month}` : '';
+}
+
+function formatDayLong(iso) {
+  const [year, month, day] = String(iso || '').split('-');
+  return year && month && day ? `${day}/${month}/${year}` : '';
+}
+
 export default function AdminDashboard() {
   const { data: productCountData } = useQuery({
     queryKey: ['products-count'],
@@ -30,14 +40,21 @@ export default function AdminDashboard() {
     queryFn: () => api.orders.stats(),
   });
 
+  const [selectedDay, setSelectedDay] = useState(null);
+
   const { data: visitorStats } = useQuery({
     queryKey: ['analytics-visitors'],
     queryFn: () => api.analytics.visitors(),
   });
 
+  const { data: visitTimeline = [] } = useQuery({
+    queryKey: ['analytics-timeline'],
+    queryFn: () => api.analytics.timeline(),
+  });
+
   const { data: visitOrigins = [] } = useQuery({
-    queryKey: ['analytics-origins'],
-    queryFn: () => api.analytics.origins(),
+    queryKey: ['analytics-origins', selectedDay],
+    queryFn: () => api.analytics.origins(selectedDay),
   });
 
   const { data: topProducts = [] } = useQuery({
@@ -54,7 +71,9 @@ export default function AdminDashboard() {
   const totalOrders = orderStats?.total ?? 0;
   const pendingOrders = orderStats?.pending ?? 0;
   const totalRevenue = orderStats?.revenue ?? 0;
-  const maxOriginVisitors = visitOrigins[0]?.visitors || 1;
+  const maxOriginVisits = visitOrigins[0]?.visits || visitOrigins[0]?.visitors || 1;
+  const maxTimelineVisits = Math.max(1, ...visitTimeline.map((day) => Number(day.visits) || 0));
+  const selectedDayStats = visitTimeline.find((day) => day.day === selectedDay);
 
   const stats = [
     { label: 'Produtos Cadastrados', value: productCount, icon: Package, color: 'text-primary' },
@@ -101,42 +120,120 @@ export default function AdminDashboard() {
         ))}
       </div>
 
+      <div className="bg-card border border-border rounded-sm mb-8">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+          <div className="flex items-center gap-2">
+            <CalendarDays className="w-4 h-4 text-primary" />
+            <h2 className="font-display text-lg tracking-wide text-foreground">Linha do tempo de acessos</h2>
+          </div>
+          <p className="font-body text-xs text-muted-foreground tracking-wider uppercase">Últimos 30 dias</p>
+        </div>
+        {visitTimeline.length === 0 ? (
+          <div className="px-6 py-12 text-center">
+            <p className="font-body text-muted-foreground">Nenhum acesso neste período.</p>
+          </div>
+        ) : (
+          <div className="px-4 pt-4 pb-2 overflow-x-auto">
+            <div className="flex items-end gap-1 min-w-[720px] h-44">
+              {visitTimeline.map((day) => {
+                const visits = Number(day.visits) || 0;
+                const selected = selectedDay === day.day;
+                const height = visits === 0 ? 4 : Math.max(8, (visits / maxTimelineVisits) * 100);
+                return (
+                  <button
+                    key={day.day}
+                    type="button"
+                    aria-pressed={selected}
+                    title={`${formatDayLong(day.day)}: ${visits} ${visits === 1 ? 'acesso' : 'acessos'}`}
+                    onClick={() => setSelectedDay((current) => (current === day.day ? null : day.day))}
+                    className="flex-1 min-w-0 h-full flex flex-col items-center gap-1 group"
+                  >
+                    <span className={`font-body text-[10px] leading-none ${selected ? 'text-foreground' : 'text-muted-foreground'}`}>
+                      {visits}
+                    </span>
+                    <span className="flex-1 w-full flex items-end justify-center">
+                      <span
+                        className={`w-full max-w-6 rounded-sm transition-colors ${selected ? 'bg-primary' : 'bg-primary/35 group-hover:bg-primary/70'}`}
+                        style={{ height: `${height}%` }}
+                      />
+                    </span>
+                    <span className={`font-body text-[10px] leading-none ${selected ? 'text-foreground font-medium' : 'text-muted-foreground'}`}>
+                      {formatDayShort(day.day)}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+            <p className="font-body text-xs text-muted-foreground text-center py-3">
+              Clique em um dia para ver de onde vieram os acessos.
+            </p>
+          </div>
+        )}
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-8">
         <div className="bg-card border border-border rounded-sm">
-          <div className="flex items-center justify-between px-6 py-4 border-b border-border">
-            <div className="flex items-center gap-2">
-              <MapPin className="w-4 h-4 text-primary" />
-              <h2 className="font-display text-lg tracking-wide text-foreground">Origem dos acessos</h2>
+          <div className="flex items-center justify-between gap-3 px-6 py-4 border-b border-border">
+            <div className="flex items-center gap-2 min-w-0">
+              <MapPin className="w-4 h-4 text-primary shrink-0" />
+              <h2 className="font-display text-lg tracking-wide text-foreground truncate">
+                {selectedDay ? `Origem em ${formatDayLong(selectedDay)}` : 'Origem dos acessos'}
+              </h2>
             </div>
-            <p className="font-body text-xs text-muted-foreground tracking-wider uppercase">Últimos 30 dias</p>
+            {selectedDay ? (
+              <button
+                type="button"
+                onClick={() => setSelectedDay(null)}
+                className="font-body text-xs text-primary hover:opacity-70 tracking-wider uppercase shrink-0"
+              >
+                Ver 30 dias
+              </button>
+            ) : (
+              <p className="font-body text-xs text-muted-foreground tracking-wider uppercase shrink-0">Últimos 30 dias</p>
+            )}
           </div>
+          {selectedDay && selectedDayStats ? (
+            <p className="px-6 pt-4 font-body text-xs text-muted-foreground">
+              {selectedDayStats.visits} {selectedDayStats.visits === 1 ? 'acesso' : 'acessos'}
+              {' · '}
+              {selectedDayStats.visitors} {selectedDayStats.visitors === 1 ? 'visitante' : 'visitantes'}
+            </p>
+          ) : null}
           {visitOrigins.length === 0 ? (
             <div className="px-6 py-12 text-center">
-              <p className="font-body text-muted-foreground">Nenhum acesso com localização neste período.</p>
+              <p className="font-body text-muted-foreground">
+                {selectedDay ? 'Nenhum acesso neste dia.' : 'Nenhum acesso com localização neste período.'}
+              </p>
             </div>
           ) : (
             <div className="divide-y divide-border">
-              {visitOrigins.map((origin) => (
-                <div key={`${origin.city}-${origin.region}-${origin.country}`} className="px-6 py-4">
-                  <div className="flex items-center justify-between gap-4 mb-2">
-                    <div>
-                      <p className="font-body text-sm text-foreground font-medium">{formatLocation(origin)}</p>
-                      {origin.country ? (
-                        <p className="font-body text-xs text-muted-foreground">{origin.country}</p>
-                      ) : null}
+              {visitOrigins.map((origin) => {
+                const visits = Number(origin.visits ?? origin.visitors) || 0;
+                return (
+                  <div key={`${origin.city}-${origin.region}-${origin.country}`} className="px-6 py-4">
+                    <div className="flex items-center justify-between gap-4 mb-2">
+                      <div>
+                        <p className="font-body text-sm text-foreground font-medium">{formatLocation(origin)}</p>
+                        {origin.country ? (
+                          <p className="font-body text-xs text-muted-foreground">{origin.country}</p>
+                        ) : null}
+                      </div>
+                      <p className="font-body text-sm text-foreground whitespace-nowrap text-right">
+                        {visits} {visits === 1 ? 'acesso' : 'acessos'}
+                        <span className="block font-body text-xs text-muted-foreground">
+                          {origin.visitors} {origin.visitors === 1 ? 'visitante' : 'visitantes'}
+                        </span>
+                      </p>
                     </div>
-                    <p className="font-body text-sm text-foreground whitespace-nowrap">
-                      {origin.visitors} {origin.visitors === 1 ? 'visitante' : 'visitantes'}
-                    </p>
+                    <div className="h-1.5 bg-secondary rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-primary rounded-full"
+                        style={{ width: `${Math.max(6, (visits / maxOriginVisits) * 100)}%` }}
+                      />
+                    </div>
                   </div>
-                  <div className="h-1.5 bg-secondary rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-primary rounded-full"
-                      style={{ width: `${Math.max(6, (origin.visitors / maxOriginVisitors) * 100)}%` }}
-                    />
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

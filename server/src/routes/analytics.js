@@ -177,7 +177,7 @@ router.get('/origins', requireAuth, requireAdmin, async (req, res) => {
        GROUP BY 1, 2, 3
        ORDER BY visits DESC, visitors DESC, city ASC
        LIMIT 12`,
-      date ? [TZ, date] : [TZ]
+      date ? [TZ, date] : []
     );
 
     res.json(result.rows);
