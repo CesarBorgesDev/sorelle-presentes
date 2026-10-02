@@ -56,13 +56,22 @@ export async function saveListingCategory(productId, channel, categoryId, priceO
     throw Object.assign(new Error('Nenhuma combinação com SKU para este produto.'), { status: 400 });
   }
   const override = parsePriceOverride(priceOverride);
+  const category = String(categoryId || '').trim() || null;
+  if (override == null && !category) {
+    await pool.query(
+      `DELETE FROM channel_listings
+       WHERE product_id = $1 AND channel = $2 AND external_id IS NULL AND status = 'pending'`,
+      [productId, channel]
+    );
+    return;
+  }
   for (const unit of units) {
     await pool.query(
       `INSERT INTO channel_listings (product_id, channel, variant_key, category_id, external_sku, price_override, status)
        VALUES ($1, $2, $3, $4, $5, $6, 'pending')
        ON CONFLICT (product_id, channel, variant_key)
        DO UPDATE SET category_id = EXCLUDED.category_id, price_override = EXCLUDED.price_override, updated_date = NOW()`,
-      [productId, channel, unit.variantKey, String(categoryId || '').trim() || null, unit.sku, override]
+      [productId, channel, unit.variantKey, category, unit.sku, override]
     );
   }
 }

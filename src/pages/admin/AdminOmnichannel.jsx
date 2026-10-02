@@ -83,7 +83,10 @@ export default function AdminOmnichannel() {
       for (const listing of payload.listings || []) {
         const key = `${listing.product_id}:${listing.channel}`;
         if (next[key] == null && listing.price_override != null) {
-          next[key] = String(listing.price_override).replace('.', ',');
+          next[key] = Number(listing.price_override).toLocaleString('pt-BR', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          });
         }
       }
       return next;
