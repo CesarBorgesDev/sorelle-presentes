@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { api } from '@/api/apiClient';
+import { resolveMediaUrl } from '@/lib/resolveMediaUrl';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 const STATUS_LABEL = {
@@ -477,7 +478,20 @@ export default function AdminOmnichannel() {
                           }))}
                         />
                       </td>
-                      <td className="px-3 py-3 text-foreground">{product.name}</td>
+                      <td className="px-3 py-3 text-foreground">
+                        <div className="flex items-center gap-3">
+                          {product.image_url ? (
+                            <img
+                              src={resolveMediaUrl(product.image_url)}
+                              alt={product.name}
+                              className="w-10 h-10 object-cover rounded-sm bg-secondary shrink-0"
+                            />
+                          ) : (
+                            <div className="w-10 h-10 rounded-sm bg-secondary shrink-0" />
+                          )}
+                          <span>{product.name}</span>
+                        </div>
+                      </td>
                       <td className="px-3 py-3 text-muted-foreground">{product.sku || product.internal_code || '—'}</td>
                       <td className="px-3 py-3">{Number(product.quantity) || 0}</td>
                       <td className="px-3 py-3">{money(product.price)}</td>

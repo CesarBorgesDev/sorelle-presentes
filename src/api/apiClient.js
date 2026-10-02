@@ -639,8 +639,15 @@ const analyticsApi = {
     return apiFetch('/analytics/visitors');
   },
 
-  origins() {
-    return apiFetch('/analytics/origins');
+  timeline() {
+    return apiFetch('/analytics/timeline');
+  },
+
+  origins(date) {
+    const params = new URLSearchParams();
+    if (date) params.set('date', date);
+    const query = params.toString();
+    return apiFetch(`/analytics/origins${query ? `?${query}` : ''}`);
   },
 
   topProducts() {

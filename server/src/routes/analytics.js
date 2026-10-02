@@ -123,20 +123,61 @@ router.get('/visitors', requireAuth, requireAdmin, async (_req, res) => {
   }
 });
 
-/** Origem geográfica dos acessos (últimos 30 dias). */
-router.get('/origins', requireAuth, requireAdmin, async (_req, res) => {
+/** Acessos por dia, nos últimos 30 dias (fuso America/Sao_Paulo). */
+router.get('/timeline', requireAuth, requireAdmin, async (_req, res) => {
   try {
+    const result = await pool.query(
+      `WITH days AS (
+         SELECT generate_series(
+           (NOW() AT TIME ZONE $1)::date - 29,
+           (NOW() AT TIME ZONE $1)::date,
+           INTERVAL '1 day'
+         )::date AS day
+       )
+       SELECT
+         to_char(d.day, 'YYYY-MM-DD') AS day,
+         COUNT(v.id)::int AS visits,
+         COUNT(DISTINCT v.visitor_key)::int AS visitors
+       FROM days d
+       LEFT JOIN site_visits v
+         ON (v.created_date AT TIME ZONE $1)::date = d.day
+       GROUP BY d.day
+       ORDER BY d.day ASC`,
+      [TZ]
+    );
+
+    res.json(result.rows);
+  } catch (err) {
+    console.error('Erro ao buscar linha do tempo de acessos:', err);
+    res.status(500).json({ message: 'Erro ao buscar linha do tempo de acessos' });
+  }
+});
+
+function parseTimelineDate(raw) {
+  const date = String(raw || '').trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return null;
+  return date;
+}
+
+/** Origem geográfica dos acessos. Sem data: últimos 30 dias. Com date=YYYY-MM-DD: só aquele dia. */
+router.get('/origins', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const date = parseTimelineDate(req.query.date);
     const result = await pool.query(
       `SELECT
          COALESCE(NULLIF(TRIM(city), ''), 'Não identificado') AS city,
          COALESCE(NULLIF(TRIM(region), ''), '') AS region,
          COALESCE(NULLIF(TRIM(country), ''), '') AS country,
+         COUNT(*)::int AS visits,
          COUNT(DISTINCT visitor_key)::int AS visitors
        FROM site_visits
-       WHERE created_date >= NOW() - INTERVAL '30 days'
+       WHERE ${date
+         ? '(created_date AT TIME ZONE $1)::date = $2::date'
+         : 'created_date >= NOW() - INTERVAL \'30 days\''}
        GROUP BY 1, 2, 3
-       ORDER BY visitors DESC, city ASC
-       LIMIT 12`
+       ORDER BY visits DESC, visitors DESC, city ASC
+       LIMIT 12`,
+      date ? [TZ, date] : [TZ]
     );
 
     res.json(result.rows);
