@@ -37,6 +37,13 @@ function money(value) {
   return Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
 
+function marketplacePrice(price, percent) {
+  const cents = Math.round((Number(price) || 0) * 100);
+  const pct = Number(percent);
+  const safe = Number.isFinite(pct) && pct > 0 ? pct : 0;
+  return Math.round(cents * (1 + safe / 100)) / 100;
+}
+
 export default function AdminOmnichannel() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -48,11 +55,14 @@ export default function AdminOmnichannel() {
   const [selectedChannel, setSelectedChannel] = useState('mercado_livre');
   const [selected, setSelected] = useState({});
   const [categories, setCategories] = useState({});
+  const [prices, setPrices] = useState({});
   const [syncMinutes, setSyncMinutes] = useState(15);
+  const [markupPercent, setMarkupPercent] = useState(0);
 
   const applyOverview = (payload) => {
     setData(payload);
     setSyncMinutes(payload.sync_minutes || 15);
+    setMarkupPercent(payload.price_markup_percent ?? 0);
     setForms((prev) => {
       const next = { ...prev };
       for (const channel of payload.channels || []) {
@@ -65,6 +75,16 @@ export default function AdminOmnichannel() {
       for (const listing of payload.listings || []) {
         const key = `${listing.product_id}:${listing.channel}`;
         if (next[key] == null) next[key] = listing.category_id || '';
+      }
+      return next;
+    });
+    setPrices((prev) => {
+      const next = { ...prev };
+      for (const listing of payload.listings || []) {
+        const key = `${listing.product_id}:${listing.channel}`;
+        if (next[key] == null && listing.price_override != null) {
+          next[key] = String(listing.price_override).replace('.', ',');
+        }
       }
       return next;
     });
@@ -156,6 +176,25 @@ export default function AdminOmnichannel() {
     return rows[0];
   };
 
+  const saveListingPrice = async (productId, rawValue) => {
+    const key = `${productId}:${selectedChannel}`;
+    const priceOverride = String(rawValue ?? prices[key] ?? '').trim();
+    const categoryId = categories[key] || '';
+    if (!priceOverride && !categoryId && !listingStatus(productId, selectedChannel)) return;
+    try {
+      const result = await api.omnichannel.saveCategory(
+        productId,
+        selectedChannel,
+        categoryId,
+        priceOverride || null,
+      );
+      setData((prev) => ({ ...prev, listings: result.listings }));
+      setError('');
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
   const publishSelected = async () => {
     const productIds = Object.keys(selected).filter((id) => selected[id]);
     if (!productIds.length) {
@@ -167,8 +206,15 @@ export default function AdminOmnichannel() {
     setNotice('');
     try {
       for (const productId of productIds) {
-        const categoryId = categories[`${productId}:${selectedChannel}`] || '';
-        await api.omnichannel.saveCategory(productId, selectedChannel, categoryId);
+        const key = `${productId}:${selectedChannel}`;
+        const categoryId = categories[key] || '';
+        const priceOverride = String(prices[key] ?? '').trim();
+        await api.omnichannel.saveCategory(
+          productId,
+          selectedChannel,
+          categoryId,
+          priceOverride || null,
+        );
       }
       const result = await api.omnichannel.publish(productIds, [selectedChannel]);
       setData((prev) => ({ ...prev, listings: result.listings, logs: result.logs }));
@@ -212,9 +258,17 @@ export default function AdminOmnichannel() {
     setError('');
     setNotice('');
     try {
-      const saved = await api.omnichannel.saveSettings(Number(syncMinutes));
+      const saved = await api.omnichannel.saveSettings({
+        syncMinutes: Number(syncMinutes),
+        priceMarkupPercent: Number(markupPercent),
+      });
       setSyncMinutes(saved.sync_minutes);
-      setNotice(`Pedidos e estoque serão sincronizados a cada ${saved.sync_minutes} minutos.`);
+      setMarkupPercent(saved.price_markup_percent ?? 0);
+      setNotice(
+        saved.price_markup_percent > 0
+          ? `Acréscimo de ${saved.price_markup_percent}% aplicado nos marketplaces. O preço do site não muda. Sincronização a cada ${saved.sync_minutes} minutos.`
+          : `Marketplaces usam o mesmo preço do site. Sincronização a cada ${saved.sync_minutes} minutos.`
+      );
     } catch (err) {
       setError(err.message);
     } finally {
@@ -240,10 +294,22 @@ export default function AdminOmnichannel() {
         <div>
           <h1 className="font-display text-3xl tracking-wider text-foreground">Omnichannel</h1>
           <p className="font-body text-muted-foreground mt-1">
-            Mercado Livre, Magazine Luiza, Shopee, Temu e TikTok Shop.
+            Mercado Livre, Magazine Luiza, Shopee, Temu e TikTok Shop. O site permanece mais barato: o acréscimo vale só para os marketplaces.
           </p>
         </div>
         <div className="flex flex-wrap items-end gap-3">
+          <label className="font-body text-xs text-muted-foreground">
+            Acréscimo nos marketplaces (%)
+            <input
+              type="number"
+              min="0"
+              max="500"
+              step="0.01"
+              value={markupPercent}
+              onChange={(event) => setMarkupPercent(event.target.value)}
+              className="mt-1 block w-28 border border-border bg-card px-3 py-2 text-sm text-foreground"
+            />
+          </label>
           <label className="font-body text-xs text-muted-foreground">
             Intervalo (min)
             <input
@@ -261,7 +327,7 @@ export default function AdminOmnichannel() {
             disabled={busy === 'interval'}
             className="border border-border px-4 py-2.5 font-body text-sm tracking-wider hover:bg-secondary"
           >
-            Salvar intervalo
+            Salvar
           </button>
           <button
             type="button"
@@ -386,6 +452,8 @@ export default function AdminOmnichannel() {
                   <th className="px-3 py-3 font-medium">Produto</th>
                   <th className="px-3 py-3 font-medium">SKU</th>
                   <th className="px-3 py-3 font-medium">Estoque</th>
+                  <th className="px-3 py-3 font-medium">No site</th>
+                  <th className="px-3 py-3 font-medium">No marketplace</th>
                   <th className="px-3 py-3 font-medium">Categoria do canal</th>
                   <th className="px-3 py-3 font-medium">Status</th>
                 </tr>
@@ -409,6 +477,21 @@ export default function AdminOmnichannel() {
                       <td className="px-3 py-3 text-foreground">{product.name}</td>
                       <td className="px-3 py-3 text-muted-foreground">{product.sku || product.internal_code || '—'}</td>
                       <td className="px-3 py-3">{Number(product.quantity) || 0}</td>
+                      <td className="px-3 py-3">{money(product.price)}</td>
+                      <td className="px-3 py-3">
+                        <input
+                          value={prices[categoryKey] ?? ''}
+                          onChange={(event) => setPrices((prev) => ({
+                            ...prev,
+                            [categoryKey]: event.target.value,
+                          }))}
+                          onBlur={(event) => saveListingPrice(product.id, event.target.value)}
+                          title="Deixe vazio para usar o acréscimo percentual"
+                          placeholder={money(marketplacePrice(product.price, markupPercent))}
+                          inputMode="decimal"
+                          className="w-28 border border-border bg-background px-2 py-1.5 text-sm"
+                        />
+                      </td>
                       <td className="px-3 py-3">
                         <input
                           value={categories[categoryKey] ?? listing?.category_id ?? ''}
@@ -437,7 +520,7 @@ export default function AdminOmnichannel() {
                 })}
                 {!products.length && (
                   <tr>
-                    <td colSpan={6} className="px-3 py-6 text-muted-foreground">Nenhum produto encontrado.</td>
+                    <td colSpan={8} className="px-3 py-6 text-muted-foreground">Nenhum produto encontrado.</td>
                   </tr>
                 )}
               </tbody>

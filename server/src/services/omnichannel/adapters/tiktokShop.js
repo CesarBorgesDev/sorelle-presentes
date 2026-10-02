@@ -162,7 +162,7 @@ export const tiktokShopAdapter = {
     };
   },
 
-  async updateStock({ credentials, externalId, externalVariantId, quantity }) {
+  async updateStock({ credentials, externalId, externalVariantId, quantity, price }) {
     if (!externalId) throw new ChannelError('Anúncio sem ID no TikTok Shop.');
     const ready = await ensureShop(credentials);
     const stock = await warehouseId(ready);
@@ -176,6 +176,17 @@ export const tiktokShopAdapter = {
         }],
       },
     });
+    if (price != null && Number.isFinite(Number(price))) {
+      await tiktok(stock.credentials, `/product/202309/products/${externalId}/prices/update`, {
+        method: 'POST',
+        body: {
+          skus: [{
+            ...sku,
+            price: { amount: Number(price).toFixed(2), currency: 'BRL' },
+          }],
+        },
+      });
+    }
     return { credentials: stock.credentials };
   },
 

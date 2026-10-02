@@ -11,12 +11,14 @@ import {
 } from '../services/omnichannel/accounts.js';
 import {
   assertChannels,
+  getPriceMarkupPercent,
   getSyncMinutes,
   listImportedOrders,
   listListings,
   listLogs,
   publishProducts,
   saveListingCategory,
+  setPriceMarkupPercent,
   setSyncMinutes,
   syncConnectedChannels,
   writeLog,
@@ -28,12 +30,13 @@ router.use(requireAuth, requireAdmin);
 
 router.get('/', async (_req, res) => {
   try {
-    const [channels, listings, orders, logs, syncMinutes, products] = await Promise.all([
+    const [channels, listings, orders, logs, syncMinutes, priceMarkup, products] = await Promise.all([
       listPublicAccounts(),
       listListings(),
       listImportedOrders(),
       listLogs(),
       getSyncMinutes(),
+      getPriceMarkupPercent(),
       pool.query(
         `SELECT id, name, sku, internal_code, quantity, price, image_url
          FROM products
@@ -46,6 +49,7 @@ router.get('/', async (_req, res) => {
       orders: rowsToEntities(orders),
       logs,
       sync_minutes: syncMinutes,
+      price_markup_percent: priceMarkup,
       products: rowsToEntities(products.rows),
     });
   } catch (err) {
@@ -105,11 +109,11 @@ router.post('/channels/:channel/disconnect', async (req, res) => {
 
 router.put('/listings', async (req, res) => {
   try {
-    const { product_id: productId, channel, category_id: categoryId } = req.body || {};
+    const { product_id: productId, channel, category_id: categoryId, price_override: priceOverride } = req.body || {};
     if (!productId || !channel) {
       return res.status(400).json({ message: 'Informe o produto e o canal.' });
     }
-    await saveListingCategory(productId, channel, categoryId);
+    await saveListingCategory(productId, channel, categoryId, priceOverride);
     res.json({ success: true, listings: await listListings() });
   } catch (err) {
     res.status(err.status || 500).json({ message: err.message || 'Não foi possível salvar a categoria.' });
@@ -148,8 +152,13 @@ router.post('/sync', async (_req, res) => {
 
 router.put('/settings', async (req, res) => {
   try {
-    const syncMinutes = await setSyncMinutes(req.body?.sync_minutes);
-    res.json({ sync_minutes: syncMinutes });
+    const syncMinutes = req.body?.sync_minutes != null
+      ? await setSyncMinutes(req.body.sync_minutes)
+      : await getSyncMinutes();
+    const priceMarkup = req.body?.price_markup_percent != null
+      ? await setPriceMarkupPercent(req.body.price_markup_percent)
+      : await getPriceMarkupPercent();
+    res.json({ sync_minutes: syncMinutes, price_markup_percent: priceMarkup });
   } catch (err) {
     res.status(err.status || 500).json({ message: err.message || 'Não foi possível salvar o intervalo.' });
   }

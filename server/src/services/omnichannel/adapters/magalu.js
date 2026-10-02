@@ -149,7 +149,7 @@ export const magaluAdapter = {
     return { credentials: fresh, externalId: unit.sku, externalSku: unit.sku };
   },
 
-  async updateStock({ credentials, externalId, quantity }) {
+  async updateStock({ credentials, externalId, quantity, price }) {
     const sku = externalId;
     if (!sku) throw new ChannelError('Anúncio sem SKU na Magazine Luiza.');
     const { credentials: fresh } = await magalu(credentials, '/seller/v1/portfolios/stocks', {
@@ -161,6 +161,18 @@ export const magaluAdapter = {
         type: 'AVAILABLE',
       },
     });
+    if (price != null && Number.isFinite(Number(price))) {
+      await magalu(fresh, '/seller/v1/portfolios/prices', {
+        method: 'POST',
+        body: {
+          sku,
+          channel: { id: 'magazineluiza' },
+          price: Number(price),
+          list_price: Number(price),
+          currency: 'BRL',
+        },
+      });
+    }
     return { credentials: fresh };
   },
 

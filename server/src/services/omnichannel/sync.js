@@ -3,7 +3,7 @@ import { getSetting, setSetting } from '../settings.js';
 import { consumeStockForOrder } from '../../utils/stockInventory.js';
 import { CHANNEL_IDS, getChannel } from './constants.js';
 import { getAdapter } from './adapters/index.js';
-import { buildListingUnits } from './catalog.js';
+import { buildListingUnits, parsePriceOverride, resolveChannelPrice } from './catalog.js';
 import { getAccount, replaceCredentials } from './accounts.js';
 
 let timer = null;
@@ -47,7 +47,7 @@ async function loadProduct(productId) {
   return result.rows[0] || null;
 }
 
-export async function saveListingCategory(productId, channel, categoryId) {
+export async function saveListingCategory(productId, channel, categoryId, priceOverride) {
   if (!getChannel(channel)) throw Object.assign(new Error('Canal desconhecido.'), { status: 400 });
   const product = await loadProduct(productId);
   if (!product) throw Object.assign(new Error('Produto não encontrado.'), { status: 404 });
@@ -55,13 +55,14 @@ export async function saveListingCategory(productId, channel, categoryId) {
   if (!units.length) {
     throw Object.assign(new Error('Nenhuma combinação com SKU para este produto.'), { status: 400 });
   }
+  const override = parsePriceOverride(priceOverride);
   for (const unit of units) {
     await pool.query(
-      `INSERT INTO channel_listings (product_id, channel, variant_key, category_id, external_sku, status)
-       VALUES ($1, $2, $3, $4, $5, 'pending')
+      `INSERT INTO channel_listings (product_id, channel, variant_key, category_id, external_sku, price_override, status)
+       VALUES ($1, $2, $3, $4, $5, $6, 'pending')
        ON CONFLICT (product_id, channel, variant_key)
-       DO UPDATE SET category_id = EXCLUDED.category_id, updated_date = NOW()`,
-      [productId, channel, unit.variantKey, String(categoryId || '').trim() || null, unit.sku]
+       DO UPDATE SET category_id = EXCLUDED.category_id, price_override = EXCLUDED.price_override, updated_date = NOW()`,
+      [productId, channel, unit.variantKey, String(categoryId || '').trim() || null, unit.sku, override]
     );
   }
 }
@@ -99,6 +100,7 @@ async function upsertListing(productId, channel, unit, patch) {
 }
 
 export async function publishProducts({ productIds, channels }) {
+  const markup = await getPriceMarkupPercent();
   const results = [];
   for (const channel of channels) {
     if (!getChannel(channel)) continue;
@@ -140,7 +142,11 @@ export async function publishProducts({ productIds, channels }) {
         try {
           const published = await adapter.publishListing({
             credentials,
-            unit: { ...unit, externalVariantId: listing?.external_variant_id || null },
+            unit: {
+              ...unit,
+              price: resolveChannelPrice(unit.price, markup, listing?.price_override),
+              externalVariantId: listing?.external_variant_id || null,
+            },
             categoryId,
             externalId: listing?.external_id || null,
           });
@@ -284,6 +290,7 @@ async function importChannelOrders(channel, orders) {
 export async function pushProductStock(productId, { exceptChannel = null } = {}) {
   const product = await loadProduct(productId);
   if (!product) return;
+  const markup = await getPriceMarkupPercent();
   const units = buildListingUnits(product);
   const listings = await pool.query(
     `SELECT * FROM channel_listings WHERE product_id = $1 AND status = 'published' AND external_id IS NOT NULL`,
@@ -302,6 +309,7 @@ export async function pushProductStock(productId, { exceptChannel = null } = {})
         externalId: listing.external_id,
         externalVariantId: listing.external_variant_id,
         quantity: unit.quantity,
+        price: resolveChannelPrice(unit.price, markup, listing.price_override),
       });
       if (updated.credentials) await rememberCredentials(listing.channel, updated.credentials);
       await pool.query(
@@ -388,6 +396,23 @@ export async function getSyncMinutes() {
   return minutes;
 }
 
+export async function getPriceMarkupPercent() {
+  const raw = await getSetting('omnichannel_price_markup_percent');
+  const value = Number(raw ?? '0');
+  if (!Number.isFinite(value) || value < 0 || value > 500) return 0;
+  return Math.round(value * 100) / 100;
+}
+
+export async function setPriceMarkupPercent(percent) {
+  const value = Number(percent);
+  if (!Number.isFinite(value) || value < 0 || value > 500) {
+    throw Object.assign(new Error('O acréscimo deve ficar entre 0 e 500%.'), { status: 400 });
+  }
+  const rounded = Math.round(value * 100) / 100;
+  await setSetting('omnichannel_price_markup_percent', String(rounded));
+  return rounded;
+}
+
 export async function setSyncMinutes(minutes) {
   const value = Number.parseInt(minutes, 10);
   if (!Number.isFinite(value) || value < 5 || value > 240) {
@@ -425,11 +450,14 @@ export function stopOmnichannelScheduler() {
 export async function listListings() {
   const result = await pool.query(
     `SELECT id, product_id, channel, variant_key, external_id, external_sku, category_id,
-            status, last_error, last_sync_at
+            price_override, status, last_error, last_sync_at
      FROM channel_listings
      ORDER BY updated_date DESC`
   );
-  return result.rows;
+  return result.rows.map((row) => ({
+    ...row,
+    price_override: row.price_override == null ? null : Number(row.price_override),
+  }));
 }
 
 export async function listImportedOrders() {

@@ -94,7 +94,7 @@ export const temuAdapter = {
     };
   },
 
-  async updateStock({ credentials, externalId, externalVariantId, quantity }) {
+  async updateStock({ credentials, externalId, externalVariantId, quantity, price }) {
     if (!externalId) throw new ChannelError('Anúncio sem ID na Temu.');
     const target = Math.max(0, Number(quantity) || 0);
     const extra = { goodsId: Number(externalId) };
@@ -102,6 +102,12 @@ export const temuAdapter = {
       extra.skuStockTargetList = [{ skuId: Number(externalVariantId), stockTarget: target }];
     }
     await temuCall(credentials, 'bg.local.goods.stock.edit', extra);
+    if (price != null && Number.isFinite(Number(price)) && externalVariantId) {
+      await temuCall(credentials, 'bg.local.goods.price.edit', {
+        goodsId: Number(externalId),
+        skuPriceList: [{ skuId: Number(externalVariantId), price: Number(price) }],
+      });
+    }
     return { credentials };
   },
 

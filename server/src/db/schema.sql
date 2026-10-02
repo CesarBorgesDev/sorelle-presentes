@@ -470,6 +470,7 @@ CREATE TABLE IF NOT EXISTS channel_listings (
   external_sku VARCHAR(160),
   external_variant_id VARCHAR(128),
   category_id VARCHAR(128),
+  price_override NUMERIC(10, 2),
   status VARCHAR(20) NOT NULL DEFAULT 'pending'
     CHECK (status IN ('pending', 'published', 'error', 'paused')),
   last_error TEXT,
@@ -478,6 +479,8 @@ CREATE TABLE IF NOT EXISTS channel_listings (
   updated_date TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE (product_id, channel, variant_key)
 );
+
+ALTER TABLE channel_listings ADD COLUMN IF NOT EXISTS price_override NUMERIC(10, 2);
 
 CREATE INDEX IF NOT EXISTS idx_channel_listings_channel ON channel_listings(channel);
 CREATE INDEX IF NOT EXISTS idx_channel_listings_external ON channel_listings(channel, external_id);
@@ -505,4 +508,8 @@ CREATE INDEX IF NOT EXISTS idx_channel_sync_logs_created ON channel_sync_logs(cr
 
 INSERT INTO app_settings (key, value) VALUES
   ('omnichannel_sync_minutes', '15')
+ON CONFLICT (key) DO NOTHING;
+
+INSERT INTO app_settings (key, value) VALUES
+  ('omnichannel_price_markup_percent', '0')
 ON CONFLICT (key) DO NOTHING;

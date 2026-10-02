@@ -126,7 +126,7 @@ export const shopeeAdapter = {
     return { credentials, externalId: String(itemId), externalSku: unit.sku };
   },
 
-  async updateStock({ credentials, externalId, quantity }) {
+  async updateStock({ credentials, externalId, quantity, price }) {
     if (!externalId) throw new ChannelError('Anúncio sem ID na Shopee.');
     await shopCall(credentials, '/api/v2/product/update_stock', {
       method: 'POST',
@@ -135,6 +135,15 @@ export const shopeeAdapter = {
         stock_list: [{ seller_stock: [{ stock: Math.max(0, Number(quantity) || 0) }] }],
       },
     });
+    if (price != null && Number.isFinite(Number(price))) {
+      await shopCall(credentials, '/api/v2/product/update_price', {
+        method: 'POST',
+        body: {
+          item_id: Number(externalId),
+          price_list: [{ original_price: Number(price) }],
+        },
+      });
+    }
     return { credentials };
   },
 

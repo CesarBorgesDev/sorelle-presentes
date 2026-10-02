@@ -146,11 +146,13 @@ export const mercadoLivreAdapter = {
     return { credentials: fresh, externalId: itemId, externalSku: unit.sku };
   },
 
-  async updateStock({ credentials, externalId, quantity }) {
+  async updateStock({ credentials, externalId, quantity, price }) {
     if (!externalId) throw new ChannelError('Anúncio sem ID no Mercado Livre.');
+    const body = { available_quantity: Math.max(0, Number(quantity) || 0) };
+    if (price != null && Number.isFinite(Number(price))) body.price = Number(price);
     const { credentials: fresh } = await authorized(credentials, `/items/${externalId}`, {
       method: 'PUT',
-      body: { available_quantity: Math.max(0, Number(quantity) || 0) },
+      body,
     });
     return { credentials: fresh };
   },

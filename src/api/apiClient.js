@@ -876,10 +876,15 @@ export const omnichannelApi = {
     return apiFetch(`/omnichannel/channels/${channel}/disconnect`, { method: 'POST' });
   },
 
-  saveCategory(productId, channel, categoryId) {
+  saveCategory(productId, channel, categoryId, priceOverride) {
     return apiFetch('/omnichannel/listings', {
       method: 'PUT',
-      body: JSON.stringify({ product_id: productId, channel, category_id: categoryId }),
+      body: JSON.stringify({
+        product_id: productId,
+        channel,
+        category_id: categoryId,
+        price_override: priceOverride ?? null,
+      }),
     });
   },
 
@@ -894,10 +899,13 @@ export const omnichannelApi = {
     return apiFetch('/omnichannel/sync', { method: 'POST' });
   },
 
-  saveSettings(syncMinutes) {
+  saveSettings({ syncMinutes, priceMarkupPercent }) {
     return apiFetch('/omnichannel/settings', {
       method: 'PUT',
-      body: JSON.stringify({ sync_minutes: syncMinutes }),
+      body: JSON.stringify({
+        sync_minutes: syncMinutes,
+        price_markup_percent: priceMarkupPercent,
+      }),
     });
   },
 };

@@ -19,6 +19,33 @@ export function absoluteMediaUrl(url) {
   return `${base}${value.startsWith('/') ? value : `/${value}`}`;
 }
 
+export function applyPriceMarkup(price, percent) {
+  const cents = Math.round((Number(price) || 0) * 100);
+  const pct = Number(percent);
+  const safe = Number.isFinite(pct) && pct > 0 ? pct : 0;
+  return Math.round(cents * (1 + safe / 100)) / 100;
+}
+
+export function resolveChannelPrice(sitePrice, markupPercent, priceOverride) {
+  if (priceOverride != null && priceOverride !== '') {
+    const value = Number(priceOverride);
+    if (Number.isFinite(value) && value >= 0) {
+      return Math.round(value * 100) / 100;
+    }
+  }
+  return applyPriceMarkup(sitePrice, markupPercent);
+}
+
+export function parsePriceOverride(value) {
+  if (value == null || String(value).trim() === '') return null;
+  const normalized = String(value).trim().replace(/\s/g, '').replace(',', '.');
+  const amount = Number(normalized);
+  if (!Number.isFinite(amount) || amount < 0) {
+    throw Object.assign(new Error('Informe um preço válido para o marketplace.'), { status: 400 });
+  }
+  return Math.round(amount * 100) / 100;
+}
+
 export function productImageUrls(product) {
   const raw = [];
   if (product?.image_url) raw.push(product.image_url);
