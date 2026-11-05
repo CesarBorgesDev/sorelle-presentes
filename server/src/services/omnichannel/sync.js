@@ -47,7 +47,22 @@ async function loadProduct(productId) {
   return result.rows[0] || null;
 }
 
-export async function saveListingCategory(productId, channel, categoryId, priceOverride) {
+function cleanListingAttributes(value) {
+  if (value == null) return null;
+  if (typeof value !== 'object' || Array.isArray(value)) {
+    throw Object.assign(new Error('Atributos inválidos.'), { status: 400 });
+  }
+  const out = {};
+  for (const [key, raw] of Object.entries(value)) {
+    const id = String(key || '').trim().toUpperCase();
+    const text = String(raw ?? '').trim();
+    if (!/^[A-Z0-9_]{2,40}$/.test(id) || !text) continue;
+    out[id] = text.slice(0, 255);
+  }
+  return out;
+}
+
+export async function saveListingCategory(productId, channel, categoryId, priceOverride, attributes) {
   if (!getChannel(channel)) throw Object.assign(new Error('Canal desconhecido.'), { status: 400 });
   const product = await loadProduct(productId);
   if (!product) throw Object.assign(new Error('Produto não encontrado.'), { status: 404 });
@@ -57,7 +72,8 @@ export async function saveListingCategory(productId, channel, categoryId, priceO
   }
   const override = parsePriceOverride(priceOverride);
   const category = String(categoryId || '').trim() || null;
-  if (override == null && !category) {
+  const attrs = attributes === undefined ? null : cleanListingAttributes(attributes);
+  if (override == null && !category && !attrs) {
     await pool.query(
       `DELETE FROM channel_listings
        WHERE product_id = $1 AND channel = $2 AND external_id IS NULL AND status = 'pending'`,
@@ -67,11 +83,14 @@ export async function saveListingCategory(productId, channel, categoryId, priceO
   }
   for (const unit of units) {
     await pool.query(
-      `INSERT INTO channel_listings (product_id, channel, variant_key, category_id, external_sku, price_override, status)
-       VALUES ($1, $2, $3, $4, $5, $6, 'pending')
+      `INSERT INTO channel_listings (product_id, channel, variant_key, category_id, external_sku, price_override, attributes, status)
+       VALUES ($1, $2, $3, $4, $5, $6, COALESCE($7::jsonb, '{}'::jsonb), 'pending')
        ON CONFLICT (product_id, channel, variant_key)
-       DO UPDATE SET category_id = EXCLUDED.category_id, price_override = EXCLUDED.price_override, updated_date = NOW()`,
-      [productId, channel, unit.variantKey, category, unit.sku, override]
+       DO UPDATE SET category_id = EXCLUDED.category_id,
+         price_override = EXCLUDED.price_override,
+         attributes = COALESCE($7::jsonb, channel_listings.attributes),
+         updated_date = NOW()`,
+      [productId, channel, unit.variantKey, category, unit.sku, override, attrs ? JSON.stringify(attrs) : null]
     );
   }
 }
@@ -108,6 +127,80 @@ async function upsertListing(productId, channel, unit, patch) {
   return result.rows[0];
 }
 
+async function publishMercadoLivreProduct({ adapter, channel, product, units, credentials, markup }) {
+  const results = [];
+  const skipped = units.filter((unit) => unit.skip);
+  for (const unit of skipped) {
+    await writeLog(channel, 'publish', false, `${product.name}: ${unit.reason}`);
+    results.push({ channel, productId: product.id, success: false, message: unit.reason });
+  }
+  const active = units.filter((unit) => !unit.skip);
+  if (!active.length) return { credentials, results };
+  const existing = await pool.query(
+    `SELECT * FROM channel_listings WHERE product_id = $1 AND channel = $2`,
+    [product.id, channel]
+  );
+  const categoryId = existing.rows.find((row) => row.category_id)?.category_id || '';
+  const attributes = existing.rows.find((row) => row.attributes && Object.keys(row.attributes).length)?.attributes || {};
+  if (!categoryId) {
+    const message = `${product.name}: informe a categoria do canal antes de publicar.`;
+    for (const unit of active) {
+      await upsertListing(product.id, channel, unit, { status: 'error', lastError: message, categoryId });
+    }
+    await writeLog(channel, 'publish', false, message);
+    results.push({ channel, productId: product.id, success: false, message });
+    return { credentials, results };
+  }
+  const prepared = active.map((unit) => {
+    const listing = existing.rows.find((row) => row.variant_key === unit.variantKey);
+    return {
+      ...unit,
+      price: resolveChannelPrice(unit.price, markup, listing?.price_override),
+      externalId: listing?.external_id || null,
+      externalVariantId: listing?.external_variant_id || null,
+    };
+  });
+  try {
+    const published = await adapter.publishCatalog({
+      credentials,
+      units: prepared,
+      categoryId,
+      attributes,
+      title: product.name,
+      description: product.description || product.name,
+    });
+    const nextCredentials = published.credentials || credentials;
+    await rememberCredentials(channel, nextCredentials);
+    for (const item of published.variants || []) {
+      const unit = prepared.find((entry) => entry.variantKey === item.variantKey) || prepared[0];
+      await upsertListing(product.id, channel, { ...unit, sku: item.sku || unit.sku }, {
+        externalId: item.externalId,
+        externalVariantId: item.externalVariantId,
+        categoryId,
+        status: 'published',
+        lastError: null,
+      });
+    }
+    const message = `${product.name} publicado em ${getChannel(channel).label}.`;
+    await writeLog(channel, 'publish', true, message);
+    results.push({ channel, productId: product.id, success: true, message });
+    return { credentials: nextCredentials, results };
+  } catch (err) {
+    const message = `${product.name}: ${err.message}`;
+    for (const unit of prepared) {
+      await upsertListing(product.id, channel, unit, {
+        externalId: unit.externalId,
+        categoryId,
+        status: 'error',
+        lastError: err.message,
+      });
+    }
+    await writeLog(channel, 'publish', false, message);
+    results.push({ channel, productId: product.id, success: false, message });
+    return { credentials, results };
+  }
+}
+
 export async function publishProducts({ productIds, channels }) {
   const markup = await getPriceMarkupPercent();
   const results = [];
@@ -129,6 +222,14 @@ export async function publishProducts({ productIds, channels }) {
         continue;
       }
       const units = buildListingUnits(product);
+      if (typeof adapter.publishCatalog === 'function') {
+        const outcome = await publishMercadoLivreProduct({
+          adapter, channel, product, units, credentials, markup,
+        });
+        credentials = outcome.credentials;
+        results.push(...outcome.results);
+        continue;
+      }
       for (const unit of units) {
         if (unit.skip) {
           await writeLog(channel, 'publish', false, `${product.name}: ${unit.reason}`);
@@ -158,6 +259,7 @@ export async function publishProducts({ productIds, channels }) {
             },
             categoryId,
             externalId: listing?.external_id || null,
+            attributes: listing?.attributes || {},
           });
           credentials = published.credentials || credentials;
           await rememberCredentials(channel, credentials);
@@ -189,6 +291,13 @@ export async function publishProducts({ productIds, channels }) {
 }
 
 async function matchListing(channel, item) {
+  if (item.variationId) {
+    const byVariation = await pool.query(
+      `SELECT * FROM channel_listings WHERE channel = $1 AND external_variant_id = $2 LIMIT 1`,
+      [channel, String(item.variationId)]
+    );
+    if (byVariation.rows[0]) return byVariation.rows[0];
+  }
   if (item.externalItemId) {
     const byExternal = await pool.query(
       `SELECT * FROM channel_listings WHERE channel = $1 AND external_id = $2 LIMIT 1`,
@@ -356,6 +465,26 @@ async function pullChannel(channel) {
   return { channel, success: true, imported: pulled.orders?.length || 0 };
 }
 
+export async function importMercadoLivreNotification(body) {
+  const topic = String(body?.topic || '');
+  const resource = String(body?.resource || '');
+  if (!/orders/i.test(topic) && !/^\/orders\/\d+$/.test(resource)) return;
+  const account = await getAccount('mercado_livre');
+  if (!account || account.status !== 'connected') return;
+  if (body?.user_id && account.shop_id && String(body.user_id) !== String(account.shop_id)) return;
+  const adapter = getAdapter('mercado_livre');
+  const fetched = await adapter.fetchOrder({
+    credentials: account.credentials || {},
+    resource,
+  });
+  if (fetched.credentials) await rememberCredentials('mercado_livre', fetched.credentials);
+  if (fetched.order?.status && fetched.order.status !== 'paid') return;
+  const touched = await importChannelOrders('mercado_livre', [fetched.order]);
+  for (const productId of touched) {
+    await pushProductStock(productId, { exceptChannel: 'mercado_livre' });
+  }
+}
+
 export async function syncConnectedChannels({ manual = false } = {}) {
   if (running) {
     return { busy: true, message: 'Já existe uma sincronização em andamento.' };
@@ -459,13 +588,14 @@ export function stopOmnichannelScheduler() {
 export async function listListings() {
   const result = await pool.query(
     `SELECT id, product_id, channel, variant_key, external_id, external_sku, category_id,
-            price_override, status, last_error, last_sync_at
+            price_override, attributes, status, last_error, last_sync_at
      FROM channel_listings
      ORDER BY updated_date DESC`
   );
   return result.rows.map((row) => ({
     ...row,
     price_override: row.price_override == null ? null : Number(row.price_override),
+    attributes: row.attributes && typeof row.attributes === 'object' ? row.attributes : {},
   }));
 }
 

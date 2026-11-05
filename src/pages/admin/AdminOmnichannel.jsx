@@ -57,6 +57,9 @@ export default function AdminOmnichannel() {
   const [selected, setSelected] = useState({});
   const [categories, setCategories] = useState({});
   const [prices, setPrices] = useState({});
+  const [attributes, setAttributes] = useState({});
+  const [categoryHints, setCategoryHints] = useState({});
+  const [attributeFields, setAttributeFields] = useState({});
   const [syncMinutes, setSyncMinutes] = useState(15);
   const [markupPercent, setMarkupPercent] = useState(0);
 
@@ -67,7 +70,13 @@ export default function AdminOmnichannel() {
     setForms((prev) => {
       const next = { ...prev };
       for (const channel of payload.channels || []) {
-        next[channel.id] = { ...(next[channel.id] || {}), ...channel.credentials };
+        const creds = { ...(next[channel.id] || {}), ...channel.credentials };
+        if (channel.id === 'mercado_livre') {
+          if (!creds.redirect_uri) creds.redirect_uri = channel.oauth_redirect_uri || '';
+          if (!creds.listing_type_id) creds.listing_type_id = 'gold_special';
+          if (!creds.shipping_mode) creds.shipping_mode = 'me2';
+        }
+        next[channel.id] = creds;
       }
       return next;
     });
@@ -92,6 +101,16 @@ export default function AdminOmnichannel() {
       }
       return next;
     });
+    setAttributes((prev) => {
+      const next = { ...prev };
+      for (const listing of payload.listings || []) {
+        const key = `${listing.product_id}:${listing.channel}`;
+        if (next[key] == null && listing.attributes && Object.keys(listing.attributes).length) {
+          next[key] = listing.attributes;
+        }
+      }
+      return next;
+    });
   };
 
   const load = async () => {
@@ -99,6 +118,10 @@ export default function AdminOmnichannel() {
     setError('');
     try {
       applyOverview(await api.omnichannel.overview());
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('ml') === 'ok') setNotice('Mercado Livre conectado.');
+      if (params.get('ml') === 'erro') setError(params.get('motivo') || 'Não foi possível autorizar o Mercado Livre.');
+      if (params.get('ml')) window.history.replaceState({}, '', window.location.pathname);
     } catch (err) {
       setError(err.message || 'Não foi possível carregar o Omnichannel.');
     } finally {
@@ -199,6 +222,89 @@ export default function AdminOmnichannel() {
     }
   };
 
+  const authorizeMercadoLivre = async (channel) => {
+    setBusy(channel.id);
+    setError('');
+    setNotice('');
+    try {
+      const result = await api.omnichannel.authorizeMercadoLivre(forms[channel.id] || {});
+      window.location.href = result.url;
+    } catch (err) {
+      setError(err.message);
+      setBusy('');
+    }
+  };
+
+  const suggestCategory = async (product) => {
+    setBusy(`cat-${product.id}`);
+    setError('');
+    try {
+      const rows = await api.omnichannel.mercadoLivreCategories(product.name);
+      setCategoryHints((prev) => ({ ...prev, [product.id]: rows }));
+      if (!rows.length) setError('Nenhuma categoria encontrada para este produto.');
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy('');
+    }
+  };
+
+  const chooseCategory = async (product, category) => {
+    const key = `${product.id}:${selectedChannel}`;
+    setCategories((prev) => ({ ...prev, [key]: category.category_id }));
+    setCategoryHints((prev) => ({ ...prev, [product.id]: [] }));
+    try {
+      const result = await api.omnichannel.saveCategory(
+        product.id,
+        selectedChannel,
+        category.category_id,
+        String(prices[key] ?? '').trim() || null,
+        attributes[key],
+      );
+      setData((prev) => ({ ...prev, listings: result.listings }));
+      const fields = await api.omnichannel.mercadoLivreAttributes(category.category_id);
+      setAttributeFields((prev) => ({ ...prev, [product.id]: fields }));
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const loadAttributeFields = async (product) => {
+    const categoryId = categories[`${product.id}:${selectedChannel}`] || '';
+    if (!/^MLB\d+$/i.test(categoryId)) {
+      setError('Informe a categoria MLB antes de carregar os atributos.');
+      return;
+    }
+    setBusy(`attr-${product.id}`);
+    try {
+      const fields = await api.omnichannel.mercadoLivreAttributes(categoryId);
+      setAttributeFields((prev) => ({ ...prev, [product.id]: fields }));
+      if (!fields.length) setNotice('Essa categoria não tem atributos obrigatórios além do SKU.');
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy('');
+    }
+  };
+
+  const saveAttributes = async (productId, nextAttributes) => {
+    const key = `${productId}:${selectedChannel}`;
+    const attrs = nextAttributes || attributes[key] || {};
+    try {
+      const result = await api.omnichannel.saveCategory(
+        productId,
+        selectedChannel,
+        categories[key] || '',
+        String(prices[key] ?? '').trim() || null,
+        attrs,
+      );
+      setData((prev) => ({ ...prev, listings: result.listings }));
+      setError('');
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
   const publishSelected = async () => {
     const productIds = Object.keys(selected).filter((id) => selected[id]);
     if (!productIds.length) {
@@ -218,6 +324,7 @@ export default function AdminOmnichannel() {
           selectedChannel,
           categoryId,
           priceOverride || null,
+          attributes[key],
         );
       }
       const result = await api.omnichannel.publish(productIds, [selectedChannel]);
@@ -370,6 +477,12 @@ export default function AdminOmnichannel() {
                 </span>
               </div>
               <p className="font-body text-sm text-muted-foreground mb-4">{channel.hint}</p>
+              {channel.id === 'mercado_livre' && (
+                <div className="mb-4 space-y-1 font-body text-xs text-muted-foreground">
+                  <p>Redirect URI para cadastrar no aplicativo: <span className="text-foreground">{channel.oauth_redirect_uri}</span></p>
+                  <p>URL de notificações de pedidos: <span className="text-foreground">{channel.notifications_url}</span></p>
+                </div>
+              )}
               {channel.last_error && (
                 <p className="font-body text-sm text-destructive mb-4">{channel.last_error}</p>
               )}
@@ -377,18 +490,40 @@ export default function AdminOmnichannel() {
                 {channel.fields.map((field) => (
                   <label key={field.key} className="font-body text-xs text-muted-foreground">
                     {field.label}{field.required ? ' *' : ''}
-                    <input
-                      type={field.secret ? 'password' : 'text'}
-                      value={forms[channel.id]?.[field.key] ?? ''}
-                      placeholder={field.placeholder || ''}
-                      autoComplete="off"
-                      onChange={(event) => setField(channel.id, field.key, event.target.value)}
-                      className="mt-1 block w-full border border-border bg-background px-3 py-2 text-sm text-foreground"
-                    />
+                    {field.options ? (
+                      <select
+                        value={forms[channel.id]?.[field.key] ?? field.options[0]?.value ?? ''}
+                        onChange={(event) => setField(channel.id, field.key, event.target.value)}
+                        className="mt-1 block w-full border border-border bg-background px-3 py-2 text-sm text-foreground"
+                      >
+                        {field.options.map((option) => (
+                          <option key={option.value} value={option.value}>{option.label}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input
+                        type={field.secret ? 'password' : 'text'}
+                        value={forms[channel.id]?.[field.key] ?? ''}
+                        placeholder={field.key === 'redirect_uri' ? (channel.oauth_redirect_uri || field.placeholder || '') : (field.placeholder || '')}
+                        autoComplete="off"
+                        onChange={(event) => setField(channel.id, field.key, event.target.value)}
+                        className="mt-1 block w-full border border-border bg-background px-3 py-2 text-sm text-foreground"
+                      />
+                    )}
                   </label>
                 ))}
               </div>
-              <div className="flex gap-3 mt-4">
+              <div className="flex flex-wrap gap-3 mt-4">
+                {channel.id === 'mercado_livre' && (
+                  <button
+                    type="button"
+                    onClick={() => authorizeMercadoLivre(channel)}
+                    disabled={busy === channel.id}
+                    className="bg-primary text-primary-foreground px-4 py-2 font-body text-sm tracking-wider hover:opacity-80 disabled:opacity-60"
+                  >
+                    {busy === channel.id ? 'Abrindo Mercado Livre…' : 'Autorizar no Mercado Livre'}
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => connect(channel)}
@@ -519,6 +654,72 @@ export default function AdminOmnichannel() {
                           placeholder="ID da categoria"
                           className="w-full min-w-[140px] border border-border bg-background px-2 py-1.5 text-sm"
                         />
+                        {selectedChannel === 'mercado_livre' && (
+                          <div className="mt-2 space-y-2">
+                            <div className="flex flex-wrap gap-2">
+                              <button
+                                type="button"
+                                onClick={() => suggestCategory(product)}
+                                disabled={busy === `cat-${product.id}`}
+                                className="border border-border px-2 py-1 text-xs hover:bg-secondary disabled:opacity-60"
+                              >
+                                Sugerir categoria
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => loadAttributeFields(product)}
+                                disabled={busy === `attr-${product.id}`}
+                                className="border border-border px-2 py-1 text-xs hover:bg-secondary disabled:opacity-60"
+                              >
+                                Atributos
+                              </button>
+                            </div>
+                            {(categoryHints[product.id] || []).map((hint) => (
+                              <button
+                                key={hint.category_id}
+                                type="button"
+                                onClick={() => chooseCategory(product, hint)}
+                                className="block w-full text-left text-xs text-foreground hover:underline"
+                              >
+                                {hint.category_id} — {hint.category_name}
+                              </button>
+                            ))}
+                            {(attributeFields[product.id] || []).map((field) => (
+                              <label key={field.id} className="block text-xs text-muted-foreground">
+                                {field.name}
+                                {field.values?.length ? (
+                                  <select
+                                    value={attributes[categoryKey]?.[field.id] || ''}
+                                    onChange={(event) => {
+                                      const next = { ...(attributes[categoryKey] || {}), [field.id]: event.target.value };
+                                      setAttributes((prev) => ({ ...prev, [categoryKey]: next }));
+                                      saveAttributes(product.id, next);
+                                    }}
+                                    className="mt-1 block w-full border border-border bg-background px-2 py-1 text-sm text-foreground"
+                                  >
+                                    <option value="">Selecione</option>
+                                    {field.values.map((option) => (
+                                      <option key={option.id} value={option.id}>{option.name}</option>
+                                    ))}
+                                  </select>
+                                ) : (
+                                  <input
+                                    value={attributes[categoryKey]?.[field.id] || ''}
+                                    onChange={(event) => setAttributes((prev) => ({
+                                      ...prev,
+                                      [categoryKey]: { ...(prev[categoryKey] || {}), [field.id]: event.target.value },
+                                    }))}
+                                    onBlur={(event) => {
+                                      const next = { ...(attributes[categoryKey] || {}), [field.id]: event.target.value };
+                                      saveAttributes(product.id, next);
+                                    }}
+                                    className="mt-1 block w-full border border-border bg-background px-2 py-1 text-sm text-foreground"
+                                  />
+                                )}
+                              </label>
+                            ))}
+                          </div>
+                        )}
                       </td>
                       <td className="px-3 py-3">
                         {listing ? (

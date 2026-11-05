@@ -79,24 +79,164 @@ async function authorized(credentials, path, options = {}) {
   }
 }
 
-function itemPayload(unit, categoryId) {
-  if (!categoryId) throw new ChannelError('Informe a categoria do Mercado Livre (ex.: MLB1234).');
-  if (!unit.images.length) throw new ChannelError('O produto precisa de uma imagem com URL pública.');
+const LISTING_TYPES = new Set(['gold_special', 'gold_pro']);
+
+function listingType(credentials) {
+  const value = String(credentials?.listing_type_id || 'gold_special').trim();
+  return LISTING_TYPES.has(value) ? value : 'gold_special';
+}
+
+function shippingMode(credentials) {
+  return credentials?.shipping_mode === 'not_specified' ? 'not_specified' : 'me2';
+}
+
+function assertPublicImages(urls) {
+  if (!urls?.length) throw new ChannelError('O produto precisa de uma imagem com URL pública.');
+  if (urls.some((url) => /localhost|127\.0\.0\.1/i.test(url))) {
+    throw new ChannelError('A foto precisa de uma URL pública. O Mercado Livre não baixa imagem de localhost.');
+  }
+}
+
+function attributeEntries(extra, sku) {
+  const list = [];
+  if (sku) list.push({ id: 'SELLER_SKU', value_name: String(sku).slice(0, 255) });
+  for (const [id, raw] of Object.entries(extra || {})) {
+    const key = String(id || '').trim().toUpperCase();
+    const value = String(raw ?? '').trim();
+    if (!key || key === 'SELLER_SKU' || !value) continue;
+    if (/^\d+$/.test(value)) list.push({ id: key, value_id: value });
+    else list.push({ id: key, value_name: value.slice(0, 255) });
+  }
+  return list;
+}
+
+function shippingBody(unit, mode) {
+  const shipping = { mode, local_pick_up: false, free_shipping: false };
+  const height = Number(unit.heightCm);
+  const width = Number(unit.widthCm);
+  const length = Number(unit.lengthCm);
+  const weightKg = Number(unit.weightKg);
+  if (mode === 'me2' && height > 0 && width > 0 && length > 0 && weightKg > 0) {
+    const grams = Math.max(1, Math.round(weightKg * 1000));
+    shipping.dimensions = `${Math.ceil(height)}x${Math.ceil(width)}x${Math.ceil(length)},${grams}`;
+  }
+  return shipping;
+}
+
+function pictures(units) {
+  const urls = [];
+  for (const unit of units) {
+    for (const url of unit.images || []) {
+      if (url && !urls.includes(url)) urls.push(url);
+    }
+  }
+  assertPublicImages(urls);
+  return urls.slice(0, 6).map((source) => ({ source }));
+}
+
+function variationBody(unit) {
+  const combinations = [];
+  if (unit.color) combinations.push({ id: 'COLOR', name: 'Cor', value_name: String(unit.color).slice(0, 255) });
+  if (unit.size) combinations.push({ id: 'SIZE', name: 'Tamanho', value_name: String(unit.size).slice(0, 255) });
+  if (!combinations.length) {
+    throw new ChannelError('A variação precisa de cor ou tamanho para ir ao Mercado Livre.');
+  }
+  const body = {
+    attribute_combinations: combinations,
+    price: Number(unit.price),
+    available_quantity: Math.max(0, Number(unit.quantity) || 0),
+    seller_custom_field: unit.sku,
+    attributes: attributeEntries({}, unit.sku),
+  };
+  if (unit.externalVariantId) body.id = Number(unit.externalVariantId) || unit.externalVariantId;
+  return body;
+}
+
+function itemPayload(unit, categoryId, credentials, attributes) {
+  if (!/^MLB\d+$/i.test(String(categoryId || '').trim())) {
+    throw new ChannelError('Informe a categoria do Mercado Livre (ex.: MLB1234).');
+  }
+  assertPublicImages(unit.images);
   return {
-    title: unit.title.slice(0, 60),
-    category_id: categoryId,
+    title: String(unit.title || '').slice(0, 60),
+    category_id: String(categoryId).trim(),
     price: Number(unit.price),
     currency_id: 'BRL',
     available_quantity: Math.max(0, Number(unit.quantity) || 0),
     buying_mode: 'buy_it_now',
-    listing_type_id: 'gold_special',
+    listing_type_id: listingType(credentials),
     condition: 'new',
-    description: { plain_text: unit.description.slice(0, 5000) },
-    pictures: unit.images.slice(0, 6).map((source) => ({ source })),
-    attributes: [
-      { id: 'SELLER_SKU', value_name: unit.sku },
-    ],
+    description: { plain_text: String(unit.description || unit.title || '').slice(0, 5000) },
+    pictures: pictures([unit]),
+    shipping: shippingBody(unit, shippingMode(credentials)),
+    attributes: attributeEntries(attributes, unit.sku),
   };
+}
+
+function mapOrder(order) {
+  return {
+    externalId: String(order.id),
+    status: order.status || null,
+    customerName: order.buyer?.nickname || 'Comprador Mercado Livre',
+    customerEmail: null,
+    customerPhone: null,
+    address: [
+      order.shipping?.receiver_address?.street_name,
+      order.shipping?.receiver_address?.street_number,
+      order.shipping?.receiver_address?.city?.name,
+      order.shipping?.receiver_address?.state?.name,
+    ].filter(Boolean).join(', '),
+    total: Number(order.total_amount) || 0,
+    shippingCost: Number(order.shipping?.cost) || 0,
+    items: (order.order_items || []).map((line) => ({
+      externalItemId: line.item?.id ? String(line.item.id) : null,
+      variationId: line.item?.variation_id ? String(line.item.variation_id) : null,
+      sku: line.item?.seller_sku || line.item?.seller_custom_field || null,
+      title: line.item?.title || 'Item',
+      quantity: Number(line.quantity) || 1,
+      price: Number(line.unit_price) || 0,
+    })),
+    raw: order,
+  };
+}
+
+function isRequiredAttribute(attribute) {
+  const tags = attribute?.tags || {};
+  if (tags.hidden || tags.read_only || tags.fixed) return false;
+  if (attribute.id === 'SELLER_SKU') return false;
+  return Boolean(tags.required || tags.catalog_required);
+}
+
+export async function searchMercadoLivreCategories(query) {
+  const q = String(query || '').trim();
+  if (q.length < 2) return [];
+  const data = await requestJson(
+    `${API}/sites/MLB/domain_discovery/search?limit=8&q=${encodeURIComponent(q)}`
+  );
+  const rows = Array.isArray(data) ? data : [];
+  return rows.slice(0, 8).map((row) => ({
+    category_id: row.category_id,
+    category_name: row.category_name,
+    domain_name: row.domain_name,
+  })).filter((row) => row.category_id);
+}
+
+export async function mercadoLivreCategoryAttributes(categoryId) {
+  const id = String(categoryId || '').trim().toUpperCase();
+  if (!/^MLB\d+$/.test(id)) {
+    throw new ChannelError('Informe uma categoria MLB válida.');
+  }
+  const data = await requestJson(`${API}/categories/${id}/attributes`);
+  const rows = Array.isArray(data) ? data : [];
+  return rows.filter(isRequiredAttribute).slice(0, 12).map((attribute) => ({
+    id: attribute.id,
+    name: attribute.name,
+    value_type: attribute.value_type,
+    values: (attribute.values || []).slice(0, 40).map((value) => ({
+      id: String(value.id),
+      name: value.name,
+    })),
+  }));
 }
 
 export const mercadoLivreAdapter = {
@@ -113,8 +253,8 @@ export const mercadoLivreAdapter = {
     };
   },
 
-  async publishListing({ credentials, unit, categoryId, externalId }) {
-    const payload = itemPayload(unit, categoryId);
+  async publishListing({ credentials, unit, categoryId, externalId, attributes }) {
+    const payload = itemPayload(unit, categoryId, credentials, attributes);
     if (externalId) {
       const { data, credentials: fresh } = await authorized(credentials, `/items/${externalId}`, {
         method: 'PUT',
@@ -123,6 +263,8 @@ export const mercadoLivreAdapter = {
           price: payload.price,
           available_quantity: payload.available_quantity,
           pictures: payload.pictures,
+          shipping: payload.shipping,
+          attributes: payload.attributes,
         },
       });
       return {
@@ -146,14 +288,86 @@ export const mercadoLivreAdapter = {
     return { credentials: fresh, externalId: itemId, externalSku: unit.sku };
   },
 
-  async updateStock({ credentials, externalId, quantity, price }) {
-    if (!externalId) throw new ChannelError('Anúncio sem ID no Mercado Livre.');
-    const body = { available_quantity: Math.max(0, Number(quantity) || 0) };
-    if (price != null && Number.isFinite(Number(price))) body.price = Number(price);
-    const { credentials: fresh } = await authorized(credentials, `/items/${externalId}`, {
-      method: 'PUT',
-      body,
+  async publishCatalog({ credentials, units, categoryId, attributes, title, description }) {
+    const active = (units || []).filter((unit) => !unit.skip);
+    if (!active.length) throw new ChannelError('Nenhuma variação com SKU para publicar.');
+    const sharedId = [...new Set(active.map((unit) => unit.externalId).filter(Boolean))];
+    if (active.length === 1 || sharedId.length > 1) {
+      let next = { ...credentials };
+      const variants = [];
+      for (const unit of active) {
+        const published = await this.publishListing({
+          credentials: next,
+          unit,
+          categoryId,
+          externalId: unit.externalId || null,
+          attributes,
+        });
+        next = published.credentials || next;
+        variants.push({
+          variantKey: unit.variantKey,
+          externalId: published.externalId,
+          externalVariantId: null,
+          sku: unit.sku,
+        });
+      }
+      return { credentials: next, variants };
+    }
+
+    const parent = active[0];
+    const payload = {
+      title: String(title || parent.title || '').slice(0, 60),
+      category_id: String(categoryId || '').trim(),
+      price: Number(parent.price),
+      currency_id: 'BRL',
+      buying_mode: 'buy_it_now',
+      listing_type_id: listingType(credentials),
+      condition: 'new',
+      pictures: pictures(active),
+      shipping: shippingBody(parent, shippingMode(credentials)),
+      attributes: attributeEntries(attributes, parent.sku),
+      variations: active.map(variationBody),
+    };
+    if (!/^MLB\d+$/i.test(payload.category_id)) {
+      throw new ChannelError('Informe a categoria do Mercado Livre (ex.: MLB1234).');
+    }
+    const externalId = sharedId[0] || null;
+    const path = externalId ? `/items/${externalId}` : '/items';
+    const { data, credentials: fresh } = await authorized(credentials, path, {
+      method: externalId ? 'PUT' : 'POST',
+      body: payload,
     });
+    const itemId = String(data.id || externalId);
+    const remoteVariations = data.variations || [];
+    if (!externalId && description) {
+      await authorized(fresh, `/items/${itemId}/description`, {
+        method: 'POST',
+        body: { plain_text: String(description).slice(0, 5000) },
+      }).catch(() => {});
+    }
+    return {
+      credentials: fresh,
+      variants: active.map((unit, index) => {
+        const remote = remoteVariations.find((item) => item.seller_custom_field === unit.sku) || remoteVariations[index];
+        return {
+          variantKey: unit.variantKey,
+          externalId: itemId,
+          externalVariantId: remote?.id ? String(remote.id) : null,
+          sku: unit.sku,
+        };
+      }),
+    };
+  },
+
+  async updateStock({ credentials, externalId, externalVariantId, quantity, price }) {
+    if (!externalId) throw new ChannelError('Anúncio sem ID no Mercado Livre.');
+    const available = Math.max(0, Number(quantity) || 0);
+    const body = { available_quantity: available };
+    if (price != null && Number.isFinite(Number(price))) body.price = Number(price);
+    const path = externalVariantId
+      ? `/items/${externalId}/variations/${externalVariantId}`
+      : `/items/${externalId}`;
+    const { credentials: fresh } = await authorized(credentials, path, { method: 'PUT', body });
     return { credentials: fresh };
   },
 
@@ -164,32 +378,26 @@ export const mercadoLivreAdapter = {
       next = me.credentials;
     }
     const seller = next.user_id;
-    const { data, credentials: fresh } = await authorized(
-      next,
-      `/orders/search?seller=${encodeURIComponent(seller)}&order.status=paid&sort=date_desc&limit=50`
-    );
-    const orders = (data.results || []).map((order) => ({
-      externalId: String(order.id),
-      customerName: order.buyer?.nickname || 'Comprador Mercado Livre',
-      customerEmail: null,
-      customerPhone: null,
-      address: [
-        order.shipping?.receiver_address?.street_name,
-        order.shipping?.receiver_address?.street_number,
-        order.shipping?.receiver_address?.city?.name,
-        order.shipping?.receiver_address?.state?.name,
-      ].filter(Boolean).join(', '),
-      total: Number(order.total_amount) || 0,
-      shippingCost: Number(order.shipping?.cost) || 0,
-      items: (order.order_items || []).map((line) => ({
-        externalItemId: line.item?.id ? String(line.item.id) : null,
-        sku: line.item?.seller_sku || line.item?.seller_custom_field || null,
-        title: line.item?.title || 'Item',
-        quantity: Number(line.quantity) || 1,
-        price: Number(line.unit_price) || 0,
-      })),
-      raw: order,
-    }));
-    return { credentials: fresh, orders };
+    const orders = [];
+    for (let offset = 0; offset < 200; offset += 50) {
+      const { data, credentials: fresh } = await authorized(
+        next,
+        `/orders/search?seller=${encodeURIComponent(seller)}&order.status=paid&sort=date_desc&limit=50&offset=${offset}`
+      );
+      next = fresh;
+      const page = data.results || [];
+      orders.push(...page.map(mapOrder));
+      if (page.length < 50) break;
+    }
+    return { credentials: next, orders };
+  },
+
+  async fetchOrder({ credentials, resource }) {
+    const path = String(resource || '');
+    if (!/^\/orders\/\d+$/.test(path)) {
+      throw new ChannelError('Aviso do Mercado Livre sem pedido válido.');
+    }
+    const { data, credentials: fresh } = await authorized(credentials, path);
+    return { credentials: fresh, order: mapOrder(data) };
   },
 };

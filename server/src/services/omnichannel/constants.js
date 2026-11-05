@@ -2,15 +2,31 @@ export const CHANNELS = [
   {
     id: 'mercado_livre',
     label: 'Mercado Livre',
-    hint: 'Crie um aplicativo em developers.mercadolibre.com.br. Informe o App ID, o secret e um code de autorização, ou cole access token e refresh token.',
+    hint: 'Crie o aplicativo em developers.mercadolibre.com.br com a Redirect URI indicada abaixo. Autorize a conta pelo botão, ou cole access token e refresh token.',
     fields: [
       { key: 'client_id', label: 'App ID', required: true },
       { key: 'client_secret', label: 'Secret', secret: true, required: true },
-      { key: 'redirect_uri', label: 'Redirect URI', placeholder: 'https://seusite/callback' },
+      { key: 'redirect_uri', label: 'Redirect URI', placeholder: 'Preenchida automaticamente' },
       { key: 'code', label: 'Code de autorização', secret: true },
       { key: 'access_token', label: 'Access token', secret: true },
       { key: 'refresh_token', label: 'Refresh token', secret: true },
       { key: 'user_id', label: 'User ID do vendedor' },
+      {
+        key: 'listing_type_id',
+        label: 'Tipo de anúncio',
+        options: [
+          { value: 'gold_special', label: 'Clássico' },
+          { value: 'gold_pro', label: 'Premium' },
+        ],
+      },
+      {
+        key: 'shipping_mode',
+        label: 'Frete',
+        options: [
+          { value: 'me2', label: 'Mercado Envios' },
+          { value: 'not_specified', label: 'A combinar' },
+        ],
+      },
     ],
   },
   {

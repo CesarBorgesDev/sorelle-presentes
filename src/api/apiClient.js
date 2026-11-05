@@ -879,19 +879,37 @@ export const omnichannelApi = {
     });
   },
 
+  authorizeMercadoLivre(credentials) {
+    return apiFetch('/omnichannel/channels/mercado_livre/authorize', {
+      method: 'POST',
+      body: JSON.stringify({ credentials }),
+    });
+  },
+
+  mercadoLivreCategories(query) {
+    const params = new URLSearchParams({ q: query || '' });
+    return apiFetch(`/omnichannel/mercado-livre/categories?${params}`);
+  },
+
+  mercadoLivreAttributes(categoryId) {
+    return apiFetch(`/omnichannel/mercado-livre/categories/${encodeURIComponent(categoryId)}/attributes`);
+  },
+
   disconnect(channel) {
     return apiFetch(`/omnichannel/channels/${channel}/disconnect`, { method: 'POST' });
   },
 
-  saveCategory(productId, channel, categoryId, priceOverride) {
+  saveCategory(productId, channel, categoryId, priceOverride, attributes) {
+    const body = {
+      product_id: productId,
+      channel,
+      category_id: categoryId,
+      price_override: priceOverride ?? null,
+    };
+    if (attributes !== undefined) body.attributes = attributes;
     return apiFetch('/omnichannel/listings', {
       method: 'PUT',
-      body: JSON.stringify({
-        product_id: productId,
-        channel,
-        category_id: categoryId,
-        price_override: priceOverride ?? null,
-      }),
+      body: JSON.stringify(body),
     });
   },
 

@@ -53,14 +53,20 @@ export async function requestJson(url, {
 function extractErrorMessage(data, text, status) {
   if (data && typeof data === 'object') {
     const nested = data.error && typeof data.error === 'object' ? data.error : null;
-    const message = data.message
-      || data.error_description
-      || data.msg
-      || data.errorMsg
-      || data.error_msg
-      || nested?.message
-      || (typeof data.error === 'string' ? data.error : null)
-      || data.raw;
+    const causes = Array.isArray(data.cause)
+      ? data.cause.map((item) => item?.message).filter(Boolean).join(' ')
+      : '';
+    const message = [
+      data.message
+        || data.error_description
+        || data.msg
+        || data.errorMsg
+        || data.error_msg
+        || nested?.message
+        || (typeof data.error === 'string' ? data.error : null)
+        || data.raw,
+      causes,
+    ].filter(Boolean).join(' ');
     if (message) return String(message).slice(0, 500);
   }
   if (text) return text.slice(0, 300);
