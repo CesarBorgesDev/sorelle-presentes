@@ -101,6 +101,8 @@ function assertPublicImages(urls) {
 const DEFAULT_EMPTY_GTIN_REASON = '17055160';
 const LIST_VALUE_ID_ATTRIBUTES = new Set(['EMPTY_GTIN_REASON', 'ITEM_CONDITION']);
 const NUMBER_VALUE_NAME_ATTRIBUTES = new Set(['UNITS_PER_PACK', 'UNITS_PER_PACKAGE']);
+/** Always send as free text (value_name), even when the value looks numeric. */
+const TEXT_VALUE_NAME_ATTRIBUTES = new Set(['BRAND', 'MODEL', 'COLOR', 'SIZE', 'GTIN']);
 /** Marcas de catálogo em que o ML costuma exigir GTIN real (EMPTY_GTIN_REASON não basta). */
 const BRANDS_REQUIRING_GTIN = [
   'karsten', 'tramontina', 'philips', 'electrolux', 'britânia', 'britania',
@@ -183,13 +185,14 @@ function attributeEntries(extra, sku, hints = {}) {
   if (sku) list.push({ id: 'SELLER_SKU', value_name: String(sku).slice(0, 255) });
   for (const [key, value] of Object.entries(attrs)) {
     if (key === 'SELLER_SKU') continue;
-    // List/catalog options use value_id. Number attributes must use value_name
-    // (sending "1" as value_id breaks "Quantidade de embalagens/pacotes").
+    // List/catalog options use value_id.
     if (LIST_VALUE_ID_ATTRIBUTES.has(key)) {
       list.push({ id: key, value_id: value });
       continue;
     }
-    if (NUMBER_VALUE_NAME_ATTRIBUTES.has(key) || key === 'GTIN' || key === 'BRAND' || key === 'MODEL' || key === 'COLOR' || key === 'SIZE') {
+    // BRAND / MODEL / COLOR / SIZE / GTIN and pack counts always use value_name
+    // (numeric-looking values must NOT become value_id).
+    if (TEXT_VALUE_NAME_ATTRIBUTES.has(key) || NUMBER_VALUE_NAME_ATTRIBUTES.has(key)) {
       list.push({ id: key, value_name: value.slice(0, 255) });
       continue;
     }
@@ -300,13 +303,13 @@ function mapOrder(order) {
 
 function isRequiredAttribute(attribute) {
   const tags = attribute?.tags || {};
-  if (tags.read_only || tags.fixed) return false;
+  // Hidden attributes must never surface as required, regardless of other tags.
+  if (tags.hidden || tags.read_only || tags.fixed) return false;
   if (attribute.id === 'SELLER_SKU' || attribute.id === 'FAMILY_NAME') return false;
-  // GTIN / pack qty are often conditional_required; keep them visible in Omnichannel.
+  // GTIN / pack qty are often conditional_required; keep them visible when not hidden.
   if (attribute.id === 'GTIN' || attribute.id === 'UNITS_PER_PACK' || attribute.id === 'UNITS_PER_PACKAGE') {
     return Boolean(tags.required || tags.catalog_required || tags.conditional_required || tags.unit_yield || tags.pack_multiplier);
   }
-  if (tags.hidden) return false;
   return Boolean(tags.required || tags.catalog_required || tags.conditional_required);
 }
 
