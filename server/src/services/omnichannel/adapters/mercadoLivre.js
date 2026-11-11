@@ -97,17 +97,49 @@ function assertPublicImages(urls) {
   }
 }
 
-function attributeEntries(extra, sku) {
-  const list = [];
-  if (sku) list.push({ id: 'SELLER_SKU', value_name: String(sku).slice(0, 255) });
+function normalizeAttributeMap(extra = {}, hints = {}) {
+  const attrs = {};
   for (const [id, raw] of Object.entries(extra || {})) {
     const key = String(id || '').trim().toUpperCase();
     const value = String(raw ?? '').trim();
-    if (!key || key === 'SELLER_SKU' || !value) continue;
-    if (/^\d+$/.test(value)) list.push({ id: key, value_id: value });
-    else list.push({ id: key, value_name: value.slice(0, 255) });
+    if (!key || !value) continue;
+    attrs[key] = value.slice(0, 255);
+  }
+  // Mercado Livre exige FAMILY_NAME em várias categorias de casa/decoração.
+  if (!attrs.FAMILY_NAME) {
+    const family = String(hints.familyName || hints.title || '').trim();
+    if (family) attrs.FAMILY_NAME = family.slice(0, 255);
+  }
+  if (!attrs.BRAND) {
+    const brand = String(hints.brand || '').trim();
+    if (brand) attrs.BRAND = brand.slice(0, 255);
+  }
+  return attrs;
+}
+
+function attributeEntries(extra, sku, hints = {}) {
+  const attrs = normalizeAttributeMap(extra, hints);
+  const list = [];
+  if (sku) list.push({ id: 'SELLER_SKU', value_name: String(sku).slice(0, 255) });
+  for (const [key, value] of Object.entries(attrs)) {
+    if (key === 'SELLER_SKU') continue;
+    // FAMILY_NAME / BRAND / MODEL always go as free text (value_name).
+    if (key === 'FAMILY_NAME' || key === 'BRAND' || key === 'MODEL' || !/^\d+$/.test(value)) {
+      list.push({ id: key, value_name: value.slice(0, 255) });
+    } else {
+      list.push({ id: key, value_id: value });
+    }
   }
   return list;
+}
+
+function attributeHints(unit, title) {
+  const name = String(title || unit?.title || '').trim();
+  return {
+    title: name,
+    familyName: name.slice(0, 60),
+    brand: 'Sorelle',
+  };
 }
 
 function shippingBody(unit, mode) {
@@ -152,13 +184,14 @@ function variationBody(unit) {
   return body;
 }
 
-function itemPayload(unit, categoryId, credentials, attributes) {
+function itemPayload(unit, categoryId, credentials, attributes, title) {
   if (!/^MLB\d+$/i.test(String(categoryId || '').trim())) {
     throw new ChannelError('Informe a categoria do Mercado Livre (ex.: MLB1234).');
   }
   assertPublicImages(unit.images);
+  const listingTitle = String(title || unit.title || '').slice(0, 60);
   return {
-    title: String(unit.title || '').slice(0, 60),
+    title: listingTitle,
     category_id: String(categoryId).trim(),
     price: Number(unit.price),
     currency_id: 'BRL',
@@ -169,7 +202,7 @@ function itemPayload(unit, categoryId, credentials, attributes) {
     description: { plain_text: String(unit.description || unit.title || '').slice(0, 5000) },
     pictures: pictures([unit]),
     shipping: shippingBody(unit, shippingMode(credentials)),
-    attributes: attributeEntries(attributes, unit.sku),
+    attributes: attributeEntries(attributes, unit.sku, attributeHints(unit, listingTitle)),
   };
 }
 
@@ -221,6 +254,8 @@ export async function searchMercadoLivreCategories(query) {
   })).filter((row) => row.category_id);
 }
 
+const ATTRIBUTE_PRIORITY = ['FAMILY_NAME', 'BRAND', 'GTIN', 'MODEL', 'COLOR', 'SIZE'];
+
 export async function mercadoLivreCategoryAttributes(categoryId) {
   const id = String(categoryId || '').trim().toUpperCase();
   if (!/^MLB\d+$/.test(id)) {
@@ -228,15 +263,26 @@ export async function mercadoLivreCategoryAttributes(categoryId) {
   }
   const data = await requestJson(`${API}/categories/${id}/attributes`);
   const rows = Array.isArray(data) ? data : [];
-  return rows.filter(isRequiredAttribute).slice(0, 12).map((attribute) => ({
-    id: attribute.id,
-    name: attribute.name,
-    value_type: attribute.value_type,
-    values: (attribute.values || []).slice(0, 40).map((value) => ({
-      id: String(value.id),
-      name: value.name,
-    })),
-  }));
+  return rows
+    .filter(isRequiredAttribute)
+    .sort((a, b) => {
+      const ai = ATTRIBUTE_PRIORITY.indexOf(a.id);
+      const bi = ATTRIBUTE_PRIORITY.indexOf(b.id);
+      if (ai === -1 && bi === -1) return 0;
+      if (ai === -1) return 1;
+      if (bi === -1) return -1;
+      return ai - bi;
+    })
+    .slice(0, 20)
+    .map((attribute) => ({
+      id: attribute.id,
+      name: attribute.name,
+      value_type: attribute.value_type,
+      values: (attribute.values || []).slice(0, 40).map((value) => ({
+        id: String(value.id),
+        name: value.name,
+      })),
+    }));
 }
 
 export const mercadoLivreAdapter = {
@@ -253,8 +299,13 @@ export const mercadoLivreAdapter = {
     };
   },
 
-  async publishListing({ credentials, unit, categoryId, externalId, attributes }) {
-    const payload = itemPayload(unit, categoryId, credentials, attributes);
+  async publishListing({ credentials, unit, categoryId, externalId, attributes, title }) {
+    const payload = itemPayload(unit, categoryId, credentials, attributes, title);
+    if (!payload.attributes.some((item) => item.id === 'FAMILY_NAME')) {
+      throw new ChannelError(
+        'O Mercado Livre exige o atributo family_name (Nome da família). Informe o nome do produto ou preencha em Atributos.'
+      );
+    }
     if (externalId) {
       const { data, credentials: fresh } = await authorized(credentials, `/items/${externalId}`, {
         method: 'PUT',
@@ -291,6 +342,8 @@ export const mercadoLivreAdapter = {
   async publishCatalog({ credentials, units, categoryId, attributes, title, description }) {
     const active = (units || []).filter((unit) => !unit.skip);
     if (!active.length) throw new ChannelError('Nenhuma variação com SKU para publicar.');
+    const listingTitle = String(title || active[0]?.title || '').slice(0, 60);
+    const hints = attributeHints(active[0], listingTitle);
     const sharedId = [...new Set(active.map((unit) => unit.externalId).filter(Boolean))];
     if (active.length === 1 || sharedId.length > 1) {
       let next = { ...credentials };
@@ -302,6 +355,7 @@ export const mercadoLivreAdapter = {
           categoryId,
           externalId: unit.externalId || null,
           attributes,
+          title: listingTitle,
         });
         next = published.credentials || next;
         variants.push({
@@ -316,7 +370,7 @@ export const mercadoLivreAdapter = {
 
     const parent = active[0];
     const payload = {
-      title: String(title || parent.title || '').slice(0, 60),
+      title: listingTitle,
       category_id: String(categoryId || '').trim(),
       price: Number(parent.price),
       currency_id: 'BRL',
@@ -325,9 +379,14 @@ export const mercadoLivreAdapter = {
       condition: 'new',
       pictures: pictures(active),
       shipping: shippingBody(parent, shippingMode(credentials)),
-      attributes: attributeEntries(attributes, parent.sku),
+      attributes: attributeEntries(attributes, parent.sku, hints),
       variations: active.map(variationBody),
     };
+    if (!payload.attributes.some((item) => item.id === 'FAMILY_NAME')) {
+      throw new ChannelError(
+        'O Mercado Livre exige o atributo family_name (Nome da família). Informe o nome do produto ou preencha em Atributos.'
+      );
+    }
     if (!/^MLB\d+$/i.test(payload.category_id)) {
       throw new ChannelError('Informe a categoria do Mercado Livre (ex.: MLB1234).');
     }
