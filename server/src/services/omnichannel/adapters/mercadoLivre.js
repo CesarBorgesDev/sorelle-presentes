@@ -97,6 +97,15 @@ function assertPublicImages(urls) {
   }
 }
 
+/** ML value_id: "O produto não tem código cadastrado" */
+const DEFAULT_EMPTY_GTIN_REASON = '17055160';
+
+function normalizeGtin(value) {
+  const digits = String(value || '').replace(/\D/g, '');
+  if (digits.length < 8 || digits.length > 14) return '';
+  return digits;
+}
+
 function normalizeAttributeMap(extra = {}, hints = {}) {
   const attrs = {};
   for (const [id, raw] of Object.entries(extra || {})) {
@@ -118,6 +127,18 @@ function normalizeAttributeMap(extra = {}, hints = {}) {
     const size = String(hints.size || '').trim();
     if (size) attrs.SIZE = size.slice(0, 255);
   }
+
+  const gtin = normalizeGtin(attrs.GTIN || hints.gtin || '');
+  if (gtin) {
+    attrs.GTIN = gtin;
+    delete attrs.EMPTY_GTIN_REASON;
+  } else {
+    delete attrs.GTIN;
+    // Categorias com GTIN conditional_required aceitam o motivo no lugar do código.
+    if (!attrs.EMPTY_GTIN_REASON) {
+      attrs.EMPTY_GTIN_REASON = String(hints.emptyGtinReason || DEFAULT_EMPTY_GTIN_REASON);
+    }
+  }
   return attrs;
 }
 
@@ -127,12 +148,13 @@ function attributeEntries(extra, sku, hints = {}) {
   if (sku) list.push({ id: 'SELLER_SKU', value_name: String(sku).slice(0, 255) });
   for (const [key, value] of Object.entries(attrs)) {
     if (key === 'SELLER_SKU') continue;
-    // BRAND / MODEL / COLOR / SIZE as free text unless the UI saved a numeric value_id.
-    if (key === 'BRAND' || key === 'MODEL' || key === 'COLOR' || key === 'SIZE' || !/^\d+$/.test(value)) {
-      list.push({ id: key, value_name: value.slice(0, 255) });
-    } else {
+    // List attributes (EMPTY_GTIN_REASON etc.) and numeric value_ids use value_id.
+    if (key === 'EMPTY_GTIN_REASON' || (/^\d+$/.test(value) && key !== 'GTIN')) {
       list.push({ id: key, value_id: value });
+      continue;
     }
+    // BRAND / MODEL / COLOR / SIZE / GTIN as free text.
+    list.push({ id: key, value_name: value.slice(0, 255) });
   }
   return list;
 }
@@ -149,6 +171,8 @@ function attributeHints(unit, title) {
     color: unit?.color || '',
     size: unit?.size || '',
     familyName: resolveFamilyName(unit, title),
+    gtin: unit?.gtin || '',
+    emptyGtinReason: DEFAULT_EMPTY_GTIN_REASON,
   };
 }
 
@@ -231,9 +255,14 @@ function mapOrder(order) {
 
 function isRequiredAttribute(attribute) {
   const tags = attribute?.tags || {};
-  if (tags.hidden || tags.read_only || tags.fixed) return false;
-  if (attribute.id === 'SELLER_SKU') return false;
-  return Boolean(tags.required || tags.catalog_required);
+  if (tags.read_only || tags.fixed) return false;
+  if (attribute.id === 'SELLER_SKU' || attribute.id === 'FAMILY_NAME') return false;
+  // GTIN is often conditional_required; show it so the seller can paste the barcode.
+  if (attribute.id === 'GTIN') {
+    return Boolean(tags.required || tags.catalog_required || tags.conditional_required);
+  }
+  if (tags.hidden) return false;
+  return Boolean(tags.required || tags.catalog_required || tags.conditional_required);
 }
 
 export async function searchMercadoLivreCategories(query) {
@@ -250,7 +279,7 @@ export async function searchMercadoLivreCategories(query) {
   })).filter((row) => row.category_id);
 }
 
-const ATTRIBUTE_PRIORITY = ['FAMILY_NAME', 'BRAND', 'GTIN', 'MODEL', 'COLOR', 'SIZE'];
+const ATTRIBUTE_PRIORITY = ['GTIN', 'BRAND', 'MODEL', 'COLOR', 'SIZE', 'EMPTY_GTIN_REASON'];
 
 export async function mercadoLivreCategoryAttributes(categoryId) {
   const id = String(categoryId || '').trim().toUpperCase();
