@@ -58,7 +58,7 @@ export function productImageUrls(product) {
   return urls.slice(0, 8);
 }
 
-/** Defaults alinhados aos Correios / Mercado Envios quando o cadastro está em branco. */
+/** Sensible package defaults when measures are missing or invalid (0 / NaN / Infinity / negative). */
 export const DEFAULT_SHIPPING = {
   weightKg: 0.3,
   lengthCm: 20,
@@ -66,16 +66,18 @@ export const DEFAULT_SHIPPING = {
   heightCm: 10,
 };
 
+function positiveFiniteOrDefault(value, fallback) {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0) return fallback;
+  return n;
+}
+
 export function resolveShippingMeasures(product) {
-  const weight = Number(product?.weight_kg);
-  const length = Number(product?.length_cm);
-  const width = Number(product?.width_cm);
-  const height = Number(product?.height_cm);
   return {
-    weightKg: Number.isFinite(weight) && weight > 0 ? weight : DEFAULT_SHIPPING.weightKg,
-    lengthCm: Number.isFinite(length) && length > 0 ? length : DEFAULT_SHIPPING.lengthCm,
-    widthCm: Number.isFinite(width) && width > 0 ? width : DEFAULT_SHIPPING.widthCm,
-    heightCm: Number.isFinite(height) && height > 0 ? height : DEFAULT_SHIPPING.heightCm,
+    weightKg: positiveFiniteOrDefault(product?.weight_kg, DEFAULT_SHIPPING.weightKg),
+    lengthCm: positiveFiniteOrDefault(product?.length_cm, DEFAULT_SHIPPING.lengthCm),
+    widthCm: positiveFiniteOrDefault(product?.width_cm, DEFAULT_SHIPPING.widthCm),
+    heightCm: positiveFiniteOrDefault(product?.height_cm, DEFAULT_SHIPPING.heightCm),
   };
 }
 
