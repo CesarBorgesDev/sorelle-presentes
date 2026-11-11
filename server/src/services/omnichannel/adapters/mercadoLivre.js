@@ -99,11 +99,38 @@ function assertPublicImages(urls) {
 
 /** ML value_id: "O produto não tem código cadastrado" */
 const DEFAULT_EMPTY_GTIN_REASON = '17055160';
+const LIST_VALUE_ID_ATTRIBUTES = new Set(['EMPTY_GTIN_REASON', 'ITEM_CONDITION']);
+const NUMBER_VALUE_NAME_ATTRIBUTES = new Set(['UNITS_PER_PACK', 'UNITS_PER_PACKAGE']);
+/** Marcas de catálogo em que o ML costuma exigir GTIN real (EMPTY_GTIN_REASON não basta). */
+const BRANDS_REQUIRING_GTIN = [
+  'karsten', 'tramontina', 'philips', 'electrolux', 'britânia', 'britania',
+  'mondial', 'oster', 'cadence', 'arno', 'consul', 'brastemp',
+];
 
 function normalizeGtin(value) {
   const digits = String(value || '').replace(/\D/g, '');
   if (digits.length < 8 || digits.length > 14) return '';
   return digits;
+}
+
+function normalizePackCount(value, fallback = 1) {
+  const n = Number(String(value ?? '').replace(',', '.'));
+  if (!Number.isFinite(n) || n < 1) return String(fallback);
+  return String(Math.min(9999, Math.round(n)));
+}
+
+function inferBrand(name, explicit) {
+  const fromField = String(explicit || '').trim();
+  if (fromField) return fromField.slice(0, 255);
+  const text = String(name || '');
+  if (/karsten/i.test(text)) return 'Karsten';
+  if (/btc\s*decor/i.test(text)) return 'BTC Decor';
+  return 'Sorelle';
+}
+
+function brandRequiresGtin(brand) {
+  const value = String(brand || '').trim().toLowerCase();
+  return BRANDS_REQUIRING_GTIN.some((item) => value.includes(item));
 }
 
 function normalizeAttributeMap(extra = {}, hints = {}) {
@@ -115,10 +142,10 @@ function normalizeAttributeMap(extra = {}, hints = {}) {
     if (!key || !value || key === 'FAMILY_NAME') continue;
     attrs[key] = value.slice(0, 255);
   }
-  if (!attrs.BRAND) {
-    const brand = String(hints.brand || '').trim();
-    if (brand) attrs.BRAND = brand.slice(0, 255);
-  }
+
+  const brand = inferBrand(hints.familyName || hints.title, attrs.BRAND || hints.brand);
+  attrs.BRAND = brand;
+
   if (!attrs.COLOR) {
     const color = String(hints.color || '').trim();
     if (color) attrs.COLOR = color.slice(0, 255);
@@ -128,16 +155,24 @@ function normalizeAttributeMap(extra = {}, hints = {}) {
     if (size) attrs.SIZE = size.slice(0, 255);
   }
 
+  // Almofadas / kits: 1 embalagem com 1 unidade evita "Quantidade de embalagens" inválida.
+  attrs.UNITS_PER_PACK = normalizePackCount(attrs.UNITS_PER_PACK, 1);
+  attrs.UNITS_PER_PACKAGE = normalizePackCount(attrs.UNITS_PER_PACKAGE, 1);
+
   const gtin = normalizeGtin(attrs.GTIN || hints.gtin || '');
   if (gtin) {
     attrs.GTIN = gtin;
     delete attrs.EMPTY_GTIN_REASON;
   } else {
     delete attrs.GTIN;
-    // Categorias com GTIN conditional_required aceitam o motivo no lugar do código.
-    if (!attrs.EMPTY_GTIN_REASON) {
-      attrs.EMPTY_GTIN_REASON = String(hints.emptyGtinReason || DEFAULT_EMPTY_GTIN_REASON);
+    if (brandRequiresGtin(brand)) {
+      throw new ChannelError(
+        `A marca ${brand} exige GTIN/EAN (código de barras de 8 a 14 dígitos). Cadastre o GTIN no produto ou em Atributos do Omnichannel.`
+      );
     }
+    attrs.EMPTY_GTIN_REASON = String(
+      attrs.EMPTY_GTIN_REASON || hints.emptyGtinReason || DEFAULT_EMPTY_GTIN_REASON
+    );
   }
   return attrs;
 }
@@ -148,12 +183,20 @@ function attributeEntries(extra, sku, hints = {}) {
   if (sku) list.push({ id: 'SELLER_SKU', value_name: String(sku).slice(0, 255) });
   for (const [key, value] of Object.entries(attrs)) {
     if (key === 'SELLER_SKU') continue;
-    // List attributes (EMPTY_GTIN_REASON etc.) and numeric value_ids use value_id.
-    if (key === 'EMPTY_GTIN_REASON' || (/^\d+$/.test(value) && key !== 'GTIN')) {
+    // List/catalog options use value_id. Number attributes must use value_name
+    // (sending "1" as value_id breaks "Quantidade de embalagens/pacotes").
+    if (LIST_VALUE_ID_ATTRIBUTES.has(key)) {
       list.push({ id: key, value_id: value });
       continue;
     }
-    // BRAND / MODEL / COLOR / SIZE / GTIN as free text.
+    if (NUMBER_VALUE_NAME_ATTRIBUTES.has(key) || key === 'GTIN' || key === 'BRAND' || key === 'MODEL' || key === 'COLOR' || key === 'SIZE') {
+      list.push({ id: key, value_name: value.slice(0, 255) });
+      continue;
+    }
+    if (/^\d{5,}$/.test(value)) {
+      list.push({ id: key, value_id: value });
+      continue;
+    }
     list.push({ id: key, value_name: value.slice(0, 255) });
   }
   return list;
@@ -166,11 +209,13 @@ function resolveFamilyName(unit, title) {
 }
 
 function attributeHints(unit, title) {
+  const familyName = resolveFamilyName(unit, title);
   return {
-    brand: 'Sorelle',
+    brand: inferBrand(familyName, unit?.brand),
     color: unit?.color || '',
     size: unit?.size || '',
-    familyName: resolveFamilyName(unit, title),
+    title: familyName,
+    familyName,
     gtin: unit?.gtin || '',
     emptyGtinReason: DEFAULT_EMPTY_GTIN_REASON,
   };
@@ -257,9 +302,9 @@ function isRequiredAttribute(attribute) {
   const tags = attribute?.tags || {};
   if (tags.read_only || tags.fixed) return false;
   if (attribute.id === 'SELLER_SKU' || attribute.id === 'FAMILY_NAME') return false;
-  // GTIN is often conditional_required; show it so the seller can paste the barcode.
-  if (attribute.id === 'GTIN') {
-    return Boolean(tags.required || tags.catalog_required || tags.conditional_required);
+  // GTIN / pack qty are often conditional_required; keep them visible in Omnichannel.
+  if (attribute.id === 'GTIN' || attribute.id === 'UNITS_PER_PACK' || attribute.id === 'UNITS_PER_PACKAGE') {
+    return Boolean(tags.required || tags.catalog_required || tags.conditional_required || tags.unit_yield || tags.pack_multiplier);
   }
   if (tags.hidden) return false;
   return Boolean(tags.required || tags.catalog_required || tags.conditional_required);
@@ -279,7 +324,9 @@ export async function searchMercadoLivreCategories(query) {
   })).filter((row) => row.category_id);
 }
 
-const ATTRIBUTE_PRIORITY = ['GTIN', 'BRAND', 'MODEL', 'COLOR', 'SIZE', 'EMPTY_GTIN_REASON'];
+const ATTRIBUTE_PRIORITY = [
+  'GTIN', 'BRAND', 'UNITS_PER_PACK', 'UNITS_PER_PACKAGE', 'MODEL', 'COLOR', 'SIZE', 'EMPTY_GTIN_REASON',
+];
 
 export async function mercadoLivreCategoryAttributes(categoryId) {
   const id = String(categoryId || '').trim().toUpperCase();

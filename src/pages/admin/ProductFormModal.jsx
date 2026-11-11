@@ -54,6 +54,8 @@ export default function ProductFormModal({ product, onClose }) {
     quantity: product?.quantity ?? 0,
     internal_code: product?.internal_code || '',
     sku: product?.sku || '',
+    gtin: product?.gtin || '',
+    brand: product?.brand || '',
     featured: product?.featured ?? false,
   });
 
@@ -162,6 +164,8 @@ export default function ProductFormModal({ product, onClose }) {
 
     const imagePayload = buildProductImagePayload(productImages);
     const trimmedSku = String(form.sku || '').trim();
+    const trimmedGtin = String(form.gtin || '').replace(/\D/g, '');
+    const trimmedBrand = String(form.brand || '').trim();
 
     mutation.mutate({
       ...form,
@@ -174,6 +178,8 @@ export default function ProductFormModal({ product, onClose }) {
       quantity: Math.max(0, parseInt(form.quantity, 10) || 0),
       internal_code: trimmedCode || null,
       sku: trimmedSku || null,
+      gtin: trimmedGtin || null,
+      brand: trimmedBrand || null,
       variants,
       ...imagePayload,
     });
@@ -294,6 +300,32 @@ export default function ProductFormModal({ product, onClose }) {
                     />
                     <p className="font-body text-xs text-muted-foreground mt-1">
                       Obrigatório para publicar. Se vazio, o código interno é usado.
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className={labelClass}>Marca</label>
+                    <input
+                      className={inputClass}
+                      value={form.brand}
+                      onChange={(e) => set('brand', e.target.value)}
+                      placeholder="Ex: Karsten, Sorelle"
+                      autoComplete="off"
+                    />
+                  </div>
+
+                  <div>
+                    <label className={labelClass}>GTIN / EAN (código de barras)</label>
+                    <input
+                      className={inputClass}
+                      value={form.gtin}
+                      onChange={(e) => set('gtin', e.target.value)}
+                      placeholder="Ex: 7890254974959"
+                      inputMode="numeric"
+                      autoComplete="off"
+                    />
+                    <p className="font-body text-xs text-muted-foreground mt-1">
+                      Obrigatório no Mercado Livre para marcas como Karsten (8 a 14 dígitos).
                     </p>
                   </div>
 

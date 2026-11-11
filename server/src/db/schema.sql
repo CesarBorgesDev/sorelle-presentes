@@ -482,6 +482,8 @@ CREATE TABLE IF NOT EXISTS channel_listings (
 
 ALTER TABLE channel_listings ADD COLUMN IF NOT EXISTS price_override NUMERIC(10, 2);
 ALTER TABLE channel_listings ADD COLUMN IF NOT EXISTS attributes JSONB NOT NULL DEFAULT '{}';
+ALTER TABLE products ADD COLUMN IF NOT EXISTS gtin VARCHAR(20);
+ALTER TABLE products ADD COLUMN IF NOT EXISTS brand VARCHAR(100);
 
 CREATE INDEX IF NOT EXISTS idx_channel_listings_channel ON channel_listings(channel);
 CREATE INDEX IF NOT EXISTS idx_channel_listings_external ON channel_listings(channel, external_id);

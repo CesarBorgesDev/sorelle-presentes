@@ -15,7 +15,7 @@ const router = Router();
 const ALLOWED_FIELDS = [
   'name', 'description', 'product_specifications', 'technology', 'care_instructions',
   'price', 'original_price', 'category', 'subcategory',
-  'image_url', 'images', 'featured', 'in_stock', 'quantity', 'internal_code', 'sku', 'materials', 'dimensions',
+  'image_url', 'images', 'featured', 'in_stock', 'quantity', 'internal_code', 'sku', 'gtin', 'brand', 'materials', 'dimensions',
   'weight_kg', 'length_cm', 'width_cm', 'height_cm', 'variants',
 ];
 
@@ -142,15 +142,16 @@ router.post('/', requireAuth, requireAdmin, async (req, res) => {
     await assertInternalCodeAvailable(pool, data.internal_code);
     const images = normalizeProductImages(data);
     const result = await pool.query(
-      `INSERT INTO products (name, description, product_specifications, technology, care_instructions, price, original_price, category, subcategory, image_url, images, featured, in_stock, quantity, internal_code, sku, materials, dimensions, weight_kg, length_cm, width_cm, height_cm, variants)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23) RETURNING *`,
+      `INSERT INTO products (name, description, product_specifications, technology, care_instructions, price, original_price, category, subcategory, image_url, images, featured, in_stock, quantity, internal_code, sku, gtin, brand, materials, dimensions, weight_kg, length_cm, width_cm, height_cm, variants)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25) RETURNING *`,
       [
         data.name, data.description || null, data.product_specifications || null,
         data.technology || null, data.care_instructions || null,
         data.price, data.original_price || null,
         data.category, data.subcategory || null, images.image_url,
         JSON.stringify(images.images), data.featured ?? false, data.in_stock ?? false,
-        data.quantity ?? 0, data.internal_code || null, data.sku || null, data.materials || null, data.dimensions || null,
+        data.quantity ?? 0, data.internal_code || null, data.sku || null,
+        data.gtin || null, data.brand || null, data.materials || null, data.dimensions || null,
         data.weight_kg ?? null, data.length_cm ?? null, data.width_cm ?? null, data.height_cm ?? null,
         JSON.stringify(data.variants || { colors: [], sizes: [], stock: [], size_specifications: {} }),
       ]

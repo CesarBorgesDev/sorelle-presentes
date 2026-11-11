@@ -88,6 +88,9 @@ export function buildListingUnits(product) {
   const basePrice = Number(product.price) || 0;
   const shipping = resolveShippingMeasures(product);
 
+  const gtin = String(product.gtin || '').trim() || null;
+  const brand = String(product.brand || '').trim() || null;
+
   if (!usesVariantStock(variants)) {
     return [{
       variantKey: '',
@@ -99,6 +102,8 @@ export function buildListingUnits(product) {
       color: null,
       size: null,
       images,
+      gtin,
+      brand,
       ...shipping,
     }];
   }
@@ -126,6 +131,8 @@ export function buildListingUnits(product) {
       color: colorName || null,
       size: size || null,
       images,
+      gtin,
+      brand,
       ...shipping,
     };
   });
