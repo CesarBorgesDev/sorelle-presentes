@@ -53,6 +53,7 @@ export default function ProductFormModal({ product, onClose }) {
     height_cm: product?.height_cm ?? '',
     quantity: product?.quantity ?? 0,
     internal_code: product?.internal_code || '',
+    sku: product?.sku || '',
     featured: product?.featured ?? false,
   });
 
@@ -160,6 +161,7 @@ export default function ProductFormModal({ product, onClose }) {
     }
 
     const imagePayload = buildProductImagePayload(productImages);
+    const trimmedSku = String(form.sku || '').trim();
 
     mutation.mutate({
       ...form,
@@ -171,6 +173,7 @@ export default function ProductFormModal({ product, onClose }) {
       height_cm: parseOptionalNumber(form.height_cm),
       quantity: Math.max(0, parseInt(form.quantity, 10) || 0),
       internal_code: trimmedCode || null,
+      sku: trimmedSku || null,
       variants,
       ...imagePayload,
     });
@@ -281,6 +284,20 @@ export default function ProductFormModal({ product, onClose }) {
                   </div>
 
                   <div>
+                    <label className={labelClass}>SKU (Mercado Livre / marketplaces)</label>
+                    <input
+                      className={inputClass}
+                      value={form.sku}
+                      onChange={(e) => set('sku', e.target.value)}
+                      placeholder="Ex: QJ2006 ou SOR-VASO-01"
+                      autoComplete="off"
+                    />
+                    <p className="font-body text-xs text-muted-foreground mt-1">
+                      Obrigatório para publicar. Se vazio, o código interno é usado.
+                    </p>
+                  </div>
+
+                  <div>
                     <label className={labelClass}>Quantidade em estoque{hasSizeGrid ? ' (total)' : ' *'}</label>
                     <input
                       required={!hasSizeGrid}
@@ -354,7 +371,16 @@ export default function ProductFormModal({ product, onClose }) {
                 <div className="space-y-5">
                   <div>
                     <label className={labelClass}>Descrição</label>
-                    <textarea rows={3} className={inputClass} value={form.description} onChange={(e) => set('description', e.target.value)} placeholder="Descrição detalhada do produto..." />
+                    <textarea
+                      rows={3}
+                      className={inputClass}
+                      value={form.description}
+                      onChange={(e) => set('description', e.target.value)}
+                      placeholder="Ex: Vaso artesanal em cerâmica com acabamento fosco, ideal para flores secas. Inclui medidas e materiais."
+                    />
+                    <p className="font-body text-xs text-muted-foreground mt-1">
+                      Usada no anúncio do Mercado Livre (até 5.000 caracteres). Evite só o nome do produto.
+                    </p>
                   </div>
 
                   <div>
@@ -375,7 +401,7 @@ export default function ProductFormModal({ product, onClose }) {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                     <div>
                       <label className={labelClass}>Materiais</label>
-                      <input className={inputClass} value={form.materials} onChange={(e) => set('materials', e.target.value)} placeholder="Ex: Cerâmica artesanal" />
+                      <input className={inputClass} value={form.materials} onChange={(e) => set('materials', e.target.value)} placeholder="Ex: Cerâmica, Vidro, Madeira maciça" />
                     </div>
 
                     <div>
@@ -390,7 +416,7 @@ export default function ProductFormModal({ product, onClose }) {
                 <div>
                   <h3 className="font-display text-sm tracking-wider text-foreground">Dimensões para frete</h3>
                   <p className="font-body text-xs text-muted-foreground mt-1">
-                    Usados no cálculo de frete Correios. Padrão: 0,3 kg e 20×15×10 cm se não informado.
+                    Obrigatórias para Mercado Envios (ML) e usadas nos Correios. Se vazio, aplica-se 0,3 kg e 20×15×10 cm.
                   </p>
                 </div>
 

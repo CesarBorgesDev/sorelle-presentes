@@ -58,11 +58,33 @@ export function productImageUrls(product) {
   return urls.slice(0, 8);
 }
 
+/** Defaults alinhados aos Correios / Mercado Envios quando o cadastro está em branco. */
+export const DEFAULT_SHIPPING = {
+  weightKg: 0.3,
+  lengthCm: 20,
+  widthCm: 15,
+  heightCm: 10,
+};
+
+export function resolveShippingMeasures(product) {
+  const weight = Number(product?.weight_kg);
+  const length = Number(product?.length_cm);
+  const width = Number(product?.width_cm);
+  const height = Number(product?.height_cm);
+  return {
+    weightKg: Number.isFinite(weight) && weight > 0 ? weight : DEFAULT_SHIPPING.weightKg,
+    lengthCm: Number.isFinite(length) && length > 0 ? length : DEFAULT_SHIPPING.lengthCm,
+    widthCm: Number.isFinite(width) && width > 0 ? width : DEFAULT_SHIPPING.widthCm,
+    heightCm: Number.isFinite(height) && height > 0 ? height : DEFAULT_SHIPPING.heightCm,
+  };
+}
+
 export function buildListingUnits(product) {
   const variants = ensureVariantStockMatrix(normalizeProductVariants(product.variants));
   const baseSku = String(product.sku || product.internal_code || '').trim();
   const images = productImageUrls(product);
   const basePrice = Number(product.price) || 0;
+  const shipping = resolveShippingMeasures(product);
 
   if (!usesVariantStock(variants)) {
     return [{
@@ -75,10 +97,7 @@ export function buildListingUnits(product) {
       color: null,
       size: null,
       images,
-      weightKg: product.weight_kg != null ? Number(product.weight_kg) : null,
-      lengthCm: product.length_cm != null ? Number(product.length_cm) : null,
-      widthCm: product.width_cm != null ? Number(product.width_cm) : null,
-      heightCm: product.height_cm != null ? Number(product.height_cm) : null,
+      ...shipping,
     }];
   }
 
@@ -105,10 +124,7 @@ export function buildListingUnits(product) {
       color: colorName || null,
       size: size || null,
       images,
-      weightKg: product.weight_kg != null ? Number(product.weight_kg) : null,
-      lengthCm: product.length_cm != null ? Number(product.length_cm) : null,
-      widthCm: product.width_cm != null ? Number(product.width_cm) : null,
-      heightCm: product.height_cm != null ? Number(product.height_cm) : null,
+      ...shipping,
     };
   });
 }
