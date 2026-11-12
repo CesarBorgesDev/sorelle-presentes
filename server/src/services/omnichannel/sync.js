@@ -151,13 +151,28 @@ async function publishMercadoLivreProduct({ adapter, channel, product, units, cr
     results.push({ channel, productId: product.id, success: false, message });
     return { credentials, results };
   }
+  // Reuse local MLB ids by variant or by SKU when the same listing was published before.
+  const skus = active.map((unit) => unit.sku).filter(Boolean);
+  let bySkuRows = [];
+  if (skus.length) {
+    const bySku = await pool.query(
+      `SELECT external_id, external_sku, external_variant_id, variant_key
+       FROM channel_listings
+       WHERE channel = $1
+         AND external_id IS NOT NULL
+         AND external_sku = ANY($2::text[])`,
+      [channel, skus]
+    );
+    bySkuRows = bySku.rows;
+  }
   const prepared = active.map((unit) => {
     const listing = existing.rows.find((row) => row.variant_key === unit.variantKey);
+    const skuMatch = bySkuRows.find((row) => row.external_sku === unit.sku);
     return {
       ...unit,
       price: resolveChannelPrice(unit.price, markup, listing?.price_override),
-      externalId: listing?.external_id || null,
-      externalVariantId: listing?.external_variant_id || null,
+      externalId: listing?.external_id || skuMatch?.external_id || null,
+      externalVariantId: listing?.external_variant_id || skuMatch?.external_variant_id || null,
     };
   });
   try {
@@ -171,8 +186,10 @@ async function publishMercadoLivreProduct({ adapter, channel, product, units, cr
     });
     const nextCredentials = published.credentials || credentials;
     await rememberCredentials(channel, nextCredentials);
+    let anyUpdated = false;
     for (const item of published.variants || []) {
       const unit = prepared.find((entry) => entry.variantKey === item.variantKey) || prepared[0];
+      if (item.updated) anyUpdated = true;
       await upsertListing(product.id, channel, { ...unit, sku: item.sku || unit.sku }, {
         externalId: item.externalId,
         externalVariantId: item.externalVariantId,
@@ -181,7 +198,8 @@ async function publishMercadoLivreProduct({ adapter, channel, product, units, cr
         lastError: null,
       });
     }
-    const message = `${product.name} publicado em ${getChannel(channel).label}.`;
+    const action = anyUpdated ? 'atualizado' : 'publicado';
+    const message = `${product.name} ${action} em ${getChannel(channel).label}.`;
     await writeLog(channel, 'publish', true, message);
     results.push({ channel, productId: product.id, success: true, message });
     return { credentials: nextCredentials, results };

@@ -360,6 +360,76 @@ export async function mercadoLivreCategoryAttributes(categoryId) {
     }));
 }
 
+async function ensureSellerId(credentials) {
+  if (credentials?.user_id) {
+    return { credentials, userId: String(credentials.user_id) };
+  }
+  const { data, credentials: fresh } = await authorized(credentials, '/users/me');
+  const userId = String(data.id || fresh.user_id || '');
+  return {
+    credentials: { ...fresh, user_id: userId },
+    userId,
+  };
+}
+
+/**
+ * Look up an existing seller listing by SELLER_SKU attribute or seller_custom_field.
+ * Returns the first matching item id, or null.
+ */
+async function findExistingItemId(credentials, unit) {
+  const sku = String(unit?.sku || '').trim();
+  if (!sku) return { credentials, itemId: null };
+
+  const ensured = await ensureSellerId(credentials);
+  let next = ensured.credentials;
+  const userId = ensured.userId;
+  if (!userId) return { credentials: next, itemId: null };
+
+  const queries = [
+    `seller_sku=${encodeURIComponent(sku)}`,
+    `sku=${encodeURIComponent(sku)}`,
+  ];
+
+  for (const query of queries) {
+    try {
+      const { data, credentials: fresh } = await authorized(
+        next,
+        `/users/${encodeURIComponent(userId)}/items/search?${query}&limit=5`
+      );
+      next = fresh;
+      const results = Array.isArray(data?.results) ? data.results : [];
+      const itemId = results.find((id) => id != null && String(id).trim());
+      if (itemId) return { credentials: next, itemId: String(itemId) };
+    } catch {
+      // Keep trying the next lookup strategy.
+    }
+  }
+
+  return { credentials: next, itemId: null };
+}
+
+async function updateListingDescription(credentials, itemId, plainText) {
+  const text = String(plainText || '').trim();
+  if (!text || !itemId) return credentials;
+  try {
+    const put = await authorized(credentials, `/items/${itemId}/description`, {
+      method: 'PUT',
+      body: { plain_text: text.slice(0, 5000) },
+    });
+    return put.credentials;
+  } catch {
+    try {
+      const post = await authorized(credentials, `/items/${itemId}/description`, {
+        method: 'POST',
+        body: { plain_text: text.slice(0, 5000) },
+      });
+      return post.credentials;
+    } catch {
+      return credentials;
+    }
+  }
+}
+
 export const mercadoLivreAdapter = {
   id: 'mercado_livre',
 
@@ -376,8 +446,18 @@ export const mercadoLivreAdapter = {
 
   async publishListing({ credentials, unit, categoryId, externalId, attributes, title }) {
     const payload = itemPayload(unit, categoryId, credentials, attributes, title);
-    if (externalId) {
-      const { data, credentials: fresh } = await authorized(credentials, `/items/${externalId}`, {
+    let next = credentials;
+    let itemId = externalId ? String(externalId).trim() : '';
+
+    // Before creating, reuse an existing ML listing with the same SKU.
+    if (!itemId) {
+      const found = await findExistingItemId(next, unit);
+      next = found.credentials;
+      itemId = found.itemId || '';
+    }
+
+    if (itemId) {
+      const { data, credentials: fresh } = await authorized(next, `/items/${itemId}`, {
         method: 'PUT',
         body: {
           family_name: payload.family_name,
@@ -388,25 +468,37 @@ export const mercadoLivreAdapter = {
           attributes: payload.attributes,
         },
       });
+      const updatedId = String(data.id || itemId);
+      const withDescription = await updateListingDescription(
+        fresh,
+        updatedId,
+        payload.description?.plain_text
+      );
       return {
-        credentials: fresh,
-        externalId: String(data.id || externalId),
+        credentials: withDescription,
+        externalId: updatedId,
         externalSku: unit.sku,
+        updated: true,
       };
     }
+
     const { description, ...createBody } = payload;
-    const { data, credentials: fresh } = await authorized(credentials, '/items', {
+    const { data, credentials: fresh } = await authorized(next, '/items', {
       method: 'POST',
       body: createBody,
     });
-    const itemId = String(data.id);
-    if (description?.plain_text) {
-      await authorized(fresh, `/items/${itemId}/description`, {
-        method: 'POST',
-        body: { plain_text: description.plain_text },
-      }).catch(() => {});
-    }
-    return { credentials: fresh, externalId: itemId, externalSku: unit.sku };
+    const createdId = String(data.id);
+    const withDescription = await updateListingDescription(
+      fresh,
+      createdId,
+      description?.plain_text
+    );
+    return {
+      credentials: withDescription,
+      externalId: createdId,
+      externalSku: unit.sku,
+      updated: false,
+    };
   },
 
   async publishCatalog({ credentials, units, categoryId, attributes, title }) {
@@ -432,6 +524,7 @@ export const mercadoLivreAdapter = {
         externalId: published.externalId,
         externalVariantId: null,
         sku: unit.sku,
+        updated: Boolean(published.updated),
       });
     }
     return { credentials: next, variants };
