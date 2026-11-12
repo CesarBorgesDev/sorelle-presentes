@@ -47,6 +47,18 @@ async function loadProduct(productId) {
   return result.rows[0] || null;
 }
 
+function unitsReadyToSend(product) {
+  return buildListingUnits(product).map((unit) => {
+    if (unit.skip || (Number(unit.quantity) || 0) > 0) return unit;
+    return {
+      ...unit,
+      skip: true,
+      noStock: true,
+      reason: 'Produto sem estoque não é enviado.',
+    };
+  });
+}
+
 function cleanListingAttributes(value) {
   if (value == null) return null;
   if (typeof value !== 'object' || Array.isArray(value)) {
@@ -239,7 +251,18 @@ export async function publishProducts({ productIds, channels }) {
         results.push({ channel, productId, success: false, message: 'Produto não encontrado.' });
         continue;
       }
-      const units = buildListingUnits(product);
+      const preparedUnits = unitsReadyToSend(product);
+      const noStockUnits = preparedUnits.filter((unit) => unit.noStock);
+      const units = preparedUnits.filter((unit) => !unit.noStock);
+      if (!units.length && noStockUnits.length) {
+        const message = `${product.name}: sem estoque, não enviado.`;
+        await writeLog(channel, 'publish', false, message);
+        results.push({ channel, productId, success: false, skipped: true, message });
+        continue;
+      }
+      if (noStockUnits.length) {
+        await writeLog(channel, 'publish', false, `${product.name}: combinações sem estoque não foram enviadas.`);
+      }
       if (typeof adapter.publishCatalog === 'function') {
         const outcome = await publishMercadoLivreProduct({
           adapter, channel, product, units, credentials, markup,
@@ -425,17 +448,27 @@ async function importChannelOrders(channel, orders) {
 
 export async function pushProductStock(productId, { exceptChannel = null } = {}) {
   const product = await loadProduct(productId);
-  if (!product) return;
+  if (!product) return [];
   const markup = await getPriceMarkupPercent();
   const units = buildListingUnits(product);
   const listings = await pool.query(
     `SELECT * FROM channel_listings WHERE product_id = $1 AND status = 'published' AND external_id IS NOT NULL`,
     [productId]
   );
+  const outcomes = [];
   for (const listing of listings.rows) {
     if (listing.channel === exceptChannel) continue;
+    const label = getChannel(listing.channel)?.label || listing.channel;
     const account = await getAccount(listing.channel);
-    if (!account || account.status !== 'connected') continue;
+    if (!account || account.status !== 'connected') {
+      outcomes.push({
+        channel: listing.channel,
+        productId,
+        success: false,
+        message: `${product.name}: ${label} está desconectado.`,
+      });
+      continue;
+    }
     const unit = units.find((item) => item.variantKey === listing.variant_key && !item.skip);
     if (!unit) continue;
     try {
@@ -452,14 +485,61 @@ export async function pushProductStock(productId, { exceptChannel = null } = {})
         `UPDATE channel_listings SET last_sync_at = NOW(), last_error = NULL, updated_date = NOW() WHERE id = $1`,
         [listing.id]
       );
+      outcomes.push({
+        channel: listing.channel,
+        productId,
+        success: true,
+        message: `${product.name} atualizado em ${label}.`,
+      });
     } catch (err) {
       await pool.query(
         `UPDATE channel_listings SET last_error = $2, updated_date = NOW() WHERE id = $1`,
         [listing.id, err.message]
       );
       await writeLog(listing.channel, 'stock', false, `${product.name}: ${err.message}`);
+      outcomes.push({
+        channel: listing.channel,
+        productId,
+        success: false,
+        message: `${product.name}: ${err.message}`,
+      });
     }
   }
+  return outcomes;
+}
+
+export async function updatePublishedProducts({ productIds }) {
+  const results = [];
+  for (const productId of productIds) {
+    const product = await loadProduct(productId);
+    if (!product) {
+      results.push({ productId, success: false, message: 'Produto não encontrado.' });
+      continue;
+    }
+    const outcomes = await pushProductStock(productId);
+    if (!outcomes.length) {
+      results.push({
+        productId,
+        success: false,
+        message: `${product.name}: nenhum anúncio publicado para atualizar.`,
+      });
+      continue;
+    }
+    const failed = outcomes.filter((item) => !item.success);
+    if (failed.length) {
+      results.push({
+        productId,
+        success: false,
+        message: [...new Set(failed.map((item) => item.message))].join(' '),
+      });
+      continue;
+    }
+    const labels = [...new Set(outcomes.map((item) => getChannel(item.channel)?.label || item.channel))];
+    const message = `${product.name} atualizado em ${labels.join(', ')}.`;
+    await writeLog(null, 'stock', true, message);
+    results.push({ productId, success: true, message });
+  }
+  return results;
 }
 
 export function notifyProductStockChanged(productId) {

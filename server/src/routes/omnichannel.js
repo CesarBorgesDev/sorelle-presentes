@@ -19,6 +19,7 @@ import {
   listLogs,
   publishProducts,
   saveListingCategory,
+  updatePublishedProducts,
   setPriceMarkupPercent,
   setSyncMinutes,
   syncConnectedChannels,
@@ -233,6 +234,19 @@ router.put('/listings', async (req, res) => {
     res.json({ success: true, listings: await listListings() });
   } catch (err) {
     res.status(err.status || 500).json({ message: err.message || 'Não foi possível salvar a categoria.' });
+  }
+});
+
+router.post('/listings/update', async (req, res) => {
+  try {
+    const productIds = Array.isArray(req.body?.product_ids) ? req.body.product_ids : [];
+    if (!productIds.length) {
+      return res.status(400).json({ message: 'Selecione ao menos um produto.' });
+    }
+    const results = await updatePublishedProducts({ productIds });
+    res.json({ results, listings: await listListings(), logs: await listLogs() });
+  } catch (err) {
+    res.status(err.status || 500).json({ message: err.message || 'Não foi possível atualizar os anúncios.' });
   }
 });
 

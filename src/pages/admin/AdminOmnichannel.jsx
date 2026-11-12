@@ -19,6 +19,16 @@ function statusClass(status) {
   return 'bg-secondary text-muted-foreground';
 }
 
+function platformCatalogState(listings, productId, channelId) {
+  const rows = (listings || []).filter(
+    (listing) => listing.product_id === productId && listing.channel === channelId,
+  );
+  if (!rows.length) return 'nao_enviado';
+  if (rows.some((row) => row.status === 'error')) return 'erro';
+  if (rows.every((row) => row.status === 'published')) return 'enviado';
+  return 'nao_enviado';
+}
+
 function formatWhen(value) {
   if (!value) return '—';
   try {
@@ -53,6 +63,7 @@ export default function AdminOmnichannel() {
   const [busy, setBusy] = useState('');
   const [forms, setForms] = useState({});
   const [search, setSearch] = useState('');
+  const [platformFilters, setPlatformFilters] = useState({});
   const [selectedChannel, setSelectedChannel] = useState('mercado_livre');
   const [selected, setSelected] = useState({});
   const [categories, setCategories] = useState({});
@@ -136,14 +147,28 @@ export default function AdminOmnichannel() {
   const channels = data?.channels || [];
   const channelLabel = (id) => channels.find((channel) => channel.id === id)?.label || id;
 
+  const showAllChannels = selectedChannel === 'all';
+  const visibleChannels = showAllChannels
+    ? channels
+    : channels.filter((channel) => channel.id === selectedChannel);
+
   const products = useMemo(() => {
     const term = search.trim().toLowerCase();
+    const visibleIds = selectedChannel === 'all' ? null : new Set([selectedChannel]);
+    const activeFilters = Object.entries(platformFilters).filter(([channelId, value]) => (
+      value && (!visibleIds || visibleIds.has(channelId))
+    ));
     return (data?.products || []).filter((product) => {
-      if (!term) return true;
-      return [product.name, product.sku, product.internal_code]
-        .some((value) => String(value || '').toLowerCase().includes(term));
+      if (term) {
+        const matchesTerm = [product.name, product.sku, product.internal_code]
+          .some((value) => String(value || '').toLowerCase().includes(term));
+        if (!matchesTerm) return false;
+      }
+      return activeFilters.every(([channelId, value]) => (
+        platformCatalogState(data?.listings, product.id, channelId) === value
+      ));
     });
-  }, [data, search]);
+  }, [data, search, platformFilters, selectedChannel]);
 
   const setField = (channelId, key, value) => {
     setForms((prev) => ({
@@ -305,36 +330,95 @@ export default function AdminOmnichannel() {
     }
   };
 
-  const publishSelected = async () => {
-    const productIds = Object.keys(selected).filter((id) => selected[id]);
-    if (!productIds.length) {
+  const productHasStock = (productId) => {
+    const product = (data?.products || []).find((item) => item.id === productId);
+    return (Number(product?.quantity) || 0) > 0;
+  };
+
+  const applyCatalogResult = (result, { successNotice, stockSkipped = 0 }) => {
+    setData((prev) => ({ ...prev, listings: result.listings, logs: result.logs }));
+    const failed = (result.results || []).filter((item) => !item.success && !item.skipped);
+    const skippedMsgs = [...new Set(
+      (result.results || []).filter((item) => item.skipped).map((item) => item.message).filter(Boolean),
+    )];
+    const notes = [];
+    if (stockSkipped) notes.push(`${stockSkipped} produto(s) sem estoque não foram enviados.`);
+    notes.push(...skippedMsgs);
+    if (failed.length) {
+      setError(failed.map((item) => item.message).filter(Boolean).slice(0, 3).join(' '));
+      if (notes.length) setNotice(notes.join(' '));
+      return;
+    }
+    setNotice([successNotice, ...notes].filter(Boolean).join(' '));
+  };
+
+  const sendProducts = async (productIds) => {
+    const unique = [...new Set(productIds)];
+    if (!unique.length) {
       setError('Selecione ao menos um produto.');
       return;
     }
-    setBusy('publish');
+    const targets = selectedChannel === 'all'
+      ? channels.filter((item) => item.status === 'connected')
+      : channels.filter((item) => item.id === selectedChannel && item.status === 'connected');
+    if (!targets.length) {
+      setError(selectedChannel === 'all'
+        ? 'Nenhum canal conectado. Conecte uma plataforma antes de enviar.'
+        : 'Conecte o canal selecionado antes de enviar.');
+      return;
+    }
+    const withStock = unique.filter((id) => productHasStock(id));
+    const stockSkipped = unique.length - withStock.length;
+    if (!withStock.length) {
+      setError('Produtos sem estoque não são enviados.');
+      setNotice('');
+      return;
+    }
+    setBusy(unique.length === 1 ? `send-${unique[0]}` : 'send');
     setError('');
     setNotice('');
     try {
-      for (const productId of productIds) {
-        const key = `${productId}:${selectedChannel}`;
-        const categoryId = categories[key] || '';
-        const priceOverride = String(prices[key] ?? '').trim();
-        await api.omnichannel.saveCategory(
-          productId,
-          selectedChannel,
-          categoryId,
-          priceOverride || null,
-          attributes[key],
-        );
+      for (const productId of withStock) {
+        for (const target of targets) {
+          const key = `${productId}:${target.id}`;
+          const categoryId = categories[key] || '';
+          const priceOverride = String(prices[key] ?? '').trim();
+          const attrs = attributes[key];
+          if (selectedChannel === 'all' && !categoryId && !priceOverride && !attrs) continue;
+          await api.omnichannel.saveCategory(
+            productId,
+            target.id,
+            categoryId,
+            priceOverride || null,
+            attrs,
+          );
+        }
       }
-      const result = await api.omnichannel.publish(productIds, [selectedChannel]);
-      setData((prev) => ({ ...prev, listings: result.listings, logs: result.logs }));
-      const failed = (result.results || []).filter((item) => !item.success);
-      if (failed.length) {
-        setError(failed.map((item) => item.message).filter(Boolean).slice(0, 3).join(' '));
-      } else {
-        setNotice('Publicação enviada aos canais conectados.');
-      }
+      const result = await api.omnichannel.publish(withStock, targets.map((target) => target.id));
+      const labels = targets.map((target) => target.label).join(', ');
+      applyCatalogResult(result, {
+        successNotice: `Envio concluído em ${labels}.`,
+        stockSkipped,
+      });
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy('');
+    }
+  };
+
+  const updateProducts = async (productIds) => {
+    const unique = [...new Set(productIds)];
+    if (!unique.length) {
+      setError('Selecione ao menos um produto.');
+      return;
+    }
+    setBusy(unique.length === 1 ? `update-${unique[0]}` : 'update');
+    setError('');
+    setNotice('');
+    try {
+      const result = await api.omnichannel.updateListings(unique);
+      applyCatalogResult(result, { successNotice: 'Anúncios atualizados.' });
     } catch (err) {
       setError(err.message);
     } finally {
@@ -549,12 +633,13 @@ export default function AdminOmnichannel() {
           <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between mb-4">
             <div className="flex flex-col gap-3 sm:flex-row">
               <label className="font-body text-xs text-muted-foreground">
-                Canal
+                Canal do envio
                 <select
                   value={selectedChannel}
                   onChange={(event) => setSelectedChannel(event.target.value)}
                   className="mt-1 block border border-border bg-card px-3 py-2 text-sm text-foreground"
                 >
+                  <option value="all">Todos os canais</option>
                   {channels.map((channel) => (
                     <option key={channel.id} value={channel.id}>
                       {channel.label} ({STATUS_LABEL[channel.status] || channel.status})
@@ -572,14 +657,32 @@ export default function AdminOmnichannel() {
                 />
               </label>
             </div>
-            <button
-              type="button"
-              onClick={publishSelected}
-              disabled={busy === 'publish'}
-              className="bg-primary text-primary-foreground px-5 py-2.5 font-body text-sm tracking-wider hover:opacity-80 disabled:opacity-60"
-            >
-              {busy === 'publish' ? 'Publicando…' : 'Publicar selecionados'}
-            </button>
+            <div className="flex flex-col items-start gap-2 sm:items-end">
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => sendProducts(Object.keys(selected).filter((id) => selected[id]))}
+                  disabled={Boolean(busy)}
+                  className="bg-primary text-primary-foreground px-5 py-2.5 font-body text-sm tracking-wider hover:opacity-80 disabled:opacity-60"
+                >
+                  {busy === 'send' ? 'Enviando…' : 'Enviar'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => updateProducts(Object.keys(selected).filter((id) => selected[id]))}
+                  disabled={Boolean(busy)}
+                  className="border border-border px-5 py-2.5 font-body text-sm tracking-wider hover:bg-secondary disabled:opacity-60"
+                >
+                  {busy === 'update' ? 'Atualizando…' : 'Atualizar'}
+                </button>
+              </div>
+              <p className="font-body text-xs text-muted-foreground max-w-sm text-left sm:text-right">
+                {showAllChannels
+                  ? 'Enviar publica nos canais conectados e ignora produtos sem estoque.'
+                  : 'Enviar publica no canal selecionado e ignora produtos sem estoque.'}
+                {' '}Atualizar sincroniza preço e estoque dos anúncios já publicados.
+              </p>
+            </div>
           </div>
           <div className="overflow-auto border border-border">
             <table className="w-full text-left font-body text-sm">
@@ -592,9 +695,36 @@ export default function AdminOmnichannel() {
                   <th className="px-3 py-3 font-medium">SKU</th>
                   <th className="px-3 py-3 font-medium">Estoque</th>
                   <th className="px-3 py-3 font-medium">No site</th>
-                  <th className="px-3 py-3 font-medium">No marketplace</th>
-                  <th className="px-3 py-3 font-medium">Categoria do canal</th>
-                  <th className="px-3 py-3 font-medium">Status</th>
+                  {!showAllChannels && (
+                    <>
+                      <th className="px-3 py-3 font-medium">No marketplace</th>
+                      <th className="px-3 py-3 font-medium">Categoria do canal</th>
+                    </>
+                  )}
+                  {visibleChannels.map((channel) => (
+                    <th
+                      key={channel.id}
+                      className="px-3 py-3 font-medium whitespace-nowrap align-top"
+                      title={STATUS_LABEL[channel.status] || channel.status}
+                    >
+                      <div>{showAllChannels ? channel.label : 'Status'}</div>
+                      <select
+                        value={platformFilters[channel.id] || ''}
+                        onChange={(event) => setPlatformFilters((prev) => ({
+                          ...prev,
+                          [channel.id]: event.target.value,
+                        }))}
+                        aria-label={`Filtrar ${channel.label}`}
+                        className="mt-2 block w-full min-w-[128px] border border-border bg-card px-2 py-1 text-xs font-normal text-foreground"
+                      >
+                        <option value="">Todos</option>
+                        <option value="enviado">Enviado</option>
+                        <option value="nao_enviado">Não enviado</option>
+                        <option value="erro">Erro</option>
+                      </select>
+                    </th>
+                  ))}
+                  <th className="px-3 py-3 font-medium">Ações</th>
                 </tr>
               </thead>
               <tbody>
@@ -628,8 +758,16 @@ export default function AdminOmnichannel() {
                         </div>
                       </td>
                       <td className="px-3 py-3 text-muted-foreground">{product.sku || product.internal_code || '—'}</td>
-                      <td className="px-3 py-3">{Number(product.quantity) || 0}</td>
+                      <td className="px-3 py-3">
+                        {(Number(product.quantity) || 0) > 0 ? (
+                          Number(product.quantity) || 0
+                        ) : (
+                          <span className="text-destructive whitespace-nowrap">Sem estoque</span>
+                        )}
+                      </td>
                       <td className="px-3 py-3">{money(product.price)}</td>
+                      {!showAllChannels && (
+                        <>
                       <td className="px-3 py-3">
                         <input
                           value={prices[categoryKey] ?? ''}
@@ -721,24 +859,59 @@ export default function AdminOmnichannel() {
                           </div>
                         )}
                       </td>
-                      <td className="px-3 py-3">
-                        {listing ? (
-                          <span className={`px-2 py-1 text-xs ${statusClass(listing.status)}`}>
-                            {STATUS_LABEL[listing.status] || listing.status}
-                          </span>
-                        ) : (
-                          <span className="text-muted-foreground">Não publicado</span>
-                        )}
-                        {listing?.last_error && (
-                          <p className="text-xs text-destructive mt-1 max-w-xs">{listing.last_error}</p>
-                        )}
+                        </>
+                      )}
+                      {visibleChannels.map((channel) => {
+                        const platformListing = listingStatus(product.id, channel.id);
+                        return (
+                          <td key={channel.id} className="px-3 py-3 align-top">
+                            {platformListing ? (
+                              <>
+                                <span className={`px-2 py-1 text-xs whitespace-nowrap ${statusClass(platformListing.status)}`}>
+                                  {STATUS_LABEL[platformListing.status] || platformListing.status}
+                                </span>
+                                {platformListing.last_error && (
+                                  <p className="text-xs text-destructive mt-1 max-w-[160px]">{platformListing.last_error}</p>
+                                )}
+                              </>
+                            ) : (
+                              <span className="text-xs text-muted-foreground whitespace-nowrap">
+                                {channel.status === 'connected' ? 'Não enviado' : 'Desconectado'}
+                              </span>
+                            )}
+                          </td>
+                        );
+                      })}
+                      <td className="px-3 py-3 align-top">
+                        <div className="flex flex-col gap-1">
+                          <button
+                            type="button"
+                            onClick={() => sendProducts([product.id])}
+                            disabled={Boolean(busy) || (Number(product.quantity) || 0) <= 0}
+                            title={(Number(product.quantity) || 0) <= 0
+                              ? 'Produto sem estoque'
+                              : (showAllChannels ? 'Enviar para os canais conectados' : `Enviar para ${channelLabel(selectedChannel)}`)}
+                            className="border border-border px-2 py-1 text-xs hover:bg-secondary disabled:opacity-50"
+                          >
+                            {busy === `send-${product.id}` || busy === 'send' ? 'Enviando…' : 'Enviar'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => updateProducts([product.id])}
+                            disabled={Boolean(busy)}
+                            title="Atualizar preço e estoque nos anúncios já publicados"
+                            className="border border-border px-2 py-1 text-xs hover:bg-secondary disabled:opacity-50"
+                          >
+                            {busy === `update-${product.id}` || busy === 'update' ? 'Atualizando…' : 'Atualizar'}
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
                 })}
                 {!products.length && (
                   <tr>
-                    <td colSpan={8} className="px-3 py-6 text-muted-foreground">Nenhum produto encontrado.</td>
+                    <td colSpan={6 + (showAllChannels ? 0 : 2) + visibleChannels.length} className="px-3 py-6 text-muted-foreground">Nenhum produto encontrado.</td>
                   </tr>
                 )}
               </tbody>

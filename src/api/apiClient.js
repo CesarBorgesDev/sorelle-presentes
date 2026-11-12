@@ -920,6 +920,13 @@ export const omnichannelApi = {
     });
   },
 
+  updateListings(productIds) {
+    return apiFetch('/omnichannel/listings/update', {
+      method: 'POST',
+      body: JSON.stringify({ product_ids: productIds }),
+    });
+  },
+
   sync() {
     return apiFetch('/omnichannel/sync', { method: 'POST' });
   },
