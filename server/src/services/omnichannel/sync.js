@@ -7,7 +7,9 @@ import { buildListingUnits, parsePriceOverride, resolveChannelPrice } from './ca
 import { getAccount, replaceCredentials } from './accounts.js';
 
 let timer = null;
+let tokenTimer = null;
 let running = false;
+const MERCADO_LIVRE_TOKEN_CHECK_MS = 60 * 60 * 1000;
 
 function plainText(value) {
   if (value == null || value === '') return null;
@@ -583,6 +585,50 @@ export async function importMercadoLivreNotification(body) {
   }
 }
 
+export async function refreshMercadoLivreToken({ force = false } = {}) {
+  const account = await getAccount('mercado_livre');
+  if (!account || account.status !== 'connected') {
+    return { skipped: true, reason: 'disconnected' };
+  }
+  const credentials = account.credentials || {};
+  if (!credentials.refresh_token || !credentials.client_id || !credentials.client_secret) {
+    return { skipped: true, reason: 'missing_credentials' };
+  }
+  try {
+    const result = await getAdapter('mercado_livre').refreshCredentials(credentials, { force });
+    if (result.refreshed) {
+      await rememberCredentials('mercado_livre', result.credentials);
+      await pool.query(
+        `UPDATE channel_accounts
+         SET status = 'connected', last_error = NULL, updated_date = NOW()
+         WHERE channel = 'mercado_livre'`
+      );
+      await writeLog('mercado_livre', 'token_refresh', true, 'Access token renovado automaticamente.');
+    }
+    return { success: true, refreshed: Boolean(result.refreshed) };
+  } catch (err) {
+    const message = err.message || 'Falha ao renovar o token do Mercado Livre.';
+    await pool.query(
+      `UPDATE channel_accounts
+       SET last_error = $1, updated_date = NOW()
+       WHERE channel = 'mercado_livre'`,
+      [message.slice(0, 500)]
+    );
+    await writeLog('mercado_livre', 'token_refresh', false, message);
+    return { success: false, message };
+  }
+}
+
+function scheduleMercadoLivreTokenRefresh(delayMs = MERCADO_LIVRE_TOKEN_CHECK_MS) {
+  if (tokenTimer) clearTimeout(tokenTimer);
+  tokenTimer = setTimeout(() => {
+    refreshMercadoLivreToken()
+      .catch((err) => console.error('[omnichannel] token Mercado Livre:', err.message))
+      .finally(() => scheduleMercadoLivreTokenRefresh());
+  }, delayMs);
+  if (typeof tokenTimer.unref === 'function') tokenTimer.unref();
+}
+
 export async function syncConnectedChannels({ manual = false } = {}) {
   if (running) {
     return { busy: true, message: 'Já existe uma sincronização em andamento.' };
@@ -590,6 +636,9 @@ export async function syncConnectedChannels({ manual = false } = {}) {
   running = true;
   const summary = [];
   try {
+    await refreshMercadoLivreToken().catch((err) => {
+      console.error('[omnichannel] token Mercado Livre:', err.message);
+    });
     const accounts = await pool.query(
       `SELECT channel FROM channel_accounts WHERE status = 'connected'`
     );
@@ -676,11 +725,14 @@ export function startOmnichannelScheduler() {
   getSyncMinutes()
     .then((minutes) => scheduleNext(minutes))
     .catch((err) => console.error('[omnichannel] Agenda não iniciada:', err.message));
+  scheduleMercadoLivreTokenRefresh(15_000);
 }
 
 export function stopOmnichannelScheduler() {
   if (timer) clearTimeout(timer);
   timer = null;
+  if (tokenTimer) clearTimeout(tokenTimer);
+  tokenTimer = null;
 }
 
 export async function listListings() {

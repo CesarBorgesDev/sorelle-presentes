@@ -48,6 +48,12 @@ function money(value) {
   return Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
 
+function mercadoLivreItemUrl(externalId) {
+  const match = String(externalId || '').trim().toUpperCase().match(/^MLB(\d+)$/);
+  if (!match) return '';
+  return `https://produto.mercadolivre.com.br/MLB-${match[1]}`;
+}
+
 function marketplacePrice(price, percent) {
   const cents = Math.round((Number(price) || 0) * 100);
   const pct = Number(percent);
@@ -863,6 +869,13 @@ export default function AdminOmnichannel() {
                       )}
                       {visibleChannels.map((channel) => {
                         const platformListing = listingStatus(product.id, channel.id);
+                        const adLinks = channel.id === 'mercado_livre'
+                          ? [...new Map(
+                            listingsFor(product.id, channel.id)
+                              .filter((row) => row.status === 'published' && mercadoLivreItemUrl(row.external_id))
+                              .map((row) => [row.external_id, row]),
+                          ).values()]
+                          : [];
                         return (
                           <td key={channel.id} className="px-3 py-3 align-top">
                             {platformListing ? (
@@ -870,6 +883,19 @@ export default function AdminOmnichannel() {
                                 <span className={`px-2 py-1 text-xs whitespace-nowrap ${statusClass(platformListing.status)}`}>
                                   {STATUS_LABEL[platformListing.status] || platformListing.status}
                                 </span>
+                                {adLinks.map((row) => (
+                                  <a
+                                    key={row.external_id}
+                                    href={mercadoLivreItemUrl(row.external_id)}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="mt-1 block text-xs text-primary hover:underline whitespace-nowrap"
+                                  >
+                                    {adLinks.length > 1 && row.external_sku
+                                      ? `Ver anúncio (${row.external_sku})`
+                                      : 'Ver anúncio'}
+                                  </a>
+                                ))}
                                 {platformListing.last_error && (
                                   <p className="text-xs text-destructive mt-1 max-w-[160px]">{platformListing.last_error}</p>
                                 )}

@@ -2,6 +2,29 @@ import { ChannelError, formBody, requestJson, requireFields } from '../http.js';
 
 const API = 'https://api.mercadolibre.com';
 
+const DEFAULT_TOKEN_TTL_SECONDS = 6 * 60 * 60;
+const TOKEN_REFRESH_SKEW_MS = 30 * 60 * 1000;
+
+function withTokenMeta(credentials, data) {
+  const expiresIn = Number(data.expires_in);
+  return {
+    ...credentials,
+    access_token: data.access_token,
+    refresh_token: data.refresh_token || credentials.refresh_token,
+    user_id: data.user_id ? String(data.user_id) : credentials.user_id,
+    expires_in: Number.isFinite(expiresIn) && expiresIn > 0 ? expiresIn : DEFAULT_TOKEN_TTL_SECONDS,
+    access_token_obtained_at: Date.now(),
+  };
+}
+
+export function mercadoLivreAccessTokenExpiresSoon(credentials, skewMs = TOKEN_REFRESH_SKEW_MS) {
+  if (!credentials?.access_token) return true;
+  const obtained = Number(credentials.access_token_obtained_at);
+  if (!Number.isFinite(obtained) || obtained <= 0) return true;
+  const expiresIn = Number(credentials.expires_in) || DEFAULT_TOKEN_TTL_SECONDS;
+  return Date.now() >= obtained + expiresIn * 1000 - skewMs;
+}
+
 async function exchangeCode(credentials) {
   requireFields(credentials, ['client_id', 'client_secret', 'code', 'redirect_uri']);
   const data = await requestJson(`${API}/oauth/token`, {
@@ -16,10 +39,7 @@ async function exchangeCode(credentials) {
     }),
   });
   return {
-    ...credentials,
-    access_token: data.access_token,
-    refresh_token: data.refresh_token || credentials.refresh_token,
-    user_id: data.user_id ? String(data.user_id) : credentials.user_id,
+    ...withTokenMeta(credentials, data),
     code: '',
   };
 }
@@ -36,19 +56,17 @@ async function refreshToken(credentials) {
       refresh_token: credentials.refresh_token,
     }),
   });
-  return {
-    ...credentials,
-    access_token: data.access_token,
-    refresh_token: data.refresh_token || credentials.refresh_token,
-    user_id: data.user_id ? String(data.user_id) : credentials.user_id,
-  };
+  return withTokenMeta(credentials, data);
 }
 
 async function authorized(credentials, path, options = {}) {
   if (!credentials.access_token && credentials.code) {
     credentials = await exchangeCode(credentials);
   }
-  if (!credentials.access_token && credentials.refresh_token) {
+  if (
+    credentials.refresh_token
+    && (!credentials.access_token || mercadoLivreAccessTokenExpiresSoon(credentials))
+  ) {
     credentials = await refreshToken(credentials);
   }
   requireFields(credentials, ['access_token']);
@@ -63,7 +81,7 @@ async function authorized(credentials, path, options = {}) {
     });
     return { data, credentials };
   } catch (err) {
-    if (credentials.refresh_token && /token|401|invalid/i.test(err.message)) {
+    if (credentials.refresh_token && /token|401|invalid|unauthorized|expired/i.test(err.message)) {
       const next = await refreshToken(credentials);
       const data = await requestJson(`${API}${path}`, {
         ...options,
@@ -432,6 +450,17 @@ async function updateListingDescription(credentials, itemId, plainText) {
 
 export const mercadoLivreAdapter = {
   id: 'mercado_livre',
+
+  async refreshCredentials(credentials, { force = false } = {}) {
+    const current = { ...(credentials || {}) };
+    if (!current.refresh_token || !current.client_id || !current.client_secret) {
+      throw new ChannelError('Informe App ID, Secret e refresh token para renovar o acesso.');
+    }
+    if (!force && current.access_token && !mercadoLivreAccessTokenExpiresSoon(current)) {
+      return { credentials: current, refreshed: false };
+    }
+    return { credentials: await refreshToken(current), refreshed: true };
+  },
 
   async testConnection(credentials) {
     let next = { ...credentials };
