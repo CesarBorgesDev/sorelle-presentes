@@ -9,6 +9,7 @@ import { getAccount, replaceCredentials } from './accounts.js';
 let timer = null;
 let tokenTimer = null;
 let running = false;
+let mercadoLivreTokenRefreshPromise = null;
 const MERCADO_LIVRE_TOKEN_CHECK_MS = 60 * 60 * 1000;
 
 function plainText(value) {
@@ -585,7 +586,7 @@ export async function importMercadoLivreNotification(body) {
   }
 }
 
-export async function refreshMercadoLivreToken({ force = false } = {}) {
+async function runMercadoLivreTokenRefresh({ force = false } = {}) {
   const account = await getAccount('mercado_livre');
   if (!account || account.status !== 'connected') {
     return { skipped: true, reason: 'disconnected' };
@@ -619,6 +620,15 @@ export async function refreshMercadoLivreToken({ force = false } = {}) {
   }
 }
 
+export async function refreshMercadoLivreToken({ force = false } = {}) {
+  if (mercadoLivreTokenRefreshPromise) return mercadoLivreTokenRefreshPromise;
+  mercadoLivreTokenRefreshPromise = runMercadoLivreTokenRefresh({ force })
+    .finally(() => {
+      mercadoLivreTokenRefreshPromise = null;
+    });
+  return mercadoLivreTokenRefreshPromise;
+}
+
 function scheduleMercadoLivreTokenRefresh(delayMs = MERCADO_LIVRE_TOKEN_CHECK_MS) {
   if (tokenTimer) clearTimeout(tokenTimer);
   tokenTimer = setTimeout(() => {
@@ -636,9 +646,6 @@ export async function syncConnectedChannels({ manual = false } = {}) {
   running = true;
   const summary = [];
   try {
-    await refreshMercadoLivreToken().catch((err) => {
-      console.error('[omnichannel] token Mercado Livre:', err.message);
-    });
     const accounts = await pool.query(
       `SELECT channel FROM channel_accounts WHERE status = 'connected'`
     );
