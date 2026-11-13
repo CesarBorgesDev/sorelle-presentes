@@ -10,6 +10,8 @@ let timer = null;
 let tokenTimer = null;
 let running = false;
 let mercadoLivreTokenRefreshPromise = null;
+let mercadoLivreTokenRefreshForced = false;
+let mercadoLivreTokenRefreshTail = Promise.resolve();
 const MERCADO_LIVRE_TOKEN_CHECK_MS = 60 * 60 * 1000;
 
 function plainText(value) {
@@ -620,13 +622,36 @@ async function runMercadoLivreTokenRefresh({ force = false } = {}) {
   }
 }
 
-export async function refreshMercadoLivreToken({ force = false } = {}) {
-  if (mercadoLivreTokenRefreshPromise) return mercadoLivreTokenRefreshPromise;
-  mercadoLivreTokenRefreshPromise = runMercadoLivreTokenRefresh({ force })
-    .finally(() => {
-      mercadoLivreTokenRefreshPromise = null;
-    });
-  return mercadoLivreTokenRefreshPromise;
+export function refreshMercadoLivreToken({ force = false } = {}) {
+  const wantsForce = Boolean(force);
+
+  // Reuse an in-flight refresh when it already satisfies this request.
+  if (mercadoLivreTokenRefreshPromise && (!wantsForce || mercadoLivreTokenRefreshForced)) {
+    return mercadoLivreTokenRefreshPromise;
+  }
+
+  // Serialize starts so a forced refresh waits for a non-forced one exactly once,
+  // then runs — without a while-loop that can re-await forever under contention.
+  const result = mercadoLivreTokenRefreshTail.then(async () => {
+    if (mercadoLivreTokenRefreshPromise && (!wantsForce || mercadoLivreTokenRefreshForced)) {
+      return mercadoLivreTokenRefreshPromise;
+    }
+
+    mercadoLivreTokenRefreshForced = wantsForce;
+    const pending = runMercadoLivreTokenRefresh({ force: wantsForce });
+    mercadoLivreTokenRefreshPromise = pending;
+    try {
+      return await pending;
+    } finally {
+      if (mercadoLivreTokenRefreshPromise === pending) {
+        mercadoLivreTokenRefreshPromise = null;
+        mercadoLivreTokenRefreshForced = false;
+      }
+    }
+  });
+
+  mercadoLivreTokenRefreshTail = result.then(() => undefined, () => undefined);
+  return result;
 }
 
 function scheduleMercadoLivreTokenRefresh(delayMs = MERCADO_LIVRE_TOKEN_CHECK_MS) {
@@ -646,6 +671,9 @@ export async function syncConnectedChannels({ manual = false } = {}) {
   running = true;
   const summary = [];
   try {
+    await refreshMercadoLivreToken().catch((err) => {
+      console.error('[omnichannel] token Mercado Livre:', err.message);
+    });
     const accounts = await pool.query(
       `SELECT channel FROM channel_accounts WHERE status = 'connected'`
     );
